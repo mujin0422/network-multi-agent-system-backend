@@ -6,13 +6,21 @@ Bản mới chỉ lắp API router vào FastAPI; nghiệp vụ được tách xu
 
 from fastapi import FastAPI
 
+from app.api.errors import register_error_handlers
 from app.api.route import api_router
+from app.core.config import get_settings
 
 
+settings = get_settings()
 app = FastAPI(
-    title="Multi-Agent AI Network Automation Platform",
-    version="1.0.0"
+    title=settings.app_name,
+    version="0.1.0",
+    debug=settings.app_debug,
 )
+
+# Domain service ném lỗi nghiệp vụ độc lập với HTTP; lớp API chịu trách nhiệm
+# chuyển chúng thành status code ổn định để frontend dễ xử lý.
+register_error_handlers(app)
 
 
 # Tất cả endpoint nghiệp vụ dùng chung tiền tố /api; health check được giữ độc lập

@@ -1,23 +1,29 @@
 """Network domain unit tests."""
 
-from pathlib import Path
-
 from app.core.config import Settings
 from app.domains.network.provider import DeviceConnectionProvider
+from app.domains.network.schemas import DeviceConfig
 
 
-def test_provider_loads_inventory_with_settings_defaults(tmp_path: Path) -> None:
-    inventory = tmp_path / "devices.yaml"
-    inventory.write_text(
-        "R1:\n  hostname: 192.0.2.1\n  port: 22\n  device_type: cisco_ios\n",
-        encoding="utf-8",
+class StubDeviceConfigRepository:
+    def get(self, device_identifier: str) -> DeviceConfig | None:
+        if device_identifier != "R1":
+            return None
+        return DeviceConfig(
+            hostname="192.0.2.1",
+            port=22,
+            device_type="cisco_ios",
+            username="admin",
+            password="secret",
+            secret="",
+        )
+
+
+def test_provider_loads_inventory_from_repository() -> None:
+    provider = DeviceConnectionProvider(
+        Settings(_env_file=None),
+        StubDeviceConfigRepository(),
     )
-    settings = Settings(
-        _env_file=None,
-        default_device_username="admin",
-        default_device_password="secret",
-    )
-    provider = DeviceConnectionProvider(settings, inventory)
 
     device = provider.get_device_config("R1")
 
