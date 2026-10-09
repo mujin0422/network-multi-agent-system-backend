@@ -1,6 +1,7 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "editor.fontSize": 16,
-    "editor.fontFamily": "JetBrains Mono",
-    "terminal.integrated.fontFamily": "MesloLGM NF"
+    "editor.fontSize": 12,
+    "python.analysis.extraPaths": [
+        "./src"
+    ]
 }

@@ -1,258 +1,332 @@
 # Network AI Assistant
 
-Network AI Assistant là trợ lý AI cho bài toán vận hành, kiểm tra và cấu hình thiết bị mạng Cisco trong môi trường GNS3. Dự án kết hợp `LangGraph`, `Ollama`, `Netmiko` và các tool tự động hóa để thu thập dữ liệu từ topology, phân tích sự cố và thực thi cấu hình khi được người dùng phê duyệt.
+Network AI Assistant is a LangGraph/LangChain application for checking and configuring network devices in a GNS3 lab. It supports:
 
-## Chức năng chính
+- CLI mode with `python -m src.main`
+- Web chat mode with Streamlit using `streamlit run app.py`
+- GNS3 topology status checks
+- Telnet/SSH device access through Netmiko
+- Human approval before risky configuration actions
 
-- Thu thập topology và trạng thái node từ GNS3.
-- Chạy các lệnh kiểm tra trên router/switch Cisco qua Telnet/SSH bằng Netmiko.
-- Phân tích sự cố mạng bằng mô hình Analyst.
-- Đề xuất kế hoạch cấu hình mới hoặc khắc phục lỗi.
-- Thực thi cấu hình VLAN, trunk, sub-interface, OSPF, static route, MPLS.
-- Hỗ trợ Human-in-the-Loop: mọi hành động cấu hình hoặc thao tác nhạy cảm đều yêu cầu xác nhận `yes/no`.
-- Có 3 cách sử dụng:
-  - CLI terminal
-  - GUI desktop với `customtkinter`
-  - Discord bot để điều khiển từ xa
+## Requirements
 
-##  Demo
+- Python 3.11 or newer
+- GNS3 Server running and reachable from your machine
+- A GNS3 project ID
+- Network devices configured for Telnet or SSH access
+- NVIDIA API key and model name for the LLM
 
-[![Watch the video](https://img.youtube.com/vi/FEDlMY4MprY/0.jpg)](https://www.youtube.com/watch?v=FEDlMY4MprY)
+Using a virtual environment is strongly recommended.
 
-## Kiến trúc
-
-Hệ thống được tổ chức quanh workflow LangGraph:
-
-1. `SupervisorAgent`
-   - Điều phối luồng xử lý.
-   - Chuyển truy vấn mới sang `network_expert`.
-   - Sau khi có output từ tool, chuyển sang `analyst`.
-
-2. `Network Expert`
-   - Dùng `ChatOllama` cùng bộ tool mạng/GNS3.
-   - Thu thập dữ liệu thiết bị, topology, ping, running-config.
-   - Gọi các tool cấu hình khi được yêu cầu.
-
-3. `Analyst`
-   - Tổng hợp output từ tool.
-   - Trả về báo cáo ngắn gọn bằng tiếng Việt theo 3 mục `### 1`, `### 2`, `### 3`.
-
-## Phạm vi tool hiện có
-
-### GNS3
-- `get_topology_links`
-- `check_nodes_status`
-- `start_node`
-- `stop_node`
-- `restart_node`
-
-### Kiểm tra thiết bị
-- `execute_show_command`
-- `get_running_config`
-- `ping_test`
-- `get_interface_ip`
-- `get_routing_table`
-- `get_ospf_neighbors`
-- `get_vlan_switch_brief`
-- `get_trunk_interfaces`
-
-### Cấu hình
-- `config_interface_ip`
-- `config_ospf`
-- `config_static_route`
-- `config_mpls_ip_interface`
-- `config_router_sub_interface`
-- `config_vlan`
-- `assign_vlan_access_port`
-- `assign_vlan_access_range`
-- `config_switch_trunk`
-- `save_device_config`
-
-## Yêu cầu môi trường
-
-- Python 3.10+
-- GNS3 Server đang chạy
-- Project GNS3 tồn tại đúng `PROJECT_ID` đang hard-code trong code
-- Ollama đang chạy local tại `http://localhost:11434`
-- Model cho `NETWORK_EXPERT_MODEL` và `ANALYST_MODEL` đã được pull sẵn trong Ollama
-
-## Cài đặt
+## 1. Get The Project
 
 ```bash
+git clone <your-repository-url>
+```
+
+## 2. Create A Virtual Environment
+
+### Windows
+
+```bat
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate.bat
 pip install -r requirements.txt
 ```
 
-## Cấu hình
-
-### 1. File môi trường
-
-Tạo file `.env` từ file mẫu:
+### Linux
 
 ```bash
-copy .env_example .env
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Lưu ý: repository hiện tại sử dụng tên file `.env_example`, không phải `.env.example`.
+## 3. Configure Environment Variables
 
-Các giá trị cần thiết:
+Create your local `.env` file from the example.
+
+### Windows
+
+```bat
+copy .env.example .env
+```
+
+### Linux
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in your real values:
 
 ```env
-DISCORD_BOT_TOKEN=YOUR_TOKEN
-DISCORD_CHANNEL_ID=YOUR_CHANNEL_ID
-DISCORD_PREFIX=!net
+NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_MODEL=your_nvidia_model
 
-OLLAMA_BASE_URL=http://localhost:11434
-NETWORK_EXPERT_MODEL=YOUR_MODEL
-NETWORK_EXPERT_NUM_PREDICT=768
-NETWORK_EXPERT_TEMPERATURE=0.1
+GNS3_IP=your_gns3_server_ip
+GNS3_PORT=3080
+PROJECT_ID=your_gns3_project_id
 
-ANALYST_MODEL=YOUR_MODEL
-ANALYST_NUM_PREDICT=1024
-ANALYST_TEMPERATURE=0.1
-ANALYST_MAX_TOOL_CHARS=512
+DEFAULT_DEVICE_HOSTNAME=127.0.0.1
+DEFAULT_DEVICE_TYPE=cisco_ios_telnet
+DEFAULT_DEVICE_USERNAME=admin
+DEFAULT_DEVICE_PORT=5000
+DEFAULT_DEVICE_PASSWORD=123456
 
-SSH_TIMEOUT=15
-SSH_AUTH_TIMEOUT=15
-SSH_DELAY_FACTOR=1
-SSH_SESSION_TIMEOUT=15
-SSH_FAST_CLI=true
+SSH_TIMEOUT=60
+SSH_AUTH_TIMEOUT=30
+SSH_DELAY_FACTOR=0.5
 ```
 
-### 2. Danh sách thiết bị
+Notes:
 
-File [config/devices.yaml](config/devices.yaml) chứa mapping tên thiết bị đến tham số kết nối Netmiko. Hiện tại code đang khai báo các thiết bị như:
+- `GNS3_IP` is the IP address of your GNS3 server.
+- `GNS3_PORT` is usually `3080`.
+- `PROJECT_ID` is the GNS3 project UUID.
+- You can find the project ID from the GNS3 API URL or project metadata.
 
-- `P1`, `P2`
-- `PE1`, `PE2`
-- `CE-1A`, `CE-1B`, `CE-2A`, `CE-2B`
-- `Switch1` đến `Switch4`
+## 4. Configure Devices
 
-Mỗi mục cần có:
+Create `config/devices.yaml` from the example.
 
-- `hostname`
-- `port`
-- `device_type`
-- `username`
-- `password`
+### Windows
 
-### 3. GNS3
+```bat
+copy config\devices.yaml.example config\devices.yaml
+```
 
-Trong code, GNS3 đang được hard-code:
-
-- `GNS3_IP = 127.0.0.1`
-- `GNS3_PORT = 3080`
-- `PROJECT_ID = cc92102e-89e3-4f2d-8e66-47268c496baa`
-
-Nếu khác môi trường của bạn, cần sửa trực tiếp trong:
-
-- `src/main.py`
-- `src/core_engine.py`
-- `src/tools/gns3_tools.py`
-
-## Cách chạy
-
-### CLI
+### Linux
 
 ```bash
+cp config/devices.yaml.example config/devices.yaml
+```
+
+Edit `config/devices.yaml` so each device matches your GNS3 console or SSH settings:
+
+```yaml
+P1:
+  hostname: "127.0.0.1"
+  port: 5000
+  device_type: "cisco_ios_telnet"
+  username: "admin"
+  password: "123456"
+```
+
+For Telnet console access through GNS3, keep `hostname` as the GNS3 host IP and set `port` to the device console port.
+
+For SSH access, use the device management IP and a Netmiko device type such as:
+
+```yaml
+R1:
+  hostname: "192.168.1.10"
+  port: 22
+  device_type: "cisco_ios"
+  username: "admin"
+  password: "123456"
+  secret: "123456"
+```
+
+## 5. Start GNS3
+
+Before running the assistant:
+
+1. Start GNS3 Server or GNS3 VM.
+2. Open the target project.
+3. Start the devices you want the assistant to inspect.
+4. Confirm the API works:
+
+```text
+http://<GNS3_IP>:<GNS3_PORT>/v2/version
+```
+
+Example:
+
+```text
+http://127.0.0.1:3080/v2/version
+```
+
+## 6. Run The CLI App
+
+From the project root:
+
+### Windows
+
+```bat
+venv\Scripts\activate.bat
 python -m src.main
 ```
 
-Chế độ này:
-- Kiểm tra kết nối GNS3 lúc khởi động
-- Load thiết bị đầu tiên trong `devices.yaml`
-- Cho phép nhập yêu cầu liên tục trong terminal
-- Nếu agent muốn cấu hình, hệ thống sẽ hỏi `yes/no`
-
-### GUI desktop
+### Linux
 
 ```bash
-python -m src.app
+source venv/bin/activate
+python -m src.main
 ```
 
-Giao diện desktop được viết bằng `customtkinter`, hiển thị dạng chat và hỗ trợ xác nhận phê duyệt ngay trong luồng hỏi đáp.
-
-### Discord bot
-
-```bash
-python -m src.discord_bot
-```
-
-Bot hỗ trợ:
-- `!net <yêu cầu>`
-- `!net status`
-- Nếu đã đặt `DISCORD_CHANNEL_ID`, có thể chat trực tiếp trong channel đó mà không cần prefix
-- Nút phê duyệt `Đồng ý` / `Từ chối` cho các lệnh cần xác nhận
-
-Tài liệu bổ sung: [docs/discord_setup.md](docs/discord_setup.md)
-
-## Ví dụ truy vấn
-
-- `Kiểm tra trạng thái kết nối của P1`
-- `Show ip interface brief trên PE1`
-- `Ping từ P2 đến 10.10.10.1`
-- `Kiểm tra OSPF neighbor trên PE2`
-- `Cấu hình VLAN 10 trên Switch1`
-- `Thực hiện cấu hình đã đề xuất`
-
-Code trong `core_engine.py` có cơ chế regex để tự động đoán tên thiết bị từ query, ưu tiên các mẫu như `P1`, `P2`, `PE1`, `PE2`, `CE-1A`, `CE-1B`.
-
-## Cấu trúc thư mục
+Type your request in the terminal. To exit, enter:
 
 ```text
-AAN/
-|-- config/
-|   `-- devices.yaml
-|-- docs/
-|   `-- discord_setup.md
-|-- images/
-|   `-- icon/send.png
-|-- src/
-|   |-- agents/
-|   |   |-- analyst.py
-|   |   |-- network_expert.py
-|   |   `-- supervisor.py
-|   |-- graph/
-|   |   |-- state.py
-|   |   `-- workflow.py
-|   |-- tools/
-|   |   |-- common_tools.py
-|   |   |-- gns3_tools.py
-|   |   |-- network_connection.py
-|   |   |-- router_tools.py
-|   |   `-- switch_tools.py
-|   |-- app.py
-|   |-- core_engine.py
-|   |-- discord_bot.py
-|   `-- main.py
-|-- .env_example
-|-- requirements.txt
-`-- README.md
+q
 ```
 
-## Lưu ý về hiện trạng source code
+## 7. Run The Streamlit Web App
 
-- CLI (`src/main.py`) và Discord bot (`src/discord_bot.py`) đang là hai entrypoint sẵn sàng sử dụng.
-- GUI (`src/app.py`) tự tạo graph riêng thay vì dùng chung `core_engine.py`.
-- `src/main.py` hiện tại load thiết bị đầu tiên trong `devices.yaml`, trong khi `src/core_engine.py` có khả năng chọn thiết bị dựa trên query.
-- Cấu hình GNS3 đang bị hard-code ở nhiều file, chưa đưa vào `.env`.
+From the project root:
 
-## Kiểm tra nhanh
+### Windows
 
-Sau khi đã bật GNS3, Ollama và cài đúng model:
+```bat
+venv\Scripts\activate.bat
+streamlit run app.py
+```
 
-1. Chạy `python -m src.main`
-2. Nhập: `Kiểm tra trạng thái P1`
-3. Xác nhận hệ thống trả về:
-   - output thu thập từ tool
-   - phần báo cáo của Analyst
-4. Thử một lệnh cấu hình và kiểm tra có bước phê duyệt `yes/no`
+### Linux
 
-## Tài liệu liên quan
+```bash
+source venv/bin/activate
+streamlit run app.py
+```
 
-- [docs/discord_setup.md](docs/discord_setup.md)
-- `configure.txt`
-- `document.txt`
-- `Test_case.md`
-- `TODO_DISCORD.md`
+Open the URL shown by Streamlit. By default:
+
+```text
+http://localhost:8501
+```
+
+The web app keeps chat history in the current browser session. Use **Tạo phiên mới** in the sidebar to reset the chat thread.
+
+## Human Approval Flow
+
+Some tools can change device configuration. When the agent needs permission, it will ask for approval.
+
+Reply with:
+
+```text
+yes
+```
+
+to continue, or:
+
+```text
+no
+```
+
+to cancel.
+
+## Common Problems
+
+### `ModuleNotFoundError: No module named 'streamlit'`
+
+Install dependencies inside the activated virtual environment:
+
+```bash
+pip install -r requirements.txt
+```
+
+### `ModuleNotFoundError: No module named 'langchain_nvidia_ai_endpoints'`
+
+Install or refresh the NVIDIA LangChain integration inside the activated virtual environment:
+
+```bash
+pip install -r requirements.txt
+```
+
+If you installed dependencies before this package was added, run:
+
+```bash
+pip install "langchain-nvidia-ai-endpoints>=1.4,<2"
+```
+
+### `Không thể kết nối tới GNS3 Server`
+
+Check:
+
+- GNS3 Server is running.
+- `GNS3_IP`, `GNS3_PORT`, and `PROJECT_ID` are correct in `.env`.
+- The project is open in GNS3.
+- Your firewall allows access to the GNS3 API port.
+
+### Device login fails
+
+Check:
+
+- Device is running in GNS3.
+- Console or SSH port is correct in `config/devices.yaml`.
+- `device_type` matches the access method.
+- Username, password, and enable secret are correct.
+
+### PowerShell cannot activate venv
+
+Run:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then activate again:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+### Streamlit protobuf issue on Python 3.14
+
+This project pins:
+
+```text
+protobuf==7.35.1
+```
+
+If Streamlit fails while importing protobuf, reinstall dependencies in a fresh virtual environment:
+
+```bash
+pip install --force-reinstall -r requirements.txt
+```
+
+## Project Structure
+
+```text
+src/
+  app.py                         Streamlit web chat app
+  main.py                        CLI entry point
+  core/                          GNS3 and device connection settings
+  network_agnets/
+    agents/                      LangGraph agents
+    graph/                       Workflow and state
+    tools/                       Network tools
+  utils/                         Logging, console output, helper functions
+
+config/
+  devices.yaml.example           Example device inventory
+
+docs/
+  configure.txt                  Example device configuration
+
+requirements.txt                 Python dependencies
+.env.example                     Environment variable template
+```
+
+## Quick Start
+
+Linux:
+
+```bash
+cp .env.example .env
+cp config/devices.yaml.example config/devices.yaml
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Windows CMD:
+
+```bat
+copy .env.example .env
+copy config\devices.yaml.example config\devices.yaml
+py -3 -m venv venv
+venv\Scripts\activate.bat
+pip install -r requirements.txt
+streamlit run app.py
+```
