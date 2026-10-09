@@ -1,5 +1,50 @@
-**/venv/
-**/__pycache__/
-**/*.pyc
-**/*.pyd
+# Environment variables and local secrets
 .env
+.env.*
+!.env.example
+
+# Local device inventory may contain credentials
+config/devices.yaml
+!config/devices.yaml.example
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Test, coverage, type-checker, and linter caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Runtime data
+*.log
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and operating-system files
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
