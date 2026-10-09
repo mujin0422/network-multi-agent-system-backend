@@ -1,11 +1,13 @@
 # Network domain
 
-Domain này sở hữu inventory thiết bị, URL GNS3 và kết nối Netmiko.
+Domain này sở hữu URL GNS3 và khả năng kết nối/thực thi qua Netmiko. Thiết bị và
+credential được quản lý tập trung trong PostgreSQL; domain không đọc file YAML.
 
 ## Thành phần
 
 - `schemas.py`: contract cấu hình thiết bị và trạng thái mạng.
-- `provider.py`: đọc YAML và giao tiếp với GNS3/Netmiko.
+- `repository.py`: đọc thiết bị và credential mã hóa từ PostgreSQL.
+- `provider.py`: mở kết nối thiết bị qua Netmiko.
 - `service.py`: use case được API hoặc agent tool adapter gọi.
 
 Provider không chứa logic HTTP của FastAPI và không được import ngược từ `core`.

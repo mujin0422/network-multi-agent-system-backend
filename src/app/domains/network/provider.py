@@ -1,25 +1,24 @@
 """External providers for GNS3 metadata and network device connections."""
 
-from pathlib import Path
 from typing import Any
 
-import yaml
 from netmiko import ConnectHandler
 
 from app.core.config import Settings
+from app.domains.network.repository import DeviceConfigRepository
 from app.domains.network.schemas import DeviceConfig
 
 
 class DeviceConnectionProvider:
-    """Read device inventory and establish Netmiko connections."""
+    """Read device configuration from a repository and connect with Netmiko."""
 
     def __init__(
         self,
         settings: Settings,
-        inventory_path: Path = Path("config/devices.yaml"),
+        repository: DeviceConfigRepository,
     ) -> None:
         self._settings = settings
-        self._inventory_path = inventory_path
+        self._repository = repository
 
     @property
     def gns3_urls(self) -> dict[str, str]:
@@ -33,25 +32,8 @@ class DeviceConnectionProvider:
         }
 
     def get_device_config(self, device_identifier: str) -> DeviceConfig | None:
-        """Load and validate one device from the YAML inventory."""
-        if not self._inventory_path.exists():
-            return None
-
-        with self._inventory_path.open(encoding="utf-8") as inventory_file:
-            inventory = yaml.safe_load(inventory_file) or {}
-
-        raw_config = inventory.get(device_identifier)
-        if raw_config is None:
-            return None
-
-        defaults = {
-            "hostname": self._settings.default_device_hostname,
-            "port": self._settings.default_device_port,
-            "device_type": self._settings.default_device_type,
-            "username": self._settings.default_device_username,
-            "password": self._settings.default_device_password,
-        }
-        return DeviceConfig.model_validate(defaults | raw_config)
+        """Load one connection-ready device from PostgreSQL."""
+        return self._repository.get(device_identifier)
 
     def connect(self, device_identifier: str) -> dict[str, Any]:
         """Open a Netmiko connection and return an explicit success result."""
@@ -59,7 +41,10 @@ class DeviceConnectionProvider:
         if device is None:
             return {
                 "success": False,
-                "error": f"Không tìm thấy cấu hình cho '{device_identifier}' trong devices.yaml",
+                "error": (
+                    f"Không tìm thấy thiết bị hoặc credential cho "
+                    f"'{device_identifier}' trong database"
+                ),
             }
 
         connection_params = device.to_netmiko_params()

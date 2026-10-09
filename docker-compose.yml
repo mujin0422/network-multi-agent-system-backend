@@ -1,0 +1,84 @@
+name: network-multi-agent
+
+services:
+  db:
+    # Debian-based official image includes the pgcrypto extension used by seeds.
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-network_automation_db}
+      POSTGRES_USER: ${POSTGRES_USER:-network_automation_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DEVICE_CREDENTIAL_ENCRYPTION_KEY: ${DEVICE_CREDENTIAL_ENCRYPTION_KEY:?DEVICE_CREDENTIAL_ENCRYPTION_KEY is required}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    ports:
+      - "${POSTGRES_PORT:-2204}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-network_automation_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-network_automation_db}
+      INVENTORY_REPOSITORY_BACKEND: postgres
+      # GNS3 chạy trên máy host; trong container không dùng 127.0.0.1 để tới host.
+      GNS3_IP: ${DOCKER_GNS3_IP:-host.docker.internal}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@networkautomation.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  backend:
+    driver: bridge

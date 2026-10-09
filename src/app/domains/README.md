@@ -17,7 +17,14 @@ domain/
 
 ## Domain hiện tại
 
-- `network`: inventory, GNS3 URL và kết nối thiết bị qua Netmiko.
+- `network`: GNS3 và khả năng kết nối/thực thi trên thiết bị qua Netmiko.
+- `inventory`: public service quản lý metadata thiết bị và constraint duy nhất.
+- `conversation`: public service quản lý conversation và message.
+- `execution`: public service quản lý Task, Operation, approval và ChangeSet.
+
+`inventory` dùng PostgreSQL khi chạy Docker và giữ adapter in-memory cho unit
+test. `network` đọc cấu hình kết nối từ PostgreSQL qua repository riêng; password
+được giải mã chỉ khi cần mở kết nối Netmiko và không nằm trong response API.
 
 ## Dependency direction
 

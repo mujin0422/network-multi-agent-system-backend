@@ -32,3 +32,13 @@ HTTP request
 - `POST /api/chat/`: xử lý một lượt chat.
 - `GET /api/agents/`: liệt kê agent đã đăng ký.
 - `GET /api/network/`: trạng thái network domain.
+- `POST/GET /api/conversations/`: tạo và đọc phiên hội thoại.
+- `POST /api/conversations/{id}/messages`: thêm message vào conversation.
+- `POST/GET/PATCH /api/devices`: quản lý inventory thiết bị trong PostgreSQL.
+- `POST/GET /api/tasks`: tạo và truy vấn Task.
+- `POST /api/tasks/{id}/operations`: thêm Operation do Planner tạo.
+- `POST /api/operations/{id}/change-sets`: lập kế hoạch apply và rollback.
+- `POST /api/change-sets/{id}/approve`: phê duyệt ChangeSet trước khi WRITE.
+
+Unit test có thể dùng repository in-memory; Docker API dùng PostgreSQL để dữ liệu
+thiết bị không mất khi tiến trình API khởi động lại.

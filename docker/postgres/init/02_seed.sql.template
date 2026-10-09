@@ -1,0 +1,151 @@
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+-- ==========================================================================
+-- SAMPLE DATA: 2.1 AUTHENTICATION & AUTHORIZATION
+-- ==========================================================================
+INSERT INTO roles (id, name) VALUES
+    ('role-0001', 'Super Admin'),
+    ('role-0002', 'Network Engineer'),
+    ('role-0003', 'Network Operator')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO management_functions (id, name) VALUES
+    ('func-0001', 'Dashboard'),
+    ('func-0002', 'Chatbot'),
+    ('func-0003', 'Device Management'),
+    ('func-0004', 'User Management'),
+    ('func-0005', 'Task Management'),
+    ('func-0006', 'Audit Log')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO actions (id, name) VALUES
+    ('acts-0001', 'Add'),
+    ('acts-0002', 'Edit'),
+    ('acts-0003', 'Delete'),
+    ('acts-0004', 'View'),
+    ('acts-0005', 'Execute'),
+    ('acts-0006', 'Approve')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions (id, function_id, action_id) VALUES
+    ('perm-0001', 'func-0001', 'acts-0004'), -- Dashboard: View
+    ('perm-0002', 'func-0002', 'acts-0004'), -- Chatbot: View
+    ('perm-0003', 'func-0002', 'acts-0005'), -- Chatbot: Execute
+    ('perm-0004', 'func-0003', 'acts-0001'), -- Device: Add
+    ('perm-0005', 'func-0003', 'acts-0002'), -- Device: Edit
+    ('perm-0006', 'func-0003', 'acts-0003'), -- Device: Delete
+    ('perm-0007', 'func-0003', 'acts-0004'), -- Device: View
+    ('perm-0008', 'func-0003', 'acts-0005'), -- Device: Execute
+    ('perm-0009', 'func-0004', 'acts-0001'), -- User: Add
+    ('perm-0010', 'func-0004', 'acts-0002'), -- User: Edit
+    ('perm-0011', 'func-0004', 'acts-0003'), -- User: Delete
+    ('perm-0012', 'func-0004', 'acts-0004'), -- User: View
+    ('perm-0013', 'func-0005', 'acts-0004'), -- Task: View
+    ('perm-0014', 'func-0005', 'acts-0005'), -- Task: Execute
+    ('perm-0015', 'func-0005', 'acts-0006'), -- Task: Approve
+    ('perm-0016', 'func-0006', 'acts-0004')  -- Audit Log: View
+ON CONFLICT DO NOTHING;
+
+-- Super Admin có toàn bộ permission.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0001', id FROM permissions
+ON CONFLICT DO NOTHING;
+
+-- Network Engineer quản lý/thực thi thiết bị, task và xem audit.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0002', id FROM permissions
+WHERE id IN (
+    'perm-0001', 'perm-0002', 'perm-0003', 'perm-0004', 'perm-0005',
+    'perm-0007', 'perm-0008', 'perm-0013', 'perm-0014', 'perm-0015',
+    'perm-0016'
+)
+ON CONFLICT DO NOTHING;
+
+-- Network Operator chủ yếu xem và chạy tác vụ READ, không duyệt WRITE.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0003', id FROM permissions
+WHERE id IN (
+    'perm-0001', 'perm-0002', 'perm-0003', 'perm-0007', 'perm-0008',
+    'perm-0013', 'perm-0014', 'perm-0016'
+)
+ON CONFLICT DO NOTHING;
+
+-- Password mẫu được hash bằng bcrypt. Chỉ dùng cho môi trường development.
+INSERT INTO users (
+    id, role_id, email, password_hashed, full_name, status
+) VALUES
+    (
+        'user-091026-0001', 'role-0001', 'admin@network.local',
+        crypt('Admin@123', gen_salt('bf', 12)), 'System Administrator', 'ACTIVE'
+    ),
+    (
+        'user-091026-0002', 'role-0002', 'engineer@network.local',
+        crypt('Engineer@123', gen_salt('bf', 12)), 'Network Engineer', 'ACTIVE'
+    ),
+    (
+        'user-091026-0003', 'role-0003', 'operator@network.local',
+        crypt('Operator@123', gen_salt('bf', 12)), 'Network Operator', 'ACTIVE'
+    )
+ON CONFLICT DO NOTHING;
+
+-- ==========================================================================
+-- SAMPLE DATA: 2.2 NETWORK INVENTORY
+-- ==========================================================================
+INSERT INTO brands (id, name) VALUES
+    ('brnd-0001', 'Cisco'),
+    ('brnd-0002', 'MikroTik'),
+    ('brnd-0003', 'Juniper'),
+    ('brnd-0004', 'Huawei'),
+    ('brnd-0005', 'Fortinet')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO categories (id, name) VALUES
+    ('catg-0001', 'Router'),
+    ('catg-0002', 'Switch'),
+    ('catg-0003', 'Firewall'),
+    ('catg-0004', 'Load Balancer'),
+    ('catg-0005', 'Wireless Controller')
+ON CONFLICT DO NOTHING;
+
+-- 13 thiết bị dùng chung credential vì username/password giống nhau.
+-- pgp_sym_encrypt dùng AES-256 và kết quả được ASCII armor trước khi lưu TEXT.
+INSERT INTO credentials (
+    id, username, password, secret, encryption_type
+) VALUES (
+    'cred-091026-0001',
+    'admin',
+    armor(pgp_sym_encrypt(
+        '123456', :'encryption_key', 'cipher-algo=aes256,compress-algo=1'
+    )),
+    NULL,
+    'PGP_SYM_AES256'
+)
+ON CONFLICT DO NOTHING;
+
+-- Nhãn P1/P2/... được lưu ở `hostname`; giá trị 127.0.0.1 người dùng cung cấp
+-- là địa chỉ kết nối nên được lưu đúng vào trường `host` theo thiết kế DB.
+INSERT INTO devices (
+    id, credential_id, brand_id, category_id, last_updated_by,
+    hostname, host, port, device_type, location
+) VALUES
+    ('devc-091026-0001', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'P1',      '127.0.0.1', 5000, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0002', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'P2',      '127.0.0.1', 5001, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0003', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'PE1',     '127.0.0.1', 5002, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0004', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'PE2',     '127.0.0.1', 5003, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0005', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'CE-1A',   '127.0.0.1', 5004, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0006', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'CE-1B',   '127.0.0.1', 5005, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0007', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'CE-2A',   '127.0.0.1', 5006, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0008', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'CE-2B',   '127.0.0.1', 5007, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0009', 'cred-091026-0001', 'brnd-0001', 'catg-0002', 'user-091026-0001', 'Switch1', '127.0.0.1', 5008, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0010', 'cred-091026-0001', 'brnd-0001', 'catg-0002', 'user-091026-0001', 'Switch2', '127.0.0.1', 5009, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0011', 'cred-091026-0001', 'brnd-0001', 'catg-0002', 'user-091026-0001', 'Switch3', '127.0.0.1', 5010, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0012', 'cred-091026-0001', 'brnd-0001', 'catg-0002', 'user-091026-0001', 'Switch4', '127.0.0.1', 5011, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-091026-0013', 'cred-091026-0001', 'brnd-0001', 'catg-0001', 'user-091026-0001', 'P3',      '127.0.0.1', 5024, 'cisco_ios_telnet', 'GNS3 Lab')
+ON CONFLICT DO NOTHING;
+
+COMMIT;
+
+-- Ví dụ giải mã chỉ dùng trong backend, không dùng trong query frontend:
+-- SELECT pgp_sym_decrypt(dearmor(password), :'encryption_key') FROM credentials;
