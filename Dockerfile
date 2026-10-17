@@ -9,6 +9,8 @@ WORKDIR /app
 # Copy metadata trước để Docker cache layer cài dependency khi source thay đổi.
 COPY pyproject.toml requirements.txt README.md ./
 COPY src ./src
+COPY migrations ./migrations
+COPY scripts ./scripts
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install . \

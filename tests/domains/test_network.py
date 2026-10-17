@@ -1,8 +1,8 @@
-"""Network domain unit tests."""
+"""Device connection tests thuộc Inventory domain."""
 
 from app.core.config import Settings
-from app.domains.network.provider import DeviceConnectionProvider
-from app.domains.network.schemas import DeviceConfig
+from app.domains.inventory.providers import DeviceConnectionProvider
+from app.domains.inventory.schemas import DeviceConfig
 
 
 class StubDeviceConfigRepository:

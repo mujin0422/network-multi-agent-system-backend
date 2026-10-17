@@ -54,7 +54,7 @@ Không commit `.env` vì file này chứa secret.
 
 ## Cấu hình thiết bị
 
-Thiết bị được quản lý tập trung trong PostgreSQL qua nhóm API `/api/devices`.
+Thiết bị được quản lý tập trung trong PostgreSQL qua API `/api/v1/devices`.
 Backend không còn đọc `config/devices.yaml`. Khi agent cần kết nối, backend tìm
 thiết bị bằng `id` hoặc `hostname` và lấy credential đã mã hóa từ database.
 
@@ -84,12 +84,30 @@ Health check:
 GET http://127.0.0.1:8000/health
 ```
 
+### API versioning
+
+Toàn bộ public business API dùng prefix `/api/v1`. Ví dụ:
+
+```text
+POST /api/v1/chat/
+GET  /api/v1/agents/
+GET  /api/v1/network/
+GET  /api/v1/conversations/
+GET  /api/v1/devices/
+GET  /api/v1/tasks/
+```
+
+`v1` là version của HTTP contract, độc lập với version phát hành của ứng dụng.
+Khi cần breaking change, tạo router `/api/v2` và giữ `/api/v1` trong thời gian
+chuyển đổi; không thay đổi hành vi của `v1` âm thầm. Endpoint hạ tầng `/health`
+không thuộc business API nên không đặt dưới prefix version.
+
 ## Docker: API, PostgreSQL và pgAdmin 4
 
 Docker Compose khởi tạo ba service:
 
 - `api`: FastAPI tại `http://localhost:8000`
-- `db`: PostgreSQL tại `localhost:5432`
+- `db`: PostgreSQL tại `localhost:2204` (mặc định `POSTGRES_PORT`)
 - `pgadmin`: pgAdmin 4 tại `http://localhost:5050`
 
 Kiểm tra các biến `POSTGRES_*`, `PGADMIN_*` và
@@ -148,8 +166,29 @@ docker compose exec db psql \
   -c "SELECT hostname, host, port, device_type FROM devices ORDER BY port;"
 ```
 
-Schema có đủ 18 bảng trong tài liệu và thêm `device_change_sets` cho rollback.
+Schema có 20 bảng nghiệp vụ, gồm authentication/RBAC, inventory, conversation,
+AI runtime và evaluation/benchmarking.
 Init script chỉ chạy khi PostgreSQL volume được tạo lần đầu.
+
+### Initial migration
+
+Không xóa volume chỉ để nhận schema mới. Chạy migration có version:
+
+```bash
+docker compose run --rm migrate
+```
+
+Kiểm tra migration nào đã chạy hoặc còn chờ:
+
+```bash
+docker compose run --rm migrate python scripts/migrate.py --status
+```
+
+`0001_initial_schema.sql` là version đầu tiên của dự án và dùng chung canonical
+DDL với `01_schema.sql`. Runner dùng checksum, transaction và PostgreSQL advisory
+lock. Database không trống nhưng không đúng initial schema sẽ bị từ chối thay vì
+tự động thay đổi. Chi tiết xem
+[`migrations/README.md`](migrations/README.md).
 
 Muốn chạy lại schema/seed từ đầu, lệnh sau sẽ **xóa toàn bộ dữ liệu database và
 pgAdmin đang lưu trong Docker volumes**:
@@ -184,44 +223,27 @@ package khi chạy từ project root.
 
 ```text
 src/app/domains/
+├── identity/        # User, session và RBAC (planned)
+├── inventory/       # Device inventory, GNS3 và Netmiko access
 ├── conversation/    # Conversation và Message
-├── execution/       # Task, Operation, ChangeSet và approval
-├── inventory/       # Device metadata và unique constraints
-└── network/         # GNS3 và Netmiko device access
+├── execution/       # Task, Operation và audit
+└── evaluation/      # Evaluation và benchmarking (planned)
 ```
 
 `conversation`, `execution` và `inventory` hiện dùng repository in-memory để
 frontend có thể test contract API. Dữ liệu mất khi API restart. Repository SQL có
 thể được thay qua dependency injection mà không đổi route hoặc domain service.
 
-## Luồng ChangeSet và rollback plan
-
-```text
-Task
-  → Operation
-  → ChangeSet
-      ├── pre_change_snapshot
-      ├── planned_commands
-      ├── rollback_commands
-      └── verification_checks
-  → WAITING_APPROVAL
-  → APPROVED
-```
-
-Phiên bản hiện tại mới quản lý kế hoạch và approval; chưa tự gửi lệnh apply hoặc
-rollback xuống thiết bị.
-
 ## Source layout
 
 ```text
 src/app/
-├── api/             # FastAPI transport và dependency composition
 ├── agents/          # Agent implementations, registry và routing
 ├── core/            # Settings, logging, ID và shared errors
-├── domains/         # Public domain services và persistence contracts
+├── domains/         # Domain services, persistence và HTTP routers
 ├── tools/           # Agent tool adapters
-└── main.py           # FastAPI entry point
+└── main.py           # FastAPI entry point và router composition
 ```
 
-Code cũ được giữ tạm trong `src_legacy/` để tham khảo trong quá trình migration;
-nó không thuộc package được khai báo trong `pyproject.toml`.
+Prototype cũ được lưu riêng trong `src_legacy/` để tham khảo; nó không thuộc
+package được khai báo trong `pyproject.toml` và không phải một phần của schema v1.

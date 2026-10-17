@@ -1,0 +1,5 @@
+-- @canonical-schema
+--
+-- Initial schema of the project. The migration runner resolves the directive
+-- above to docker/postgres/init/01_schema.sql so the Docker bootstrap and the
+-- versioned migration use one canonical DDL source instead of duplicated SQL.

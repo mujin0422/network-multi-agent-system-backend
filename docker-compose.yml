@@ -55,6 +55,22 @@ services:
     networks:
       - backend
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-network_automation_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-network_automation_db}
+    command: ["python", "scripts/migrate.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
   pgadmin:
     image: dpage/pgadmin4:latest
     restart: unless-stopped
