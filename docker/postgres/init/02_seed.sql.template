@@ -1,0 +1,436 @@
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+-- =============================================================================
+-- REFERENCE DATA: AUTHENTICATION & AUTHORIZATION
+-- =============================================================================
+INSERT INTO roles (id, name, description) VALUES
+    ('role-0001', 'Super Administrator', 'Toàn quyền quản trị nền tảng.'),
+    ('role-0002', 'System Administrator', 'Quản trị người dùng, vai trò và vận hành hệ thống.'),
+    ('role-0003', 'Network Engineer', 'Quản lý, chẩn đoán và thay đổi cấu hình mạng.'),
+    ('role-0004', 'Network Operator', 'Giám sát và thực thi tác vụ mạng chỉ đọc.')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO management_functions (id, name, description) VALUES
+    ('func-0001', 'Dashboard', 'Tổng quan trạng thái hệ thống.'),
+    ('func-0002', 'Chatbot', 'Gửi yêu cầu tới hệ thống Multi-Agent.'),
+    ('func-0003', 'Device Management', 'Quản lý inventory và credential thiết bị.'),
+    ('func-0004', 'User Management', 'Quản lý tài khoản người dùng.'),
+    ('func-0005', 'Role-Based Access', 'Quản lý vai trò và quyền.'),
+    ('func-0006', 'Task Management', 'Theo dõi và điều phối task.'),
+    ('func-0007', 'Audit Log', 'Tra cứu hành động thực tế trên thiết bị.'),
+    ('func-0008', 'Evaluation', 'Xem kết quả benchmark và đánh giá AI.')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO actions (id, name, description) VALUES
+    ('acts-0001', 'Add', 'Tạo mới dữ liệu.'),
+    ('acts-0002', 'Edit', 'Cập nhật dữ liệu.'),
+    ('acts-0003', 'Delete', 'Xóa dữ liệu khi chính sách cho phép.'),
+    ('acts-0004', 'View', 'Xem dữ liệu.'),
+    ('acts-0005', 'Execute', 'Khởi chạy tác vụ.'),
+    ('acts-0006', 'Approve', 'Phê duyệt thao tác ghi cấu hình.')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions (id, function_id, action_id) VALUES
+    ('perm-0001', 'func-0001', 'acts-0004'),
+    ('perm-0002', 'func-0002', 'acts-0004'),
+    ('perm-0003', 'func-0002', 'acts-0005'),
+    ('perm-0004', 'func-0003', 'acts-0001'),
+    ('perm-0005', 'func-0003', 'acts-0002'),
+    ('perm-0006', 'func-0003', 'acts-0003'),
+    ('perm-0007', 'func-0003', 'acts-0004'),
+    ('perm-0008', 'func-0003', 'acts-0005'),
+    ('perm-0009', 'func-0004', 'acts-0001'),
+    ('perm-0010', 'func-0004', 'acts-0002'),
+    ('perm-0011', 'func-0004', 'acts-0003'),
+    ('perm-0012', 'func-0004', 'acts-0004'),
+    ('perm-0013', 'func-0005', 'acts-0001'),
+    ('perm-0014', 'func-0005', 'acts-0002'),
+    ('perm-0015', 'func-0005', 'acts-0004'),
+    ('perm-0016', 'func-0006', 'acts-0004'),
+    ('perm-0017', 'func-0006', 'acts-0005'),
+    ('perm-0018', 'func-0006', 'acts-0006'),
+    ('perm-0019', 'func-0007', 'acts-0004'),
+    ('perm-0020', 'func-0008', 'acts-0004')
+ON CONFLICT DO NOTHING;
+
+-- Super Administrator có toàn bộ quyền.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0001', id FROM permissions
+ON CONFLICT DO NOTHING;
+
+-- System Administrator quản trị hệ thống nhưng không tự động có quyền WRITE mạng.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0002', id FROM permissions
+WHERE id IN (
+    'perm-0001', 'perm-0002', 'perm-0003', 'perm-0007',
+    'perm-0009', 'perm-0010', 'perm-0011', 'perm-0012',
+    'perm-0013', 'perm-0014', 'perm-0015', 'perm-0016',
+    'perm-0019', 'perm-0020'
+)
+ON CONFLICT DO NOTHING;
+
+-- Network Engineer quản lý thiết bị, thực thi và phê duyệt thao tác cấu hình.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0003', id FROM permissions
+WHERE id IN (
+    'perm-0001', 'perm-0002', 'perm-0003', 'perm-0004', 'perm-0005',
+    'perm-0007', 'perm-0008', 'perm-0016', 'perm-0017', 'perm-0018',
+    'perm-0019', 'perm-0020'
+)
+ON CONFLICT DO NOTHING;
+
+-- Network Operator chỉ xem inventory/audit và chạy tác vụ không cần approval.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT 'role-0004', id FROM permissions
+WHERE id IN (
+    'perm-0001', 'perm-0002', 'perm-0003', 'perm-0007',
+    'perm-0016', 'perm-0017', 'perm-0019'
+)
+ON CONFLICT DO NOTHING;
+
+-- Tài khoản và mật khẩu dưới đây chỉ phục vụ development/demo.
+INSERT INTO users (
+    id, role_id, email, password_hash, full_name, user_status
+) VALUES
+    (
+        'user-171026-0001', 'role-0001', 'admin@network.local',
+        crypt('Admin@123', gen_salt('bf', 12)), 'Super Administrator', 'ACTIVE'
+    ),
+    (
+        'user-171026-0002', 'role-0002', 'sysadmin@network.local',
+        crypt('SysAdmin@123', gen_salt('bf', 12)), 'System Administrator', 'ACTIVE'
+    ),
+    (
+        'user-171026-0003', 'role-0003', 'engineer@network.local',
+        crypt('Engineer@123', gen_salt('bf', 12)), 'Network Engineer', 'ACTIVE'
+    ),
+    (
+        'user-171026-0004', 'role-0004', 'operator@network.local',
+        crypt('Operator@123', gen_salt('bf', 12)), 'Network Operator', 'ACTIVE'
+    )
+ON CONFLICT DO NOTHING;
+
+-- Session là dữ liệu runtime nhạy cảm nên không seed refresh token giả.
+
+-- =============================================================================
+-- REFERENCE DATA: NETWORK INVENTORY
+-- =============================================================================
+INSERT INTO brands (id, name, supported_drivers) VALUES
+    ('brnd-0001', 'Cisco', '["cisco_ios", "cisco_ios_telnet"]'::jsonb),
+    ('brnd-0002', 'MikroTik', '["mikrotik_routeros"]'::jsonb),
+    ('brnd-0003', 'Juniper', '["juniper_junos"]'::jsonb),
+    ('brnd-0004', 'Huawei', '["huawei"]'::jsonb),
+    ('brnd-0005', 'Fortinet', '["fortinet"]'::jsonb)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO categories (id, name) VALUES
+    ('catg-0001', 'Router'),
+    ('catg-0002', 'Switch'),
+    ('catg-0003', 'Firewall'),
+    ('catg-0004', 'Load Balancer'),
+    ('catg-0005', 'Wireless Controller')
+ON CONFLICT DO NOTHING;
+
+-- pgp_sym_encrypt dùng AES-256; armor giúp ciphertext lưu an toàn trong TEXT.
+INSERT INTO credentials (
+    id, name, description, username, password, secret, encryption_type,
+    created_by, last_updated_by
+) VALUES (
+    'cred-171026-0001',
+    'GNS3 Lab - Cisco - Full Access',
+    'Credential dùng chung cho topology Cisco trong môi trường GNS3 demo.',
+    'admin',
+    armor(pgp_sym_encrypt(
+        '123456', :'encryption_key', 'cipher-algo=aes256,compress-algo=1'
+    )),
+    armor(pgp_sym_encrypt(
+        '123456', :'encryption_key', 'cipher-algo=aes256,compress-algo=1'
+    )),
+    'PGP_SYM_AES256',
+    'user-171026-0001',
+    'user-171026-0001'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO devices (
+    id, credential_id, brand_id, category_id, created_by, last_updated_by,
+    hostname, host, port, device_type, location
+) VALUES
+    ('devc-171026-0001', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'P1',      '127.0.0.1', 5000, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0002', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'P2',      '127.0.0.1', 5001, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0003', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'PE1',     '127.0.0.1', 5002, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0004', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'PE2',     '127.0.0.1', 5003, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0005', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'CE-1A',   '127.0.0.1', 5004, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0006', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'CE-1B',   '127.0.0.1', 5005, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0007', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'CE-2A',   '127.0.0.1', 5006, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0008', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'CE-2B',   '127.0.0.1', 5007, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0009', 'cred-171026-0001', 'brnd-0001', 'catg-0002', 'user-171026-0001', 'user-171026-0001', 'Switch1', '127.0.0.1', 5008, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0010', 'cred-171026-0001', 'brnd-0001', 'catg-0002', 'user-171026-0001', 'user-171026-0001', 'Switch2', '127.0.0.1', 5009, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0011', 'cred-171026-0001', 'brnd-0001', 'catg-0002', 'user-171026-0001', 'user-171026-0001', 'Switch3', '127.0.0.1', 5010, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0012', 'cred-171026-0001', 'brnd-0001', 'catg-0002', 'user-171026-0001', 'user-171026-0001', 'Switch4', '127.0.0.1', 5011, 'cisco_ios_telnet', 'GNS3 Lab'),
+    ('devc-171026-0013', 'cred-171026-0001', 'brnd-0001', 'catg-0001', 'user-171026-0001', 'user-171026-0001', 'P3',      '127.0.0.1', 5024, 'cisco_ios_telnet', 'GNS3 Lab')
+ON CONFLICT DO NOTHING;
+
+-- =============================================================================
+-- DEMO DATA: COMPLETE MULTI-AGENT WORKFLOW
+-- P1/P2 cung cấp routing table -> Analyst phân tích -> P3 nhận cấu hình OSPF.
+-- =============================================================================
+INSERT INTO conversations (
+    id, user_id, title, created_at, last_updated_at
+) VALUES (
+    'cons-171026-0001',
+    'user-171026-0003',
+    'Kiểm tra routing và cấu hình OSPF',
+    CURRENT_TIMESTAMP - INTERVAL '10 minutes',
+    CURRENT_TIMESTAMP - INTERVAL '30 seconds'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO messages (
+    id, conversation_id, sender_by, message, created_at
+) VALUES
+    (
+        'mesg-171026-0001', 'cons-171026-0001', 'USER',
+        'Lấy routing table của P1 và P2, phân tích kết quả, sau đó nếu phù hợp hãy cấu hình OSPF trên P3.',
+        CURRENT_TIMESTAMP - INTERVAL '9 minutes'
+    ),
+    (
+        'mesg-171026-0002', 'cons-171026-0001', 'AGENT',
+        'Đã kiểm tra P1/P2 và áp dụng cấu hình OSPF trên P3. Kết quả xác minh thành công.',
+        CURRENT_TIMESTAMP - INTERVAL '30 seconds'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tasks (
+    id, conversation_id, source_message_id, user_id, input_message,
+    task_status, task_type, started_at, completed_at, created_at
+) VALUES (
+    'task-171026-0001-0001',
+    'cons-171026-0001',
+    'mesg-171026-0001',
+    'user-171026-0003',
+    'Lấy routing table của P1 và P2, phân tích kết quả, sau đó nếu phù hợp hãy cấu hình OSPF trên P3.',
+    'SUCCESS',
+    'COMPOSITE',
+    CURRENT_TIMESTAMP - INTERVAL '8 minutes 50 seconds',
+    CURRENT_TIMESTAMP - INTERVAL '1 minute',
+    CURRENT_TIMESTAMP - INTERVAL '9 minutes'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO task_operations (
+    id, task_id, operation_intent, display_order, operation_status,
+    operation_parameters,
+    created_at, started_at, completed_at
+) VALUES
+    (
+        'oper-171026-0001-0001', 'task-171026-0001-0001',
+        'GET_ROUTING_TABLE', 1, 'SUCCESS',
+        '{"command":"show ip route"}'::jsonb,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 40 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes',
+        CURRENT_TIMESTAMP - INTERVAL '7 minutes'
+    ),
+    (
+        'oper-171026-0001-0002', 'task-171026-0001-0001',
+        'ANALYZE_ROUTING_DATA', 2, 'SUCCESS',
+        '{"checks":["reachability","route_consistency"]}'::jsonb,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 40 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '6 minutes 50 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '5 minutes 30 seconds'
+    ),
+    (
+        'oper-171026-0001-0003', 'task-171026-0001-0001',
+        'CONFIGURE_OSPF', 3, 'SUCCESS',
+        '{"process_id":1,"area":0,"network":"10.0.0.0","wildcard":"0.0.0.255"}'::jsonb,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 40 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '5 minutes 20 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '1 minute'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO operation_dependencies (
+    id, operation_id, depends_on_operation_id, dependency_type, created_at
+) VALUES
+    (
+        'opdp-171026-0001', 'oper-171026-0001-0002',
+        'oper-171026-0001-0001', 'ON_SUCCESS',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 30 seconds'
+    ),
+    (
+        'opdp-171026-0002', 'oper-171026-0001-0003',
+        'oper-171026-0001-0002', 'ON_SUCCESS',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 30 seconds'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO task_operation_devices (
+    id, operation_id, device_id, operation_device_status, device_role,
+    access_mode,
+    started_at, completed_at
+) VALUES
+    (
+        'oper-devv-171026-0001-0001', 'oper-171026-0001-0001',
+        'devc-171026-0001', 'SUCCESS', 'SOURCE', 'READ',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes',
+        CURRENT_TIMESTAMP - INTERVAL '7 minutes 10 seconds'
+    ),
+    (
+        'oper-devv-171026-0001-0002', 'oper-171026-0001-0001',
+        'devc-171026-0002', 'SUCCESS', 'SOURCE', 'READ',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes',
+        CURRENT_TIMESTAMP - INTERVAL '7 minutes'
+    ),
+    (
+        'oper-devv-171026-0001-0003', 'oper-171026-0001-0003',
+        'devc-171026-0013', 'SUCCESS', 'TARGET', 'WRITE',
+        CURRENT_TIMESTAMP - INTERVAL '5 minutes 20 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '1 minute'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO task_executions (
+    id, task_id, operation_id, operation_device_id, agent_name, tool_name,
+    step_order, input, output, execution_status, started_at, completed_at,
+    duration_ms, created_at
+) VALUES
+    (
+        'exec-171026-0001-0001', 'task-171026-0001-0001', NULL, NULL,
+        'planner-agent', NULL, 1,
+        '{"message_id":"mesg-171026-0001"}'::jsonb,
+        '{"operation_count":3,"task_type":"COMPOSITE"}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '8 minutes 50 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 40 seconds', 10000,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes 50 seconds'
+    ),
+    (
+        'exec-171026-0001-0002', 'task-171026-0001-0001',
+        'oper-171026-0001-0001', 'oper-devv-171026-0001-0001',
+        'network-agent', 'execute_command', 1,
+        '{"device":"P1","command":"show ip route"}'::jsonb,
+        '{"routes":["10.0.12.0/30","10.0.13.0/30"]}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '8 minutes',
+        CURRENT_TIMESTAMP - INTERVAL '7 minutes 10 seconds', 50000,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes'
+    ),
+    (
+        'exec-171026-0001-0003', 'task-171026-0001-0001',
+        'oper-171026-0001-0001', 'oper-devv-171026-0001-0002',
+        'network-agent', 'execute_command', 1,
+        '{"device":"P2","command":"show ip route"}'::jsonb,
+        '{"routes":["10.0.12.0/30","10.0.23.0/30"]}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '8 minutes',
+        CURRENT_TIMESTAMP - INTERVAL '7 minutes', 60000,
+        CURRENT_TIMESTAMP - INTERVAL '8 minutes'
+    ),
+    (
+        'exec-171026-0001-0004', 'task-171026-0001-0001',
+        'oper-171026-0001-0002', NULL,
+        'analyst-agent', NULL, 1,
+        '{"source_devices":["P1","P2"]}'::jsonb,
+        '{"safe_to_configure":true,"finding":"P3 cần quảng bá mạng 10.0.0.0/24 vào area 0"}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '6 minutes 50 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '5 minutes 30 seconds', 80000,
+        CURRENT_TIMESTAMP - INTERVAL '6 minutes 50 seconds'
+    ),
+    (
+        'exec-171026-0001-0005', 'task-171026-0001-0001',
+        'oper-171026-0001-0003', 'oper-devv-171026-0001-0003',
+        'network-agent', 'generate_config', 1,
+        '{"device":"P3","process_id":1,"area":0}'::jsonb,
+        '{"proposed_commands":["router ospf 1","network 10.0.0.0 0.0.0.255 area 0"]}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '5 minutes 20 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '4 minutes 50 seconds', 30000,
+        CURRENT_TIMESTAMP - INTERVAL '5 minutes 20 seconds'
+    ),
+    (
+        'exec-171026-0001-0006', 'task-171026-0001-0001',
+        'oper-171026-0001-0003', 'oper-devv-171026-0001-0003',
+        'network-agent', 'execute_config', 2,
+        '{"device":"P3","commands":["router ospf 1","network 10.0.0.0 0.0.0.255 area 0"]}'::jsonb,
+        '{"applied":true,"verification":"OSPF process 1 is active"}'::jsonb,
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '2 minutes 30 seconds',
+        CURRENT_TIMESTAMP - INTERVAL '1 minute', 90000,
+        CURRENT_TIMESTAMP - INTERVAL '2 minutes 30 seconds'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO device_action_logs (
+    id, task_id, operation_id, operation_device_id, execution_id, device_id,
+    action_type, action_phase, sequence_number,
+    command, result, action_log_status, executed_at
+) VALUES
+    (
+        '00000000-0000-4000-8000-000000000001',
+        'task-171026-0001-0001', 'oper-171026-0001-0001',
+        'oper-devv-171026-0001-0001', 'exec-171026-0001-0002',
+        'devc-171026-0001', 'READ', 'READ', 1,
+        'show ip route', 'Routing table returned: 2 relevant routes.',
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '7 minutes 30 seconds'
+    ),
+    (
+        '00000000-0000-4000-8000-000000000002',
+        'task-171026-0001-0001', 'oper-171026-0001-0001',
+        'oper-devv-171026-0001-0002', 'exec-171026-0001-0003',
+        'devc-171026-0002', 'READ', 'READ', 1,
+        'show ip route', 'Routing table returned: 2 relevant routes.',
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '7 minutes 20 seconds'
+    ),
+    (
+        '00000000-0000-4000-8000-000000000003',
+        'task-171026-0001-0001', 'oper-171026-0001-0003',
+        'oper-devv-171026-0001-0003', 'exec-171026-0001-0006',
+        'devc-171026-0013', 'READ', 'PRE_CHECK', 1,
+        'show running-config | section router ospf',
+        '! no ospf configuration', 'SUCCESS',
+        CURRENT_TIMESTAMP - INTERVAL '2 minutes 20 seconds'
+    ),
+    (
+        '00000000-0000-4000-8000-000000000004',
+        'task-171026-0001-0001', 'oper-171026-0001-0003',
+        'oper-devv-171026-0001-0003', 'exec-171026-0001-0006',
+        'devc-171026-0013', 'WRITE', 'APPLY', 2,
+        'router ospf 1\nnetwork 10.0.0.0 0.0.0.255 area 0',
+        'Configuration accepted.', 'SUCCESS',
+        CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+    ),
+    (
+        '00000000-0000-4000-8000-000000000005',
+        'task-171026-0001-0001', 'oper-171026-0001-0003',
+        'oper-devv-171026-0001-0003', 'exec-171026-0001-0006',
+        'devc-171026-0013', 'READ', 'POST_CHECK', 3,
+        'show ip ospf', 'Routing Process ospf 1 is active.',
+        'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '1 minute 20 seconds'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO task_evaluations (
+    task_id, evaluation_status, expected_outcome, actual_outcome, goal_result,
+    rca_result, remediation_required, remediation_attempted,
+    remediation_result, safety_result, evaluation_evidence,
+    evaluator_type, evaluator_version, created_at, evaluated_at
+) VALUES (
+    'task-171026-0001-0001',
+    'COMPLETED',
+    '{"p1_p2_routes_collected":true,"p3_ospf_process":1,"p3_area":0}'::jsonb,
+    '{"p1_p2_routes_collected":true,"p3_ospf_process":1,"p3_area":0,"verified":true}'::jsonb,
+    'PASS',
+    'NOT_APPLICABLE',
+    FALSE,
+    FALSE,
+    'NOT_APPLICABLE',
+    'PASS',
+    '{"execution_ids":["exec-171026-0001-0002","exec-171026-0001-0003","exec-171026-0001-0006"],"post_check":"show ip ospf"}'::jsonb,
+    'AUTOMATED',
+    'network-evaluator-1.0.0',
+    CURRENT_TIMESTAMP - INTERVAL '50 seconds',
+    CURRENT_TIMESTAMP - INTERVAL '20 seconds'
+)
+ON CONFLICT DO NOTHING;
+
+COMMIT;
+
+-- Giải mã chỉ thực hiện trong backend/tool được cấp quyền, không dùng ở frontend:
+-- SELECT pgp_sym_decrypt(dearmor(password), :'encryption_key') FROM credentials;

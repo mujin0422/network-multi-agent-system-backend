@@ -1,30 +1,51 @@
-"""Điểm khởi động HTTP của kiến trúc mới.
+"""FastAPI application entry point and top-level router composition."""
 
-Bản legacy khởi tạo GNS3, LangGraph và giao diện người dùng ngay tại entry point.
-Bản mới chỉ lắp API router vào FastAPI; nghiệp vụ được tách xuống các tầng bên dưới.
-"""
+from fastapi import APIRouter, FastAPI
 
-from fastapi import FastAPI
+from app.agents.routers import agents_router, chat_router
+from app.core.config import get_settings
+from app.core.exceptions.handlers import register_error_handlers
+from app.domains.conversation.routers import router as conversation_router
+from app.domains.execution.routers import (
+    operations_router,
+    router as execution_router,
+)
+from app.domains.inventory.routers import (
+    network_router,
+    router as inventory_router,
+)
 
-from app.api.route import api_router
 
-
+settings = get_settings()
 app = FastAPI(
-    title="Multi-Agent AI Network Automation Platform",
-    version="1.0.0"
+    title=settings.app_name,
+    version="0.1.0",
+    debug=settings.app_debug,
 )
 
+register_error_handlers(app)
 
-# Tất cả endpoint nghiệp vụ dùng chung tiền tố /api; health check được giữ độc lập
-# để hạ tầng giám sát có thể kiểm tra tiến trình mà không chạy qua agent.
-app.include_router(
-    api_router,
-    prefix="/api"
+API_V1_PREFIX = "/api/v1"
+v1_router = APIRouter(prefix=API_V1_PREFIX)
+
+v1_router.include_router(chat_router, prefix="/chat", tags=["Chat"])
+v1_router.include_router(agents_router, prefix="/agents", tags=["Agents"])
+v1_router.include_router(network_router, prefix="/network", tags=["Network"])
+v1_router.include_router(
+    conversation_router,
+    prefix="/conversations",
+    tags=["Conversations"],
 )
+v1_router.include_router(inventory_router, prefix="/devices", tags=["Devices"])
+v1_router.include_router(execution_router, prefix="/tasks", tags=["Tasks"])
+v1_router.include_router(
+    operations_router,
+    prefix="/operations",
+    tags=["Operations"],
+)
+app.include_router(v1_router)
 
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "running"
-    }
+    return {"status": "running"}

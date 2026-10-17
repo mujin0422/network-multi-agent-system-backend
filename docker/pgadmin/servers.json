@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "mujin-server",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "network_automation_db",
+      "Username": "network_automation_user",
+      "SSLMode": "prefer"
+    }
+  }
+}

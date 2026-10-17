@@ -1,35 +1,183 @@
 # Domains
 
-Mỗi domain sở hữu nghiệp vụ, contract và persistence của chính nó. Hai domain
-không import trực tiếp implementation của nhau.
+`domains` chứa nghiệp vụ cốt lõi của hệ thống. Mỗi domain là một bounded context
+có contract, use case, transport adapter và persistence riêng. Business layer
+không tự đọc biến môi trường và không phụ thuộc trực tiếp vào implementation của
+domain khác.
 
 ## Cấu trúc chuẩn
 
 ```text
-domain/
-  schemas.py      # Pydantic input/output contract
-  provider.py     # external source: HTTP, RSS, Selenium, vendor API
-  service.py      # use case orchestration
-  README.md       # ownership và hướng dẫn mở rộng
+domain_name/
+├── __init__.py          # public API ổn định của domain
+├── schemas/             # Pydantic request, response, enum và domain contract
+│   ├── __init__.py
+│   └── <feature>.py
+├── repositories/        # persistence port và adapter
+│   ├── __init__.py
+│   └── <aggregate>.py
+├── services/            # use case và business rule
+│   ├── __init__.py
+│   └── <feature>.py
+├── routers/             # FastAPI transport của domain, chỉ tạo khi cần
+│   ├── __init__.py
+│   └── <feature>.py
+└── providers/           # tích hợp hệ thống ngoài, chỉ tạo khi cần
+    ├── __init__.py
+    └── <provider>.py
 ```
 
-`models.py` và `repository.py` chỉ được thêm khi domain có persistence. Module hỗ trợ như `router.py`, `registry.py` hoặc `base.py` được phép khi đó là khái niệm riêng của domain.
+Không phải domain nào cũng cần đủ mọi folder:
 
-## Domain hiện tại
+- `schemas/` và `services/` được tạo khi domain đã có use case tương ứng.
+- `repositories/` chỉ cần khi domain đọc hoặc ghi persistence.
+- `providers/` chỉ dành cho kết nối dịch vụ hoặc thiết bị bên ngoài.
+- `routers/` expose public service qua HTTP và không chứa business rule.
+- Chưa dùng ORM nên chưa cần `models/`; Pydantic contract không phải ORM model.
+- `app/main.py` tổng hợp router của các domain. Route chat/agent discovery nằm
+  trong `app/agents/routers` vì thuộc application layer của agent.
 
-- `network`: inventory, GNS3 URL và kết nối thiết bị qua Netmiko.
+Các package con export public symbol qua `__init__.py`. Code bên ngoài ưu tiên
+import từ public API của domain:
 
-## Dependency direction
+```python
+from app.domains.inventory import InventoryService
+from app.domains.inventory.schemas import DeviceCreate
+```
+
+Không import xuyên vào file implementation nếu symbol đã được export.
+
+## Quy tắc tách file con
+
+Folder chỉ dùng để phân lớp; bên trong tiếp tục tách file theo resource hoặc
+aggregate, không gom tất cả class vào một `schemas.py` lớn:
 
 ```text
-provider -> schema + core
-repository -> model + schema
-service -> provider + repository
-api/worker/agent -> service
+conversation/schemas/
+├── conversation.py
+└── message.py
+
+execution/schemas/
+├── device_action_log.py
+├── task.py
+├── operation.py
+├── operation_dependency.py
+├── operation_device.py
+├── task_execution.py
+└── status.py
+
+inventory/schemas/
+├── brand.py
+├── category.py
+├── credential.py
+├── device.py
+├── device_connection.py
+└── network_status.py
 ```
 
-Provider không ghi database trực tiếp. Repository không gọi website bên ngoài.
+Một file có thể chứa các contract rất gần nhau như `Device`, `DeviceCreate` và
+`DeviceUpdate`. Chỉ tách tiếp khi chúng thuộc resource khác hoặc file bắt đầu có
+nhiều trách nhiệm.
 
-Service là nơi phối hợp hai phần này. API không đi tắt vào provider/repository.
+## Năm domain của hệ thống
 
-Agent và agent tool adapter được đặt ngoài domain, trong `agents/` (ví dụ `agents/tools/network.py`), và chỉ gọi public service của domain. Điều này giữ domain độc lập với framework agent.
+Tên domain ánh xạ trực tiếp với năm nhóm trong tài liệu database:
+
+| Nhóm tài liệu | Domain source |
+| --- | --- |
+| 3.1 Authentication & Authorization | `identity` |
+| 3.2 Network Inventory | `inventory` |
+| 3.3 Conversation Management | `conversation` |
+| 3.4 AI Execution Management | `execution` |
+| 3.5 AI Evaluation & Benchmarking | `evaluation` |
+
+### `identity`
+
+Sở hữu user, session, role, permission và authentication/authorization. Database
+record schemas đã được định nghĩa theo đúng bảy bảng trong tài liệu. Repository,
+service và router chỉ được tạo khi bắt đầu triển khai use case đăng nhập và RBAC.
+
+### `inventory`
+
+Sở hữu toàn bộ nhóm Network Inventory trong tài liệu: device, brand, category,
+credential và khả năng kết nối GNS3/Netmiko. Domain cung cấp Device API,
+uniqueness rule, repository PostgreSQL, provider kết nối thiết bị và in-memory
+repository cho test.
+
+Public Device contract không trả password/secret. Credential chỉ được giải mã
+trong repository dành cho luồng kết nối và không được ghi log.
+
+### `conversation`
+
+Sở hữu conversation, message và thứ tự lịch sử hội thoại. Domain chỉ quản lý dữ
+liệu hội thoại; việc chọn hoặc điều phối AI agent nằm ở application layer.
+
+### `execution`
+
+Sở hữu Task, Operation, dependency, trạng thái thực thi và device action audit.
+Schema đã bao phủ toàn bộ sáu bảng; hiện service, repository và router mới triển
+khai use case Task/Operation.
+
+### `evaluation`
+
+Sở hữu AI evaluation và benchmarking: goal result, RCA, remediation, safety và
+evidence. Schema `TaskEvaluation` đã ánh xạ bảng `task_evaluations`; repository,
+service và router sẽ được tạo khi có workflow đánh giá thực tế.
+
+## Phạm vi schema database
+
+Hai mươi bảng trong tài liệu đã có record schema tương ứng. Tên trường trong các
+record schema giữ nguyên theo database; các request/response schema bổ sung như
+`DeviceCreate` hoặc `TaskDetail` không được tính là bảng mới.
+
+| Domain | Bảng và record schema |
+| --- | --- |
+| `identity` | `roles` → `Role`, `management_functions` → `ManagementFunction`, `actions` → `Action`, `permissions` → `Permission`, `role_permissions` → `RolePermission`, `users` → `UserRecord`, `user_sessions` → `UserSessionRecord` |
+| `inventory` | `brands` → `Brand`, `categories` → `Category`, `credentials` → `CredentialRecord`, `devices` → `Device` |
+| `conversation` | `conversations` → `Conversation`, `messages` → `Message` |
+| `execution` | `tasks` → `Task`, `task_operations` → `Operation`, `operation_dependencies` → `OperationDependency`, `task_operation_devices` → `TaskOperationDevice`, `task_executions` → `TaskExecution`, `device_action_logs` → `DeviceActionLog` |
+| `evaluation` | `task_evaluations` → `TaskEvaluation` |
+
+`User`, `Credential` là public response schema đã loại dữ liệu nhạy cảm.
+`UserRecord`, `UserSessionRecord` và `CredentialRecord` vẫn nhận đủ trường nội bộ
+nhưng password, refresh-token hash và ciphertext được đánh dấu `exclude=True` để
+không bị serialize ngoài ý muốn.
+
+## Đánh giá ranh giới domain
+
+Năm domain trên phù hợp với phạm vi hiện tại và chưa cần thêm hoặc loại bỏ:
+
+| Domain | Trách nhiệm | Trạng thái |
+| --- | --- | --- |
+| `identity` | User, session và RBAC | Schema implemented; use cases planned |
+| `inventory` | Inventory, credential và kết nối thiết bị | Implemented |
+| `conversation` | Hội thoại và message | Implemented |
+| `execution` | Task, operation và device action audit | All schemas; Task/Operation use cases |
+| `evaluation` | Evaluation và benchmarking | Schema implemented; workflow planned |
+
+Chỉ cân nhắc tách thêm trong tương lai khi xuất hiện ranh giới nghiệp vụ độc lập:
+
+- Tách `credential` khỏi `inventory` khi secret lifecycle, rotation và vault trở
+  thành một bounded context độc lập.
+- Không biến `agents` hoặc `tools` thành domain; chúng là lớp orchestration và
+  adapter sử dụng các domain service.
+
+## Quy tắc phụ thuộc
+
+```text
+api / agents / tools
+         ↓
+   domain service
+      ↙      ↘
+repository  provider
+      ↘      ↙
+      schemas + core
+```
+
+- Service phối hợp business rule và chỉ phụ thuộc persistence/provider qua
+  contract.
+- Repository không gọi provider bên ngoài.
+- Provider không ghi trực tiếp dữ liệu nghiệp vụ.
+- API, agent và tool gọi public service; không đi tắt vào repository.
+- Khi hai domain cần phối hợp, application/orchestrator gọi hai public service;
+  không để domain này import implementation nội bộ của domain kia.

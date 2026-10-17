@@ -1,4 +1,3 @@
-# File: src/alphascope/core/logging.py
 """Shared logging configuration for API and worker processes."""
 
 import logging

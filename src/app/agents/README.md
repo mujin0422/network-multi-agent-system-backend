@@ -6,15 +6,17 @@ implementations, registry và chính sách orchestration.
 ```text
 agents/
   analyst/          # implementation và prompt của analyst agent
+  routers/          # chat và agent discovery HTTP routes
   network/          # implementation và prompt của network agent
   orchestrator/     # routing/supervisor policies
   tools/            # adapter gọi public service của domain
   base.py           # agent contract
+  dependencies.py   # dependency composition cho agent routers
   manager.py        # điều phối một lượt thực thi
   registry.py       # đăng ký và lookup agent
   schemas.py        # contract của agent application layer
 ```
 
 Agent không đặt trong `domains`. Khi agent cần nghiệp vụ mạng, adapter trong
-`agents/tools/` gọi `domains/network/service.py`; agent không gọi provider hoặc
-Netmiko trực tiếp.
+`agents/tools/` gọi public service kết nối thiết bị của `domains/inventory`;
+agent không gọi provider hoặc Netmiko trực tiếp.
