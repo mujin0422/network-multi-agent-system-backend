@@ -14,6 +14,33 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+class Device(BaseModel):
+    """Device response công khai được trả cho frontend.
+
+    Model chứa metadata và khóa tham chiếu credential, nhưng tuyệt đối không
+    chứa username, password hay enable secret.
+    """
+
+    id: str = Field(description="Khóa chính, thường dùng prefix devc.")
+    credential_id: str | None = Field(
+        default=None,
+        description="ID credential; null nếu chưa được gán.",
+    )
+    brand_id: str = Field(description="ID hãng sản xuất.")
+    category_id: str = Field(description="ID loại thiết bị.")
+    hostname: str = Field(description="Nhãn thiết bị duy nhất.")
+    host: str = Field(description="Địa chỉ IP hoặc DNS dùng để kết nối.")
+    port: int = Field(gt=0, le=65535, description="Cổng SSH/Telnet.")
+    device_type: str = Field(description="Netmiko driver của thiết bị.")
+    location: str | None = Field(default=None, description="Vị trí vật lý hoặc logic.")
+    created_by: str = Field(description="ID user tạo device; không đổi sau khi tạo.")
+    last_updated_by: str | None = Field(
+        default=None,
+        description="ID user cập nhật device gần nhất.",
+    )
+    created_at: datetime = Field(description="Thời điểm tạo theo UTC.")
+    last_updated_at: datetime = Field(description="Thời điểm cập nhật theo UTC.")
+
 
 class DeviceCreate(BaseModel):
     """Payload frontend gửi khi đăng ký một thiết bị mới."""
@@ -94,31 +121,3 @@ class DeviceUpdate(BaseModel):
     )
     location: str | None = Field(default=None, description="Vị trí mới.")
     last_updated_by: str = Field(min_length=1, description="ID user thực hiện update.")
-
-
-class Device(BaseModel):
-    """Device response công khai được trả cho frontend.
-
-    Model chứa metadata và khóa tham chiếu credential, nhưng tuyệt đối không
-    chứa username, password hay enable secret.
-    """
-
-    id: str = Field(description="Khóa chính, thường dùng prefix devc.")
-    credential_id: str | None = Field(
-        default=None,
-        description="ID credential; null nếu chưa được gán.",
-    )
-    brand_id: str = Field(description="ID hãng sản xuất.")
-    category_id: str = Field(description="ID loại thiết bị.")
-    hostname: str = Field(description="Nhãn thiết bị duy nhất.")
-    host: str = Field(description="Địa chỉ IP hoặc DNS dùng để kết nối.")
-    port: int = Field(gt=0, le=65535, description="Cổng SSH/Telnet.")
-    device_type: str = Field(description="Netmiko driver của thiết bị.")
-    location: str | None = Field(default=None, description="Vị trí vật lý hoặc logic.")
-    created_by: str = Field(description="ID user tạo device; không đổi sau khi tạo.")
-    last_updated_by: str | None = Field(
-        default=None,
-        description="ID user cập nhật device gần nhất.",
-    )
-    created_at: datetime = Field(description="Thời điểm tạo theo UTC.")
-    last_updated_at: datetime = Field(description="Thời điểm cập nhật theo UTC.")

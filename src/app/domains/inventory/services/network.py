@@ -3,7 +3,7 @@
 from typing import Any
 
 from app.domains.inventory.providers import DeviceConnectionProvider
-from app.domains.inventory.schemas import DeviceConfig, NetworkStatus
+from app.domains.inventory.schemas import DeviceConfig
 
 
 class NetworkService:
@@ -11,9 +11,6 @@ class NetworkService:
 
     def __init__(self, provider: DeviceConnectionProvider) -> None:
         self._provider = provider
-
-    def status(self) -> NetworkStatus:
-        return NetworkStatus(status="ok")
 
     def get_device(self, device_identifier: str) -> DeviceConfig | None:
         return self._provider.get_device_config(device_identifier)

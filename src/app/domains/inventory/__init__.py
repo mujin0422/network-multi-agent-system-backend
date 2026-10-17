@@ -6,42 +6,65 @@ thay đổi mà không làm ảnh hưởng tới nơi sử dụng.
 """
 
 from app.domains.inventory.repositories import (
+    BrandRepository,
+    CategoryRepository,
+    CredentialRepository,
     DeviceConfigRepository,
-    InMemoryDeviceRepository,
+    PostgresBrandRepository,
+    PostgresCategoryRepository,
+    PostgresCredentialRepository,
     PostgresDeviceConfigRepository,
     PostgresDeviceRepository,
 )
 from app.domains.inventory.providers import DeviceConnectionProvider
 from app.domains.inventory.schemas import (
     Brand,
+    BrandCreate,
+    BrandUpdate,
     Category,
     Credential,
+    CredentialCreate,
     CredentialRecord,
+    CredentialUpdate,
     Device,
     DeviceConfig,
     DeviceCreate,
     DeviceUpdate,
-    NetworkStatus,
 )
-from app.domains.inventory.services import InventoryService, NetworkService
+from app.domains.inventory.services import (
+    BrandService,
+    CategoryService,
+    CredentialService,
+    DeviceService,
+    NetworkService,
+)
 
 __all__ = [
     "Brand",
+    "BrandCreate",
+    "BrandRepository",
+    "BrandService",
+    "BrandUpdate",
     "Category",
+    "CategoryRepository",
+    "CategoryService",
     "Credential",
+    "CredentialCreate",
+    "CredentialRepository",
     "CredentialRecord",
+    "CredentialService",
+    "CredentialUpdate",
     "Device",
     "DeviceConfig",
     "DeviceCreate",
     "DeviceConfigRepository",
     "DeviceConnectionProvider",
     "DeviceUpdate",
-    # Service chứa quy tắc nghiệp vụ và là điểm vào chính của domain.
-    "InventoryService",
-    # Adapter nhẹ dùng cho unit test hoặc chạy thử không cần database.
-    "InMemoryDeviceRepository",
+    "DeviceService",
     "NetworkService",
-    "NetworkStatus",
+    "PostgresBrandRepository",
+    "PostgresCategoryRepository",
+    "PostgresCredentialRepository",
     "PostgresDeviceConfigRepository",
     # Adapter production đọc và ghi bảng devices trong PostgreSQL.
     "PostgresDeviceRepository",

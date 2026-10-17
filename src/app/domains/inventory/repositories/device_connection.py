@@ -2,6 +2,9 @@
 
 from typing import Protocol
 
+import psycopg
+from psycopg.rows import dict_row
+
 from app.domains.inventory.schemas import DeviceConfig
 
 
@@ -23,9 +26,6 @@ class PostgresDeviceConfigRepository:
         self._encryption_key = encryption_key
 
     def _connect(self):
-        import psycopg
-        from psycopg.rows import dict_row
-
         return psycopg.connect(self._database_url, row_factory=dict_row)
 
     def get(self, device_identifier: str) -> DeviceConfig | None:
