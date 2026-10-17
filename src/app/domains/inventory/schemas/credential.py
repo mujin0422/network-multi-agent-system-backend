@@ -1,8 +1,46 @@
 """Schemas ánh xạ bảng ``credentials``."""
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CredentialCreate(BaseModel):
+    """Payload tạo Credential; secret chỉ được nhận vào và không trả ra API."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=150)
+    description: str | None = None
+    username: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, repr=False, json_schema_extra={"writeOnly": True})
+    secret: str | None = Field(default=None, repr=False, json_schema_extra={"writeOnly": True})
+    encryption_type: Literal["PGP_SYM_AES256"] = "PGP_SYM_AES256"
+    created_by: str = Field(min_length=1)
+
+
+class CredentialUpdate(BaseModel):
+    """Payload sửa Credential; trường không gửi sẽ được giữ nguyên."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    description: str | None = None
+    username: str | None = Field(default=None, min_length=1, max_length=255)
+    password: str | None = Field(
+        default=None,
+        min_length=1,
+        repr=False,
+        json_schema_extra={"writeOnly": True},
+    )
+    secret: str | None = Field(
+        default=None,
+        repr=False,
+        json_schema_extra={"writeOnly": True},
+    )
+    encryption_type: Literal["PGP_SYM_AES256"] | None = None
+    last_updated_by: str = Field(min_length=1)
 
 
 class Credential(BaseModel):
