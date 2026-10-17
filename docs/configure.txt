@@ -1,4 +1,6 @@
 //========== P1 ==========//
+enable
+configure terminal
 
 hostname P1
 ip domain-name aiagent.local
@@ -43,6 +45,8 @@ wr
 
 
 //========== P2 ==========//
+enable
+configure terminal
 
 hostname P2
 ip domain-name aiagent.local
@@ -87,6 +91,8 @@ wr
 
 
 //========== PE1 ==========//
+enable
+configure terminal
 
 hostname PE1
 ip domain-name aiagent.local
@@ -163,6 +169,8 @@ wr
 
 
 //========== PE2 ==========//
+enable
+configure terminal
 
 hostname PE2
 ip domain-name aiagent.local
@@ -239,6 +247,8 @@ wr
 
 
 //========== CE-1A ==========//
+enable
+configure terminal
 
 hostname CE-1A
 ip domain-name aiagent.local
@@ -284,6 +294,8 @@ wr
 
 
 //========== CE-1B ==========//
+enable
+configure terminal
 
 hostname CE-1B
 ip domain-name aiagent.local
@@ -317,6 +329,8 @@ wr
 
 
 //========== CE-2A ==========//
+enable
+configure terminal
 
 hostname CE-2A
 ip domain-name aiagent.local
@@ -362,6 +376,8 @@ wr
 
 
 //========== CE-2B ==========//
+enable
+configure terminal
 
 hostname CE-2B
 ip domain-name aiagent.local
@@ -395,6 +411,8 @@ wr
 
 
 //========== Switch1 ==========//
+enable
+configure terminal
 
 hostname Switch1
 ip domain-name aiagent.local
@@ -440,6 +458,8 @@ end
 wr
 
 //========== Switch2 ==========//
+enable
+configure terminal
 
 hostname Switch2
 ip domain-name aiagent.local
@@ -459,6 +479,8 @@ end
 wr
 
 //========== Switch3 ==========//
+enable
+configure terminal
 
 hostname Switch3
 ip domain-name aiagent.local
@@ -504,6 +526,8 @@ end
 wr
 
 //========== Switch4 ==========//
+enable
+configure terminal
 
 hostname Switch4
 ip domain-name aiagent.local
@@ -558,6 +582,8 @@ ip 172.16.4.10 255.255.255.0 172.16.4.1
 
 save
 
+enable
+configure terminal
 
 hostname P3
 ip domain-name aiagent.local

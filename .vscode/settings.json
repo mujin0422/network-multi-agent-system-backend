@@ -1,6 +1,5 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "editor.fontSize": 12,
     "python.analysis.extraPaths": [
         "./src"
     ]
