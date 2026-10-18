@@ -14,6 +14,7 @@ from app.domains.inventory.routers import (
     network_router,
     router as inventory_router,
 )
+from app.domains.identity.routers import auth_router
 
 
 settings = get_settings()
@@ -28,6 +29,7 @@ register_error_handlers(app)
 API_V1_PREFIX = "/api/v1"
 v1_router = APIRouter(prefix=API_V1_PREFIX)
 
+v1_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 v1_router.include_router(chat_router, prefix="/chat", tags=["Chat"])
 v1_router.include_router(agents_router, prefix="/agents", tags=["Agents"])
 v1_router.include_router(network_router, prefix="/network", tags=["Network"])

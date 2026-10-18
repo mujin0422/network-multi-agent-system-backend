@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     inventory_repository_backend: Literal["memory", "postgres"] = "memory"
     # Chỉ backend dùng khóa này để giải mã credential khi mở kết nối Netmiko.
     device_credential_encryption_key: str = ""
+    # Khóa ký access token identity, độc lập với khóa credential thiết bị.
+    auth_jwt_secret: str = "development-only-change-me"
+    auth_access_token_minutes: int = Field(default=15, gt=0, le=1440)
+    auth_refresh_token_days: int = Field(default=30, gt=0, le=365)
 
     # GNS3 project settings.
     gns3_ip: str = "127.0.0.1"

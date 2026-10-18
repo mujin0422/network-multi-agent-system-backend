@@ -94,8 +94,9 @@ Tên domain ánh xạ trực tiếp với năm nhóm trong tài liệu database:
 ### `identity`
 
 Sở hữu user, session, role, permission và authentication/authorization. Database
-record schemas đã được định nghĩa theo đúng bảy bảng trong tài liệu. Repository,
-service và router chỉ được tạo khi bắt đầu triển khai use case đăng nhập và RBAC.
+record schemas đã được định nghĩa theo đúng bảy bảng trong tài liệu. Domain có
+PostgreSQL repository, login/refresh/logout, current-user endpoint và dependency
+RBAC theo function/action.
 
 ### `inventory`
 
@@ -149,7 +150,7 @@ Năm domain trên phù hợp với phạm vi hiện tại và chưa cần thêm 
 
 | Domain | Trách nhiệm | Trạng thái |
 | --- | --- | --- |
-| `identity` | User, session và RBAC | Schema implemented; use cases planned |
+| `identity` | User, session và RBAC | Authentication, session và route permissions implemented |
 | `inventory` | Inventory, credential và kết nối thiết bị | Implemented |
 | `conversation` | Hội thoại và message | Implemented |
 | `execution` | Task, operation và device action audit | All schemas; Task/Operation use cases |

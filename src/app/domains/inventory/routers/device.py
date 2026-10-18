@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from app.domains.identity.routers.dependencies import require_permission
 
 from app.domains.inventory.schemas import Device, DeviceCreate, DeviceUpdate
 from app.domains.inventory.routers.dependencies import get_inventory_service
@@ -16,6 +17,7 @@ router = APIRouter()
 async def create_device(
     payload: DeviceCreate,
     service: Annotated[InventoryService, Depends(get_inventory_service)],
+    _user: Annotated[object, Depends(require_permission("Device Management", "Add"))],
 ) -> Device:
     return service.create_device(payload)
 
@@ -23,6 +25,7 @@ async def create_device(
 @router.get("/", response_model=list[Device])
 async def list_devices(
     service: Annotated[InventoryService, Depends(get_inventory_service)],
+    _user: Annotated[object, Depends(require_permission("Device Management", "View"))],
 ) -> list[Device]:
     return service.list_devices()
 
@@ -31,6 +34,7 @@ async def list_devices(
 async def get_device(
     device_id: str,
     service: Annotated[InventoryService, Depends(get_inventory_service)],
+    _user: Annotated[object, Depends(require_permission("Device Management", "View"))],
 ) -> Device:
     return service.get_device(device_id)
 
@@ -40,5 +44,6 @@ async def update_device(
     device_id: str,
     payload: DeviceUpdate,
     service: Annotated[InventoryService, Depends(get_inventory_service)],
+    _user: Annotated[object, Depends(require_permission("Device Management", "Edit"))],
 ) -> Device:
     return service.update_device(device_id, payload)

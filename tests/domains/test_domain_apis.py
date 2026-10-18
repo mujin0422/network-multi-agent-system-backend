@@ -6,12 +6,88 @@ from uuid import uuid4
 import httpx
 
 from app.main import app
+from app.domains.identity.routers.dependencies import get_identity_service
+from app.domains.identity.schemas import User, UserRecord, UserStatus
+from app.domains.identity.services import IdentityService
+from app.core.config import Settings
+from datetime import UTC, datetime
+
+
+class TestIdentityRepository:
+    def __init__(self):
+        now = datetime.now(UTC)
+        self.user = UserRecord(
+            id="user-test", role_id="role-test", email="test@example.com",
+            password_hash=IdentityService.hash_password("test-password"),
+            full_name="Test", user_status=UserStatus.ACTIVE, created_at=now,
+        )
+        self.sessions = {}
+
+    def get_user_by_email(self, email):
+        return self.user if email == self.user.email else None
+
+    def get_user(self, user_id):
+        return User.model_validate(self.user.model_dump()) if user_id == self.user.id else None
+
+    def get_user_with_password(self, user_id):
+        return self.user if user_id == self.user.id else None
+
+    def get_role(self, role_id):
+        return None
+
+    def get_permissions(self, role_id):
+        return {
+            ("Chatbot", "View"), ("Chatbot", "Execute"),
+            ("Device Management", "Add"), ("Device Management", "View"),
+            ("Device Management", "Edit"), ("Task Management", "View"),
+            ("Task Management", "Execute"),
+        }
+
+    def save_session(self, session):
+        self.sessions[session.id] = session
+
+    def get_session_by_hash(self, token_hash):
+        return next((s for s in self.sessions.values() if s.refresh_token_hash == token_hash), None)
+
+    def revoke_session(self, session_id, revoked_at):
+        self.sessions[session_id] = self.sessions[session_id].model_copy(update={"revoked_at": revoked_at})
+
+    def is_session_active(self, session_id):
+        s = self.sessions.get(session_id)
+        return bool(s and s.revoked_at is None and s.expires_at > datetime.now(UTC))
+
+    def get_active_session(self, session_id):
+        return self.sessions.get(session_id) if self.is_session_active(session_id) else None
+
+    def rotate_session(self, session_id, revoked_at, replacement):
+        if not self.is_session_active(session_id):
+            return False
+        self.revoke_session(session_id, revoked_at)
+        self.save_session(replacement)
+        return True
+
+    def update_login(self, user_id, logged_in_at):
+        self.user = self.user.model_copy(update={"last_login_at": logged_in_at})
+
+
+TEST_IDENTITY_REPOSITORY = TestIdentityRepository()
+TEST_IDENTITY_SERVICE = IdentityService(
+    TEST_IDENTITY_REPOSITORY, Settings(auth_jwt_secret="test-only-secret")
+)
+app.dependency_overrides[get_identity_service] = lambda: TEST_IDENTITY_SERVICE
 
 
 async def request(method: str, path: str, json: dict | None = None) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        return await client.request(method, path, json=json)
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "test-password"},
+        )
+        token = response.json()["access_token"]
+        return await client.request(
+            method, path, json=json, headers={"Authorization": f"Bearer {token}"}
+        )
 
 
 def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:

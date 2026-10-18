@@ -15,3 +15,11 @@ class ResourceConflictError(DomainError):
 
 class InvalidStateTransitionError(DomainError):
     """Yêu cầu chuyển trạng thái không hợp lệ theo state machine."""
+
+
+class AuthenticationError(DomainError):
+    """Thông tin xác thực không hợp lệ hoặc đã hết hạn."""
+
+
+class AuthorizationError(DomainError):
+    """Người dùng đã xác thực nhưng không có quyền phù hợp."""
