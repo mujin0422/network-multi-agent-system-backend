@@ -3,6 +3,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from app.domains.identity.routers.dependencies import require_permission
+from app.domains.identity.schemas import User
 
 from app.domains.execution.schemas import (
     Operation,
@@ -23,6 +25,7 @@ operations_router = APIRouter()
 async def create_task(
     payload: TaskCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "Execute"))],
 ) -> Task:
     return service.create_task(payload)
 
@@ -30,6 +33,7 @@ async def create_task(
 @router.get("/", response_model=list[Task])
 async def list_tasks(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[Task]:
     return service.list_tasks()
 
@@ -38,6 +42,7 @@ async def list_tasks(
 async def get_task(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> TaskDetail:
     return service.get_task(task_id)
 
@@ -51,5 +56,6 @@ async def add_operation(
     task_id: str,
     payload: OperationCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "Execute"))],
 ) -> Operation:
     return service.add_operation(task_id, payload)

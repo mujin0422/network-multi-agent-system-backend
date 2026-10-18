@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions.domain import (
+    AuthenticationError,
+    AuthorizationError,
     InvalidStateTransitionError,
     ResourceConflictError,
     ResourceNotFoundError,
@@ -19,6 +21,18 @@ def register_error_handlers(app: FastAPI) -> None:
         exc: ResourceNotFoundError,
     ) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(AuthenticationError)
+    async def handle_authentication(
+        _request: Request, exc: AuthenticationError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=401, content={"detail": str(exc)}, headers={"WWW-Authenticate": "Bearer"})
+
+    @app.exception_handler(AuthorizationError)
+    async def handle_authorization(
+        _request: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     @app.exception_handler(ResourceConflictError)
     async def handle_conflict(

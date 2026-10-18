@@ -3,6 +3,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
+from app.domains.identity.routers.dependencies import require_permission
+from app.domains.identity.schemas import User
 
 from app.domains.conversation.schemas import (
     Conversation,
@@ -22,6 +24,7 @@ router = APIRouter()
 async def create_conversation(
     payload: ConversationCreate,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    _user: Annotated[User, Depends(require_permission("Chatbot", "Execute"))],
 ) -> Conversation:
     return service.create(payload)
 
@@ -29,6 +32,7 @@ async def create_conversation(
 @router.get("/", response_model=list[Conversation])
 async def list_conversations(
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
     user_id: Annotated[str | None, Query()] = None,
 ) -> list[Conversation]:
     return service.list(user_id)
@@ -38,6 +42,7 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: str,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
 ) -> ConversationDetail:
     return service.get(conversation_id)
 
@@ -51,5 +56,6 @@ async def add_message(
     conversation_id: str,
     payload: MessageCreate,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    _user: Annotated[User, Depends(require_permission("Chatbot", "Execute"))],
 ) -> Message:
     return service.add_message(conversation_id, payload)

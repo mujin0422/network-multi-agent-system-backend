@@ -46,6 +46,7 @@ Các nhóm cấu hình chính trong `.env.example`:
 
 - Application và logging
 - NVIDIA AI provider
+- Identity token signing secret and token lifetimes
 - GNS3
 - PostgreSQL device inventory
 - Network connection timeout
@@ -209,7 +210,45 @@ thành `host.docker.internal` hoặc bổ sung bước ánh xạ tại network p
 
 ## Chạy test
 
-Sau khi cài editable package:
+Sau khi cài editable package, unit test identity không cần PostgreSQL:
+
+```bash
+pytest tests/domains/test_identity_service.py -q
+```
+
+Identity API cần PostgreSQL đã có schema và seed. Với Docker Compose, tạo `.env`,
+đặt secret ngẫu nhiên cho `AUTH_JWT_SECRET`, `POSTGRES_PASSWORD`,
+`PGADMIN_DEFAULT_PASSWORD` và `DEVICE_CREDENTIAL_ENCRYPTION_KEY`, sau đó chạy:
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl http://localhost:8000/health
+```
+
+Tài khoản development được seed trong database:
+
+```text
+admin@network.local / Admin@123
+sysadmin@network.local / SysAdmin@123
+engineer@network.local / Engineer@123
+operator@network.local / Operator@123
+```
+
+Đăng nhập rồi kiểm tra token và quyền qua API:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"email":"admin@network.local","password":"Admin@123"}'
+```
+
+Lấy `access_token` trong response và dùng header `Authorization: Bearer <token>`
+để gọi `/api/v1/auth/me` hoặc route cần quyền như `/api/v1/devices/`. Refresh
+bằng `POST /api/v1/auth/refresh` với `{"refresh_token":"..."}`; refresh token cũ
+sẽ bị thu hồi. Swagger UI tại `/docs` cho phép thực hiện các bước này trực tiếp.
+
+Chạy toàn bộ test:
 
 ```bash
 pytest
@@ -222,7 +261,7 @@ package khi chạy từ project root.
 
 ```text
 src/app/domains/
-├── identity/        # User, session và RBAC (planned)
+├── identity/        # Authentication, session và RBAC
 ├── inventory/       # Device inventory, GNS3 và Netmiko access
 ├── conversation/    # Conversation và Message
 ├── execution/       # Task, Operation và audit

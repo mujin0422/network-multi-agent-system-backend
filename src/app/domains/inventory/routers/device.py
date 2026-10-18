@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from app.domains.identity.routers.dependencies import require_permission
 
 from app.domains.inventory.schemas import Device, DeviceCreate, DeviceUpdate
 from app.domains.inventory.routers.dependencies import get_device_service

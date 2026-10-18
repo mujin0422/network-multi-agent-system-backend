@@ -1,6 +1,8 @@
 """Public exports for shared domain exceptions."""
 
 from app.core.exceptions.domain import (
+    AuthenticationError,
+    AuthorizationError,
     DomainError,
     InvalidStateTransitionError,
     ResourceConflictError,
@@ -8,6 +10,8 @@ from app.core.exceptions.domain import (
 )
 
 __all__ = [
+    "AuthenticationError",
+    "AuthorizationError",
     "DomainError",
     "InvalidStateTransitionError",
     "ResourceConflictError",
