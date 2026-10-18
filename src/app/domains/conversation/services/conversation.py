@@ -51,10 +51,6 @@ class ConversationService:
             created_at=now,
         )
         self._repository.save_message(message)
-
-        # Một message mới làm thay đổi thời điểm cập nhật của conversation cha.
-        updated = conversation.model_copy(update={"last_updated_at": now})
-        self._repository.save_conversation(updated)
         return message
 
     def _require_conversation(self, conversation_id: str) -> Conversation:
