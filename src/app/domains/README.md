@@ -41,7 +41,7 @@ Các package con export public symbol qua `__init__.py`. Code bên ngoài ưu ti
 import từ public API của domain:
 
 ```python
-from app.domains.inventory import InventoryService
+from app.domains.inventory import DeviceService
 from app.domains.inventory.schemas import DeviceCreate
 ```
 
@@ -71,8 +71,7 @@ inventory/schemas/
 ├── category.py
 ├── credential.py
 ├── device.py
-├── device_connection.py
-└── network_status.py
+└── device_connection.py
 ```
 
 Một file có thể chứa các contract rất gần nhau như `Device`, `DeviceCreate` và
@@ -83,13 +82,13 @@ nhiều trách nhiệm.
 
 Tên domain ánh xạ trực tiếp với năm nhóm trong tài liệu database:
 
-| Nhóm tài liệu | Domain source |
-| --- | --- |
-| 3.1 Authentication & Authorization | `identity` |
-| 3.2 Network Inventory | `inventory` |
-| 3.3 Conversation Management | `conversation` |
-| 3.4 AI Execution Management | `execution` |
-| 3.5 AI Evaluation & Benchmarking | `evaluation` |
+| Nhóm tài liệu                      | Domain source  |
+| ---------------------------------- | -------------- |
+| 3.1 Authentication & Authorization | `identity`     |
+| 3.2 Network Inventory              | `inventory`    |
+| 3.3 Conversation Management        | `conversation` |
+| 3.4 AI Execution Management        | `execution`    |
+| 3.5 AI Evaluation & Benchmarking   | `evaluation`   |
 
 ### `identity`
 
@@ -102,8 +101,8 @@ RBAC theo function/action.
 
 Sở hữu toàn bộ nhóm Network Inventory trong tài liệu: device, brand, category,
 credential và khả năng kết nối GNS3/Netmiko. Domain cung cấp Device API,
-uniqueness rule, repository PostgreSQL, provider kết nối thiết bị và in-memory
-repository cho test.
+uniqueness rule, PostgreSQL repository và provider kết nối thiết bị. Test dùng
+stub repository cục bộ, không đưa memory adapter vào production code.
 
 Public Device contract không trả password/secret. Credential chỉ được giải mã
 trong repository dành cho luồng kết nối và không được ghi log.
@@ -131,13 +130,13 @@ Hai mươi bảng trong tài liệu đã có record schema tương ứng. Tên t
 record schema giữ nguyên theo database; các request/response schema bổ sung như
 `DeviceCreate` hoặc `TaskDetail` không được tính là bảng mới.
 
-| Domain | Bảng và record schema |
-| --- | --- |
-| `identity` | `roles` → `Role`, `management_functions` → `ManagementFunction`, `actions` → `Action`, `permissions` → `Permission`, `role_permissions` → `RolePermission`, `users` → `UserRecord`, `user_sessions` → `UserSessionRecord` |
-| `inventory` | `brands` → `Brand`, `categories` → `Category`, `credentials` → `CredentialRecord`, `devices` → `Device` |
-| `conversation` | `conversations` → `Conversation`, `messages` → `Message` |
-| `execution` | `tasks` → `Task`, `task_operations` → `Operation`, `operation_dependencies` → `OperationDependency`, `task_operation_devices` → `TaskOperationDevice`, `task_executions` → `TaskExecution`, `device_action_logs` → `DeviceActionLog` |
-| `evaluation` | `task_evaluations` → `TaskEvaluation` |
+| Domain         | Bảng và record schema                                                                                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identity`     | `roles` → `Role`, `management_functions` → `ManagementFunction`, `actions` → `Action`, `permissions` → `Permission`, `role_permissions` → `RolePermission`, `users` → `UserRecord`, `user_sessions` → `UserSessionRecord`            |
+| `inventory`    | `brands` → `Brand`, `categories` → `Category`, `credentials` → `CredentialRecord`, `devices` → `Device`                                                                                                                              |
+| `conversation` | `conversations` → `Conversation`, `messages` → `Message`                                                                                                                                                                             |
+| `execution`    | `tasks` → `Task`, `task_operations` → `Operation`, `operation_dependencies` → `OperationDependency`, `task_operation_devices` → `TaskOperationDevice`, `task_executions` → `TaskExecution`, `device_action_logs` → `DeviceActionLog` |
+| `evaluation`   | `task_evaluations` → `TaskEvaluation`                                                                                                                                                                                                |
 
 `User`, `Credential` là public response schema đã loại dữ liệu nhạy cảm.
 `UserRecord`, `UserSessionRecord` và `CredentialRecord` vẫn nhận đủ trường nội bộ
@@ -155,6 +154,13 @@ Năm domain trên phù hợp với phạm vi hiện tại và chưa cần thêm 
 | `conversation` | Hội thoại và message | Implemented |
 | `execution` | Task, operation và device action audit | All schemas; Task/Operation use cases |
 | `evaluation` | Evaluation và benchmarking | Schema implemented; workflow planned |
+| Domain         | Trách nhiệm                               | Trạng thái                            |
+| -------------- | ----------------------------------------- | ------------------------------------- |
+| `identity`     | User, session và RBAC                     | Schema implemented; use cases planned |
+| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                           |
+| `conversation` | Hội thoại và message                      | Implemented                           |
+| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases |
+| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned  |
 
 Chỉ cân nhắc tách thêm trong tương lai khi xuất hiện ranh giới nghiệp vụ độc lập:
 

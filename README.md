@@ -92,7 +92,6 @@ Toàn bộ public business API dùng prefix `/api/v1`. Ví dụ:
 ```text
 POST /api/v1/chat/
 GET  /api/v1/agents/
-GET  /api/v1/network/
 GET  /api/v1/conversations/
 GET  /api/v1/devices/
 GET  /api/v1/tasks/
@@ -269,7 +268,7 @@ src/app/domains/
 └── evaluation/      # Evaluation và benchmarking (planned)
 ```
 
-`conversation`, `execution` và `inventory` hiện dùng repository in-memory để
+`conversation` và `execution` hiện dùng repository in-memory để
 frontend có thể test contract API. Dữ liệu mất khi API restart. Repository SQL có
 thể được thay qua dependency injection mà không đổi route hoặc domain service.
 

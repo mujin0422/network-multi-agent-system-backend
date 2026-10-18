@@ -1,47 +1,23 @@
-"""Persistence contract và các adapter của Inventory domain.
-
-Service chỉ phụ thuộc vào ``DeviceRepository`` protocol, không phụ thuộc trực
-tiếp PostgreSQL. Vì vậy unit test có thể dùng in-memory adapter, trong khi Docker
-inject PostgreSQL adapter mà không cần thay đổi nghiệp vụ hoặc API route.
-"""
+"""Persistence contract và PostgreSQL adapter cho resource Device."""
 
 from typing import Protocol
+
+import psycopg
+from psycopg.rows import dict_row
 
 from app.domains.inventory.schemas import Device
 
 
 class DeviceRepository(Protocol):
-    """Cổng persistence tối thiểu mà ``InventoryService`` yêu cầu."""
+    """Cổng persistence tối thiểu mà ``DeviceService`` yêu cầu."""
 
     def save(self, device: Device) -> None: ...
 
     def get(self, device_id: str) -> Device | None: ...
 
+    def get_by_hostname(self, hostname: str) -> Device | None: ...
+
     def list(self) -> list[Device]: ...
-
-
-class InMemoryDeviceRepository:
-    """Kho dữ liệu trong RAM dành cho unit test.
-
-    Dữ liệu mất khi process kết thúc. ``model_copy(deep=True)`` ngăn code gọi
-    service vô tình sửa trực tiếp object đang được repository lưu giữ.
-    """
-
-    def __init__(self) -> None:
-        self._devices: dict[str, Device] = {}
-
-    def save(self, device: Device) -> None:
-        """Tạo mới hoặc ghi đè thiết bị có cùng ID."""
-        self._devices[device.id] = device.model_copy(deep=True)
-
-    def get(self, device_id: str) -> Device | None:
-        """Tìm theo primary key; trả ``None`` nếu thiết bị không tồn tại."""
-        device = self._devices.get(device_id)
-        return device.model_copy(deep=True) if device else None
-
-    def list(self) -> list[Device]:
-        """Trả bản sao của toàn bộ thiết bị đang lưu trong RAM."""
-        return [item.model_copy(deep=True) for item in self._devices.values()]
 
 
 class PostgresDeviceRepository:
@@ -62,11 +38,6 @@ class PostgresDeviceRepository:
         self._database_url = database_url
 
     def _connect(self):
-        # Import tại đây để unit test dùng in-memory adapter không bắt buộc phải
-        # khởi động PostgreSQL. Docker image vẫn cài psycopg từ requirements.txt.
-        import psycopg
-        from psycopg.rows import dict_row
-
         return psycopg.connect(self._database_url, row_factory=dict_row)
 
     def save(self, device: Device) -> None:
@@ -109,6 +80,20 @@ class PostgresDeviceRepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(query, (device_id,))
+                row = cursor.fetchone()
+        return Device.model_validate(row) if row else None
+
+    def get_by_hostname(self, hostname: str) -> Device | None:
+        """Đọc một thiết bị theo hostname, không phân biệt hoa thường."""
+
+        query = f"""
+            SELECT {self._columns}
+            FROM devices
+            WHERE lower(hostname) = lower(%s)
+        """
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, (hostname,))
                 row = cursor.fetchone()
         return Device.model_validate(row) if row else None
 

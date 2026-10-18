@@ -29,8 +29,6 @@ class Settings(BaseSettings):
         "postgresql://network_automation_user:network_dev_password@localhost:5432/"
         "network_automation_db"
     )
-    # Unit test mặc định dùng memory; Docker Compose override thành postgres.
-    inventory_repository_backend: Literal["memory", "postgres"] = "memory"
     # Chỉ backend dùng khóa này để giải mã credential khi mở kết nối Netmiko.
     device_credential_encryption_key: str = ""
     # Khóa ký access token identity, độc lập với khóa credential thiết bị.

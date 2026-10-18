@@ -5,6 +5,9 @@ from uuid import uuid4
 
 import httpx
 
+from app.domains.inventory.routers.dependencies import get_device_service
+from app.domains.inventory.schemas import Device
+from app.domains.inventory.services import DeviceService
 from app.main import app
 from app.domains.identity.routers.dependencies import get_identity_service
 from app.domains.identity.schemas import User, UserRecord, UserStatus
@@ -77,6 +80,27 @@ TEST_IDENTITY_SERVICE = IdentityService(
 app.dependency_overrides[get_identity_service] = lambda: TEST_IDENTITY_SERVICE
 
 
+class StubDeviceRepository:
+    def __init__(self) -> None:
+        self._devices: dict[str, Device] = {}
+
+    def save(self, device: Device) -> None:
+        self._devices[device.id] = device.model_copy(deep=True)
+
+    def get(self, device_id: str) -> Device | None:
+        device = self._devices.get(device_id)
+        return device.model_copy(deep=True) if device else None
+
+    def get_by_hostname(self, hostname: str) -> Device | None:
+        for device in self._devices.values():
+            if device.hostname.casefold() == hostname.casefold():
+                return device.model_copy(deep=True)
+        return None
+
+    def list(self) -> list[Device]:
+        return [device.model_copy(deep=True) for device in self._devices.values()]
+
+
 async def request(method: str, path: str, json: dict | None = None) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -115,6 +139,11 @@ def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
 
 
 def test_inventory_api_enforces_hostname_uniqueness() -> None:
+    service = DeviceService(StubDeviceRepository())
+
+    async def override_device_service() -> DeviceService:
+        return service
+
     async def scenario() -> None:
         suffix = uuid4().hex[:8]
         payload = {
@@ -132,12 +161,22 @@ def test_inventory_api_enforces_hostname_uniqueness() -> None:
             "/api/v1/devices/",
             {**payload, "host": "192.0.2.11", "port": payload["port"] + 1},
         )
+        found_by_hostname = await request(
+            "GET",
+            f"/api/v1/devices/by-hostname/{payload['hostname'].lower()}",
+        )
 
         assert created.status_code == 201
         assert duplicate.status_code == 409
         assert "Hostname" in duplicate.json()["detail"]
+        assert found_by_hostname.status_code == 200
+        assert found_by_hostname.json()["id"] == created.json()["id"]
 
-    asyncio.run(scenario())
+    app.dependency_overrides[get_device_service] = override_device_service
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_device_service, None)
 
 
 def test_execution_api_creates_task_and_operation() -> None:

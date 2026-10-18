@@ -1,8 +1,4 @@
-"""Các use case và quy tắc nghiệp vụ của Network Inventory domain.
-
-Service không biết dữ liệu nằm trong RAM hay PostgreSQL. Repository cụ thể được
-truyền từ lớp dependency injection, giúp business rule có thể kiểm thử độc lập.
-"""
+"""Các use case và quy tắc nghiệp vụ của resource Device."""
 
 from datetime import UTC, datetime
 
@@ -12,7 +8,7 @@ from app.domains.inventory.repositories import DeviceRepository
 from app.domains.inventory.schemas import Device, DeviceCreate, DeviceUpdate
 
 
-class InventoryService:
+class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
     def __init__(self, repository: DeviceRepository) -> None:
@@ -42,6 +38,16 @@ class InventoryService:
         device = self._repository.get(device_id)
         if device is None:
             raise ResourceNotFoundError(f"Không tìm thấy device '{device_id}'")
+        return device
+
+    def get_device_by_hostname(self, hostname: str) -> Device:
+        """Lấy Device theo hostname hoặc phát sinh lỗi ánh xạ thành HTTP 404."""
+
+        device = self._repository.get_by_hostname(hostname)
+        if device is None:
+            raise ResourceNotFoundError(
+                f"Không tìm thấy device có hostname '{hostname}'"
+            )
         return device
 
     def update_device(self, device_id: str, payload: DeviceUpdate) -> Device:

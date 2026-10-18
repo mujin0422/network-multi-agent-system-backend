@@ -11,7 +11,9 @@ from app.domains.execution.routers import (
     router as execution_router,
 )
 from app.domains.inventory.routers import (
-    network_router,
+    brand_router,
+    category_router,
+    credential_router,
     router as inventory_router,
 )
 from app.domains.identity.routers import auth_router
@@ -32,7 +34,13 @@ v1_router = APIRouter(prefix=API_V1_PREFIX)
 v1_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 v1_router.include_router(chat_router, prefix="/chat", tags=["Chat"])
 v1_router.include_router(agents_router, prefix="/agents", tags=["Agents"])
-v1_router.include_router(network_router, prefix="/network", tags=["Network"])
+v1_router.include_router(brand_router, prefix="/brands", tags=["Brands"])
+v1_router.include_router(category_router, prefix="/categories", tags=["Categories"])
+v1_router.include_router(
+    credential_router,
+    prefix="/credentials",
+    tags=["Credentials"],
+)
 v1_router.include_router(
     conversation_router,
     prefix="/conversations",
