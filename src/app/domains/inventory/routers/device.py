@@ -2,10 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from app.domains.identity.routers.dependencies import require_permission
 
-from app.domains.inventory.schemas import Device, DeviceCreate, DeviceUpdate
+from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 from app.domains.inventory.routers.dependencies import get_device_service
 from app.domains.inventory.services import DeviceService
 
@@ -29,14 +29,27 @@ async def create_device(
     return service.create_device(payload)
 
 
-# READ — Lấy danh sách toàn bộ thiết bị.
-@router.get("/", response_model=list[Device], summary="Lấy danh sách thiết bị")
+# READ — Lọc và lấy danh sách thiết bị theo từng trang.
+@router.get("/", response_model=DevicePage, summary="Lấy danh sách thiết bị")
 async def list_devices(
     service: Annotated[DeviceService, Depends(get_device_service)],
-) -> list[Device]:
-    """Trả danh sách device hiện có trong inventory."""
+    page: Annotated[int, Query(ge=1, description="Số trang, bắt đầu từ 1.")] = 1,
+    page_size: Annotated[
+        int,
+        Query(ge=1, le=100, description="Số thiết bị trong một trang."),
+    ] = 10,
+    brand_id: Annotated[
+        str | None,
+        Query(description="Lọc thiết bị theo ID brand."),
+    ] = None,
+    category_id: Annotated[
+        str | None,
+        Query(description="Lọc thiết bị theo ID category."),
+    ] = None,
+) -> DevicePage:
+    """Trả một trang device, có thể lọc đồng thời theo brand và category."""
 
-    return service.list_devices()
+    return service.list_devices(page, page_size, brand_id, category_id)
 
 
 # READ — Lấy chi tiết một thiết bị theo hostname.

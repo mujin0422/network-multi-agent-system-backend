@@ -13,6 +13,7 @@ Domain này cung cấp:
 - Kiểm tra quyền theo cặp `Management Function` và `Action`.
 - Thêm, cập nhật user.
 - Thêm, cập nhật role.
+- Lấy danh sách và chi tiết user/role theo ID.
 
 ## Các bảng được sở hữu
 
@@ -123,16 +124,20 @@ model trực tiếp.
 
 Tất cả endpoint được đăng ký dưới `/api/v1`:
 
-| Method  | Endpoint                  | Chức năng         | Quyền                    |
-| ------- | ------------------------- | ----------------- | ------------------------ |
-| `POST`  | `/api/v1/auth/login`      | Đăng nhập         | Public                   |
-| `POST`  | `/api/v1/auth/refresh`    | Làm mới token     | Refresh token hợp lệ     |
-| `POST`  | `/api/v1/auth/logout`     | Thu hồi session   | Đã đăng nhập             |
-| `GET`   | `/api/v1/auth/me`         | Lấy user hiện tại | Đã đăng nhập             |
-| `POST`  | `/api/v1/users/`          | Thêm user         | User Management / Add    |
-| `PATCH` | `/api/v1/users/{user_id}` | Sửa user          | User Management / Edit   |
-| `POST`  | `/api/v1/roles/`          | Thêm role         | Role-Based Access / Add  |
-| `PATCH` | `/api/v1/roles/{role_id}` | Sửa role          | Role-Based Access / Edit |
+| Method  | Endpoint                  | Chức năng             | Quyền                    |
+| ------- | ------------------------- | --------------------- | ------------------------ |
+| `POST`  | `/api/v1/auth/login`      | Đăng nhập             | Public                   |
+| `POST`  | `/api/v1/auth/refresh`    | Làm mới token         | Refresh token hợp lệ     |
+| `POST`  | `/api/v1/auth/logout`     | Thu hồi session       | Đã đăng nhập             |
+| `GET`   | `/api/v1/auth/me`         | Lấy user hiện tại     | Đã đăng nhập             |
+| `POST`  | `/api/v1/users/`          | Thêm user             | User Management / Add    |
+| `GET`   | `/api/v1/users/`          | Lấy danh sách user    | User Management / View   |
+| `GET`   | `/api/v1/users/{user_id}` | Lấy user theo ID      | User Management / View   |
+| `PATCH` | `/api/v1/users/{user_id}` | Sửa user              | User Management / Edit   |
+| `POST`  | `/api/v1/roles/`          | Thêm role             | Role-Based Access / Add  |
+| `GET`   | `/api/v1/roles/`          | Lấy danh sách role    | Role-Based Access / View |
+| `GET`   | `/api/v1/roles/{role_id}` | Lấy role theo ID      | Role-Based Access / View |
+| `PATCH` | `/api/v1/roles/{role_id}` | Sửa role              | Role-Based Access / Edit |
 
 ## Luồng authentication
 

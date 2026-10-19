@@ -212,8 +212,14 @@ def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
         assert message.status_code == 201
 
         detail = await request("GET", f"/api/v1/conversations/{conversation_id}")
+        messages = await request(
+            "GET",
+            f"/api/v1/conversations/{conversation_id}/messages",
+        )
         assert detail.status_code == 200
         assert detail.json()["messages"][0]["message"] == "Kiểm tra neighbor trên P1"
+        assert messages.status_code == 200
+        assert messages.json()[0]["conversation_id"] == conversation_id
 
     app.dependency_overrides[get_conversation_service] = override_conversation_service
     try:

@@ -20,6 +20,14 @@ class DeviceRepository(Protocol):
 
     def list(self) -> list[Device]: ...
 
+    def list_page(
+        self,
+        brand_id: str | None,
+        category_id: str | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[Device], int]: ...
+
 
 class PostgresDeviceRepository:
     """Lưu và đọc inventory từ bảng ``devices`` trong PostgreSQL.
@@ -71,3 +79,37 @@ class PostgresDeviceRepository:
         with self._sessions() as session:
             models = session.scalars(statement).all()
             return [Device.model_validate(item, from_attributes=True) for item in models]
+
+    def list_page(
+        self,
+        brand_id: str | None,
+        category_id: str | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[Device], int]:
+        """Lọc và phân trang thiết bị trực tiếp trong database."""
+
+        filters = []
+        if brand_id is not None:
+            filters.append(DeviceModel.brand_id == brand_id)
+        if category_id is not None:
+            filters.append(DeviceModel.category_id == category_id)
+
+        data_statement = (
+            select(DeviceModel)
+            .where(*filters)
+            .order_by(DeviceModel.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count()).select_from(DeviceModel).where(*filters)
+        with self._sessions() as session:
+            models = session.scalars(data_statement).all()
+            total = session.scalar(count_statement) or 0
+            return (
+                [
+                    Device.model_validate(model, from_attributes=True)
+                    for model in models
+                ],
+                total,
+            )

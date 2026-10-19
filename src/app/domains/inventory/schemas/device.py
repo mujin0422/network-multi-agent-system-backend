@@ -14,6 +14,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class Device(BaseModel):
     """Device response công khai được trả cho frontend.
 
@@ -40,6 +41,16 @@ class Device(BaseModel):
     )
     created_at: datetime = Field(description="Thời điểm tạo theo UTC.")
     last_updated_at: datetime = Field(description="Thời điểm cập nhật theo UTC.")
+
+
+class DevicePage(BaseModel):
+    """Một trang kết quả Device cùng metadata phân trang."""
+
+    items: list[Device] = Field(description="Danh sách thiết bị của trang hiện tại.")
+    page: int = Field(ge=1, description="Số trang hiện tại, bắt đầu từ 1.")
+    page_size: int = Field(ge=1, description="Số thiết bị tối đa trong một trang.")
+    total: int = Field(ge=0, description="Tổng số thiết bị khớp bộ lọc.")
+    total_pages: int = Field(ge=0, description="Tổng số trang của kết quả.")
 
 
 class DeviceCreate(BaseModel):

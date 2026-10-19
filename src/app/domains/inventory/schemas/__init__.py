@@ -8,7 +8,12 @@ from app.domains.inventory.schemas.credential import (
     CredentialRecord,
     CredentialUpdate,
 )
-from app.domains.inventory.schemas.device import Device, DeviceCreate, DeviceUpdate
+from app.domains.inventory.schemas.device import (
+    Device,
+    DeviceCreate,
+    DevicePage,
+    DeviceUpdate,
+)
 from app.domains.inventory.schemas.device_connection import DeviceConfig
 
 __all__ = [
@@ -23,5 +28,6 @@ __all__ = [
     "Device",
     "DeviceConfig",
     "DeviceCreate",
+    "DevicePage",
     "DeviceUpdate",
 ]

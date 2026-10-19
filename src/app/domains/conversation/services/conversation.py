@@ -40,6 +40,12 @@ class ConversationService:
             messages=self._repository.list_messages(conversation_id),
         )
 
+    def list_messages(self, conversation_id: str) -> list[Message]:
+        """Lấy danh sách message của một conversation đã tồn tại."""
+
+        self._require_conversation(conversation_id)
+        return self._repository.list_messages(conversation_id)
+
     def add_message(self, conversation_id: str, payload: MessageCreate) -> Message:
         conversation = self._require_conversation(conversation_id)
         now = datetime.now(UTC)

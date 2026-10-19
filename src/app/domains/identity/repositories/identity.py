@@ -14,8 +14,10 @@ from app.domains.identity.schemas import Role, User, UserRecord, UserSessionReco
 class IdentityRepository(Protocol):
     def get_user_by_email(self, email: str) -> UserRecord | None: ...
     def get_user(self, user_id: str) -> User | None: ...
+    def list_users(self) -> list[User]: ...
     def get_user_with_password(self, user_id: str) -> UserRecord | None: ...
     def get_role(self, role_id: str) -> Role | None: ...
+    def list_roles(self) -> list[Role]: ...
     def get_role_by_name(self, name: str) -> Role | None: ...
     def save_user(self, user: UserRecord) -> None: ...
     def save_role(self, role: Role) -> None: ...
@@ -52,6 +54,13 @@ class PostgresIdentityRepository:
             model = session.get(UserModel, user_id)
             return User.model_validate(model, from_attributes=True) if model else None
 
+    def list_users(self) -> list[User]:
+        with self._sessions() as session:
+            models = session.scalars(select(UserModel)).all()
+            return [
+                User.model_validate(model, from_attributes=True) for model in models
+            ]
+
     def get_user_with_password(self, user_id: str) -> UserRecord | None:
         with self._sessions() as session:
             return self._user_record(session.get(UserModel, user_id))
@@ -60,6 +69,13 @@ class PostgresIdentityRepository:
         with self._sessions() as session:
             model = session.get(RoleModel, role_id)
             return Role.model_validate(model, from_attributes=True) if model else None
+
+    def list_roles(self) -> list[Role]:
+        with self._sessions() as session:
+            models = session.scalars(select(RoleModel)).all()
+            return [
+                Role.model_validate(model, from_attributes=True) for model in models
+            ]
 
     def get_role_by_name(self, name: str) -> Role | None:
         statement = select(RoleModel).where(func.lower(RoleModel.name) == name.lower())
