@@ -2,12 +2,10 @@
 
 from app.domains.conversation.repositories.conversation import (
     ConversationRepository,
-    InMemoryConversationRepository,
     PostgresConversationRepository,
 )
 
 __all__ = [
     "ConversationRepository",
-    "InMemoryConversationRepository",
     "PostgresConversationRepository",
 ]

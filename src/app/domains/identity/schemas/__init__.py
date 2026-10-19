@@ -9,9 +9,14 @@ from app.domains.identity.schemas.auth import (
 )
 from app.domains.identity.schemas.management_function import ManagementFunction
 from app.domains.identity.schemas.permission import Permission, RolePermission
-from app.domains.identity.schemas.role import Role
-from app.domains.identity.schemas.status import UserStatus
-from app.domains.identity.schemas.user import User, UserRecord
+from app.domains.identity.schemas.role import Role, RoleCreate, RoleUpdate
+from app.domains.identity.schemas.user import (
+    User,
+    UserCreate,
+    UserRecord,
+    UserStatus,
+    UserUpdate,
+)
 from app.domains.identity.schemas.user_session import UserSessionRecord
 
 __all__ = [
@@ -23,9 +28,13 @@ __all__ = [
     "ManagementFunction",
     "Permission",
     "Role",
+    "RoleCreate",
     "RolePermission",
+    "RoleUpdate",
     "User",
+    "UserCreate",
     "UserRecord",
+    "UserUpdate",
     "UserSessionRecord",
     "UserStatus",
 ]

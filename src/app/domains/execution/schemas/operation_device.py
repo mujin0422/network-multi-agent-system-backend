@@ -1,14 +1,30 @@
 """Schema ánh xạ bảng ``task_operation_devices``."""
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.domains.execution.schemas.status import (
-    AccessMode,
-    DeviceRole,
-    OperationDeviceStatus,
-)
+
+class OperationDeviceStatus(StrEnum):
+    PENDING = "PENDING"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+    SKIPPED = "SKIPPED"
+
+
+class DeviceRole(StrEnum):
+    SOURCE = "SOURCE"
+    TARGET = "TARGET"
+    CONTEXT = "CONTEXT"
+
+
+class AccessMode(StrEnum):
+    READ = "READ"
+    WRITE = "WRITE"
 
 
 class TaskOperationDevice(BaseModel):

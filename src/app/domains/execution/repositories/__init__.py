@@ -2,7 +2,7 @@
 
 from app.domains.execution.repositories.execution import (
     ExecutionRepository,
-    InMemoryExecutionRepository,
+    PostgresExecutionRepository,
 )
 
-__all__ = ["ExecutionRepository", "InMemoryExecutionRepository"]
+__all__ = ["ExecutionRepository", "PostgresExecutionRepository"]

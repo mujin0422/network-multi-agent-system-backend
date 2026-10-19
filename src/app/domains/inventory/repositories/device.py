@@ -65,9 +65,9 @@ class PostgresDeviceRepository:
             return Device.model_validate(model, from_attributes=True) if model else None
 
     def list(self) -> list[Device]:
-        """Đọc toàn bộ inventory theo thứ tự ổn định cho frontend."""
-        # Sắp theo port rồi hostname để frontend luôn nhận thứ tự ổn định.
-        statement = select(DeviceModel).order_by(DeviceModel.port, DeviceModel.hostname)
+        """Đọc toàn bộ thiết bị từ database."""
+
+        statement = select(DeviceModel)
         with self._sessions() as session:
             models = session.scalars(statement).all()
             return [Device.model_validate(item, from_attributes=True) for item in models]

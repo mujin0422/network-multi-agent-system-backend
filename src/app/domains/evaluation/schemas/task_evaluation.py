@@ -1,16 +1,35 @@
 """Schema ánh xạ bảng ``task_evaluations``."""
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domains.evaluation.schemas.status import (
-    EvaluationResult,
-    EvaluationStatus,
-    EvaluatorType,
-)
+
+class EvaluationStatus(StrEnum):
+    """Trạng thái workflow của một evaluation."""
+
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+
+
+class EvaluationResult(StrEnum):
+    """Kết quả đánh giá goal, RCA, remediation hoặc safety."""
+
+    PASS = "PASS"
+    FAIL = "FAIL"
+    UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class EvaluatorType(StrEnum):
+    """Nguồn thực hiện evaluation."""
+
+    AUTOMATED = "AUTOMATED"
+    HUMAN = "HUMAN"
 
 
 class TaskEvaluation(BaseModel):

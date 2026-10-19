@@ -5,9 +5,12 @@ from uuid import uuid4
 
 import httpx
 
-from app.domains.conversation.repositories import InMemoryConversationRepository
 from app.domains.conversation.routers.dependencies import get_conversation_service
+from app.domains.conversation.schemas import Conversation, Message
 from app.domains.conversation.services import ConversationService
+from app.domains.execution.routers.dependencies import get_execution_service
+from app.domains.execution.schemas import Operation, Task
+from app.domains.execution.services import ExecutionService
 from app.domains.inventory.routers.dependencies import get_device_service
 from app.domains.inventory.schemas import Device
 from app.domains.inventory.services import DeviceService
@@ -110,6 +113,69 @@ class StubDeviceRepository:
         return [device.model_copy(deep=True) for device in self._devices.values()]
 
 
+class StubConversationRepository:
+    def __init__(self) -> None:
+        self._conversations: dict[str, Conversation] = {}
+        self._messages: dict[str, list[Message]] = {}
+
+    def save_conversation(self, conversation: Conversation) -> None:
+        self._conversations[conversation.id] = conversation.model_copy(deep=True)
+
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
+        return self._conversations.get(conversation_id)
+
+    def list_conversations(self, user_id: str | None = None) -> list[Conversation]:
+        values = self._conversations.values()
+        return [item for item in values if user_id is None or item.user_id == user_id]
+
+    def save_message(self, message: Message) -> None:
+        self._messages.setdefault(message.conversation_id, []).append(message)
+
+    def list_messages(self, conversation_id: str) -> list[Message]:
+        return list(self._messages.get(conversation_id, []))
+
+
+class StubExecutionRepository:
+    def __init__(self) -> None:
+        self._tasks: dict[str, Task] = {}
+        self._operations: dict[str, Operation] = {}
+
+    def save_task(self, task: Task) -> None:
+        self._tasks[task.id] = task
+
+    def get_task(self, task_id: str) -> Task | None:
+        return self._tasks.get(task_id)
+
+    def list_tasks(self) -> list[Task]:
+        return list(self._tasks.values())
+
+    def find_task_by_source_message(self, message_id: str) -> Task | None:
+        return next(
+            (
+                task
+                for task in self._tasks.values()
+                if task.source_message_id == message_id
+            ),
+            None,
+        )
+
+    def save_operation(self, operation: Operation) -> None:
+        self._operations[operation.id] = operation
+
+    def get_operation(self, operation_id: str) -> Operation | None:
+        return self._operations.get(operation_id)
+
+    def list_operations(self, task_id: str) -> list[Operation]:
+        return sorted(
+            (
+                operation
+                for operation in self._operations.values()
+                if operation.task_id == task_id
+            ),
+            key=lambda operation: operation.display_order,
+        )
+
+
 async def request(method: str, path: str, json: dict | None = None) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -124,7 +190,7 @@ async def request(method: str, path: str, json: dict | None = None) -> httpx.Res
 
 
 def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
-    service = ConversationService(InMemoryConversationRepository())
+    service = ConversationService(StubConversationRepository())
 
     async def override_conversation_service() -> ConversationService:
         return service
@@ -198,6 +264,11 @@ def test_inventory_api_enforces_hostname_uniqueness() -> None:
 
 
 def test_execution_api_creates_task_and_operation() -> None:
+    service = ExecutionService(StubExecutionRepository())
+
+    async def override_execution_service() -> ExecutionService:
+        return service
+
     async def scenario() -> None:
         source_message_id = f"mesg-test-{uuid4().hex}"
         task_response = await request(
@@ -230,4 +301,8 @@ def test_execution_api_creates_task_and_operation() -> None:
         assert detail_response.status_code == 200
         assert len(detail_response.json()["operations"]) == 1
 
-    asyncio.run(scenario())
+    app.dependency_overrides[get_execution_service] = override_execution_service
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_execution_service, None)

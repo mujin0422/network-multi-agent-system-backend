@@ -54,7 +54,6 @@ class PostgresDeviceConfigRepository:
                     func.lower(DeviceModel.hostname) == device_identifier.lower(),
                 )
             )
-            .order_by(case((DeviceModel.id == device_identifier, 0), else_=1))
             .limit(1)
         )
         with self._sessions() as session:

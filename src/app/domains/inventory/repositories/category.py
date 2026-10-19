@@ -22,9 +22,9 @@ class PostgresCategoryRepository:
         self._sessions = create_session_factory(database_url)
 
     def list(self) -> list[Category]:
-        """Trả toàn bộ Category theo thứ tự tên ổn định cho frontend."""
+        """Trả toàn bộ Category từ database."""
 
-        statement = select(CategoryModel).order_by(CategoryModel.name, CategoryModel.id)
+        statement = select(CategoryModel)
         with self._sessions() as session:
             models = session.scalars(statement).all()
             return [Category.model_validate(item, from_attributes=True) for item in models]

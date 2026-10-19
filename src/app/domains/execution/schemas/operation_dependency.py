@@ -1,10 +1,14 @@
 """Schema ánh xạ bảng ``operation_dependencies``."""
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.domains.execution.schemas.status import DependencyType
+
+class DependencyType(StrEnum):
+    ON_SUCCESS = "ON_SUCCESS"
+    ON_COMPLETION = "ON_COMPLETION"
 
 
 class OperationDependency(BaseModel):

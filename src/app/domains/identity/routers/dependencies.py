@@ -7,28 +7,50 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
+from app.core.exceptions import AuthenticationError
 from app.domains.identity.repositories import PostgresIdentityRepository
-from app.domains.identity.services import IdentityService
 from app.domains.identity.schemas import User
+from app.domains.identity.services import IdentityService, RoleService, UserService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 @lru_cache
+def _build_identity_repository() -> PostgresIdentityRepository:
+    return PostgresIdentityRepository(get_settings().database_url)
+
+
+@lru_cache
 def _build_identity_service() -> IdentityService:
-    settings = get_settings()
-    return IdentityService(PostgresIdentityRepository(settings.database_url), settings)
+    return IdentityService(_build_identity_repository(), get_settings())
+
+
+@lru_cache
+def _build_user_service() -> UserService:
+    return UserService(_build_identity_repository())
+
+
+@lru_cache
+def _build_role_service() -> RoleService:
+    return RoleService(_build_identity_repository())
 
 
 async def get_identity_service() -> IdentityService:
     return _build_identity_service()
 
 
+async def get_user_service() -> UserService:
+    return _build_user_service()
+
+
+async def get_role_service() -> RoleService:
+    return _build_role_service()
+
+
 async def get_current_identity(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     service: Annotated[IdentityService, Depends(get_identity_service)],
 ) -> tuple[User, str]:
-    from app.core.exceptions import AuthenticationError
     if credentials is None:
         raise AuthenticationError("Cần đăng nhập để thực hiện thao tác này")
     user, session_id = service.authenticate(credentials.credentials)

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.core.database import create_session_factory
 from app.domains.identity.models import ActionModel, ManagementFunctionModel, PermissionModel, RoleModel, RolePermissionModel, UserModel, UserSessionModel
@@ -16,6 +16,9 @@ class IdentityRepository(Protocol):
     def get_user(self, user_id: str) -> User | None: ...
     def get_user_with_password(self, user_id: str) -> UserRecord | None: ...
     def get_role(self, role_id: str) -> Role | None: ...
+    def get_role_by_name(self, name: str) -> Role | None: ...
+    def save_user(self, user: UserRecord) -> None: ...
+    def save_role(self, role: Role) -> None: ...
     def get_permissions(self, role_id: str) -> set[tuple[str, str]]: ...
     def save_session(self, session: UserSessionRecord) -> None: ...
     def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None: ...
@@ -57,6 +60,49 @@ class PostgresIdentityRepository:
         with self._sessions() as session:
             model = session.get(RoleModel, role_id)
             return Role.model_validate(model, from_attributes=True) if model else None
+
+    def get_role_by_name(self, name: str) -> Role | None:
+        statement = select(RoleModel).where(func.lower(RoleModel.name) == name.lower())
+        with self._sessions() as session:
+            model = session.scalar(statement)
+            return Role.model_validate(model, from_attributes=True) if model else None
+
+    def save_user(self, record: UserRecord) -> None:
+        with self._sessions.begin() as session:
+            model = session.get(UserModel, record.id)
+            if model is None:
+                session.add(
+                    UserModel(
+                        id=record.id,
+                        role_id=record.role_id,
+                        email=record.email,
+                        password_hash=record.password_hash,
+                        full_name=record.full_name,
+                        user_status=record.user_status,
+                        created_at=record.created_at,
+                        last_updated_at=record.last_updated_at,
+                        last_login_at=record.last_login_at,
+                    )
+                )
+                return
+            model.role_id = record.role_id
+            model.email = record.email
+            model.password_hash = record.password_hash
+            model.full_name = record.full_name
+            model.user_status = record.user_status
+            model.last_updated_at = record.last_updated_at
+            model.last_login_at = record.last_login_at
+
+    def save_role(self, record: Role) -> None:
+        with self._sessions.begin() as session:
+            model = session.get(RoleModel, record.id)
+            if model is None:
+                session.add(RoleModel(**record.model_dump()))
+                return
+            model.name = record.name
+            model.description = record.description
+            model.last_updated_by = record.last_updated_by
+            model.last_updated_at = record.last_updated_at
 
     def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
         statement = select(ManagementFunctionModel.name, ActionModel.name).join(PermissionModel, PermissionModel.function_id == ManagementFunctionModel.id).join(ActionModel, ActionModel.id == PermissionModel.action_id).join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id).where(RolePermissionModel.role_id == role_id)

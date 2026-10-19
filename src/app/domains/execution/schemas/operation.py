@@ -1,11 +1,21 @@
 """Operation contracts."""
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domains.execution.schemas.status import OperationStatus
+
+class OperationStatus(StrEnum):
+    PENDING = "PENDING"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    PARTIAL_SUCCESS = "PARTIAL_SUCCESS"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+    SKIPPED = "SKIPPED"
 
 
 class OperationCreate(BaseModel):

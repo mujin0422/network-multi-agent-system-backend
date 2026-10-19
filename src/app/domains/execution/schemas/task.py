@@ -1,11 +1,30 @@
 """Task contracts."""
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domains.execution.schemas.operation import Operation
-from app.domains.execution.schemas.status import TaskStatus, TaskType
+
+
+class TaskStatus(StrEnum):
+    PENDING = "PENDING"
+    PLANNING = "PLANNING"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    PARTIAL_SUCCESS = "PARTIAL_SUCCESS"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+
+
+class TaskType(StrEnum):
+    UNCLASSIFIED = "UNCLASSIFIED"
+    INFORMATION_RETRIEVAL = "INFORMATION_RETRIEVAL"
+    DIAGNOSIS = "DIAGNOSIS"
+    CONFIGURATION = "CONFIGURATION"
+    REMEDIATION = "REMEDIATION"
+    COMPOSITE = "COMPOSITE"
 
 
 class TaskCreate(BaseModel):

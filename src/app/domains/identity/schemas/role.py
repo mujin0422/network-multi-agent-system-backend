@@ -2,7 +2,25 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class RoleCreate(BaseModel):
+    """Dữ liệu đầu vào khi tạo vai trò."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = None
+
+
+class RoleUpdate(BaseModel):
+    """Các trường được phép sửa của vai trò."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
 
 
 class Role(BaseModel):

@@ -23,13 +23,7 @@ class MessageModel(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    conversation_id: Mapped[str] = mapped_column(
-        ForeignKey("conversations.id"),
-        nullable=False,
-    )
-    sender_by: Mapped[MessageSender] = mapped_column(
-        Enum(MessageSender, name="message_sender"),
-        nullable=False,
-    )
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"),nullable=False)
+    sender_by: Mapped[MessageSender] = mapped_column(Enum(MessageSender, name="message_sender"),nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

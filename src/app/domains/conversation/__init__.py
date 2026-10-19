@@ -1,6 +1,5 @@
 """Public API của Conversation domain."""
 
-from app.domains.conversation.repositories import InMemoryConversationRepository
 from app.domains.conversation.schemas import (
     Conversation,
     ConversationCreate,
@@ -16,7 +15,6 @@ __all__ = [
     "ConversationCreate",
     "ConversationDetail",
     "ConversationService",
-    "InMemoryConversationRepository",
     "Message",
     "MessageCreate",
     "MessageSender",

@@ -1,15 +1,30 @@
 """Schema ánh xạ bảng ``device_action_logs``."""
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domains.execution.schemas.status import (
-    DeviceActionPhase,
-    DeviceActionStatus,
-    DeviceActionType,
-)
+
+class DeviceActionStatus(StrEnum):
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+
+class DeviceActionType(StrEnum):
+    READ = "READ"
+    WRITE = "WRITE"
+
+
+class DeviceActionPhase(StrEnum):
+    READ = "READ"
+    PRE_CHECK = "PRE_CHECK"
+    APPLY = "APPLY"
+    POST_CHECK = "POST_CHECK"
+    ROLLBACK = "ROLLBACK"
+    ROLLBACK_VERIFY = "ROLLBACK_VERIFY"
 
 
 class DeviceActionLog(BaseModel):
