@@ -1,8 +1,11 @@
 """Persistence contract và bản in-memory của Conversation domain."""
 
 from typing import Protocol
-import psycopg
-from psycopg.rows import dict_row
+
+from sqlalchemy import select
+
+from app.core.database import create_session_factory
+from app.domains.conversation.models import ConversationModel, MessageModel
 from app.domains.conversation.schemas import Conversation, Message
 
 
@@ -55,101 +58,49 @@ class PostgresConversationRepository:
     """Repository PostgreSQL cho conversations và messages."""
 
     def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
-
-    def _connect(self):
-        return psycopg.connect(
-            self._database_url,
-            row_factory=dict_row
-        )
+        self._sessions = create_session_factory(database_url)
 
     def save_conversation(self, conversation: Conversation) -> None:
-        query = """
-            INSERT INTO conversations (
-                id, user_id, title, created_at, last_updated_at
-            )
-            VALUES (
-                %(id)s, %(user_id)s, %(title)s,
-                %(created_at)s, %(last_updated_at)s
-            )
-            ON CONFLICT (id) DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                title = EXCLUDED.title,
-                last_updated_at = EXCLUDED.last_updated_at
-
-        """
-
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, conversation.model_dump())
+        values = conversation.model_dump()
+        with self._sessions.begin() as session:
+            model = session.get(ConversationModel, conversation.id)
+            if model is None:
+                session.add(ConversationModel(**values))
+                return
+            model.user_id = conversation.user_id
+            model.title = conversation.title
+            model.last_updated_at = conversation.last_updated_at
 
     def get_conversation(self, conversation_id: str) -> Conversation | None:
-        query = """
-            SELECT id, user_id, title, created_at, last_updated_at
-            FROM conversations
-            WHERE id = %s
-        """
-
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, (conversation_id,))
-                row = cursor.fetchone()
-        return Conversation.model_validate(row) if row else None
+        with self._sessions() as session:
+            model = session.get(ConversationModel, conversation_id)
+            return Conversation.model_validate(model, from_attributes=True) if model else None
 
     def list_conversations(self, user_id: str | None = None) -> list[Conversation]:
-        query = """
-            SELECT id, user_id, title, created_at, last_updated_at
-            FROM conversations
-        """
-
-        params: tuple = ()
-
+        statement = select(ConversationModel)
         if user_id is not None:
-            query += " WHERE user_id = %s"
-            params = (user_id,)
-
-        query += " ORDER BY last_updated_at DESC, id "
-
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, params)
-                rows = cursor.fetchall()
-
-        return [Conversation.model_validate(row) for row in rows]
+            statement = statement.where(ConversationModel.user_id == user_id)
+        statement = statement.order_by(
+            ConversationModel.last_updated_at.desc(),
+            ConversationModel.id,
+        )
+        with self._sessions() as session:
+            models = session.scalars(statement).all()
+            return [
+                Conversation.model_validate(item, from_attributes=True)
+                for item in models
+            ]
 
     def save_message(self, message: Message) -> None:
-        query = """
-            INSERT INTO messages (
-                id, conversation_id, sender_by, message, created_at
-            )
-            VALUES (
-                %(id)s, %(conversation_id)s, %(sender_by)s::message_sender,
-                %(message)s, %(created_at)s
-            )
-        """
-
-        data = message.model_dump()
-        sender = data["sender_by"]
-
-        data["sender_by"] = (
-            sender.value if hasattr(sender, "value") else sender
-        )
-
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, data)
+        with self._sessions.begin() as session:
+            session.add(MessageModel(**message.model_dump()))
 
     def list_messages(self, conversation_id: str) -> list[Message]:
-        query = """
-            SELECT id, conversation_id, sender_by, message, created_at
-            FROM messages
-            WHERE conversation_id = %s
-            ORDER BY created_at, id
-        """
-
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, (conversation_id,))
-                rows = cursor.fetchall()
-
-        return [Message.model_validate(row) for row in rows]
+        statement = (
+            select(MessageModel)
+            .where(MessageModel.conversation_id == conversation_id)
+            .order_by(MessageModel.created_at, MessageModel.id)
+        )
+        with self._sessions() as session:
+            models = session.scalars(statement).all()
+            return [Message.model_validate(item, from_attributes=True) for item in models]

@@ -1,15 +1,14 @@
-"""Persistence port and PostgreSQL adapter for identity records."""
+"""Identity persistence port and SQLAlchemy repository."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.domains.identity.schemas import (
-    Role,
-    User,
-    UserRecord,
-    UserSessionRecord,
-)
+from sqlalchemy import select, update
+
+from app.core.database import create_session_factory
+from app.domains.identity.models import ActionModel, ManagementFunctionModel, PermissionModel, RoleModel, RolePermissionModel, UserModel, UserSessionModel
+from app.domains.identity.schemas import Role, User, UserRecord, UserSessionRecord
 
 
 class IdentityRepository(Protocol):
@@ -28,110 +27,78 @@ class IdentityRepository(Protocol):
 
 
 class PostgresIdentityRepository:
-    """PostgreSQL implementation using the canonical identity tables."""
+    """Identity repository implemented with SQLAlchemy ORM."""
 
     def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
-
-    def _connect(self):
-        import psycopg
-        from psycopg.rows import dict_row
-        return psycopg.connect(self._database_url, row_factory=dict_row)
+        self._sessions = create_session_factory(database_url)
 
     @staticmethod
-    def _user_query(where: str) -> str:
-        return f"""SELECT id, role_id, email, password_hash, full_name,
-            user_status, created_at, last_updated_at, last_login_at
-            FROM users WHERE {where}"""
+    def _user_record(model: UserModel | None) -> UserRecord | None:
+        return UserRecord.model_validate(model, from_attributes=True) if model else None
+
+    @staticmethod
+    def _session_record(model: UserSessionModel | None) -> UserSessionRecord | None:
+        return UserSessionRecord.model_validate(model, from_attributes=True) if model else None
 
     def get_user_by_email(self, email: str) -> UserRecord | None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(self._user_query("email = %s"), (email.lower(),))
-            row = cur.fetchone()
-        return UserRecord.model_validate(row) if row else None
+        with self._sessions() as session:
+            return self._user_record(session.scalar(select(UserModel).where(UserModel.email == email.lower())))
 
     def get_user(self, user_id: str) -> User | None:
-        record = self.get_user_with_password(user_id)
-        return User.model_validate(record.model_dump()) if record else None
+        with self._sessions() as session:
+            model = session.get(UserModel, user_id)
+            return User.model_validate(model, from_attributes=True) if model else None
 
     def get_user_with_password(self, user_id: str) -> UserRecord | None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(self._user_query("id = %s"), (user_id,))
-            row = cur.fetchone()
-        return UserRecord.model_validate(row) if row else None
+        with self._sessions() as session:
+            return self._user_record(session.get(UserModel, user_id))
 
     def get_role(self, role_id: str) -> Role | None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, name, description, created_by, last_updated_by, created_at, last_updated_at FROM roles WHERE id = %s", (role_id,))
-            row = cur.fetchone()
-        return Role.model_validate(row) if row else None
+        with self._sessions() as session:
+            model = session.get(RoleModel, role_id)
+            return Role.model_validate(model, from_attributes=True) if model else None
 
     def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
-        query = """SELECT mf.name AS function_name, a.name AS action_name
-            FROM role_permissions rp
-            JOIN permissions p ON p.id = rp.permission_id
-            JOIN management_functions mf ON mf.id = p.function_id
-            JOIN actions a ON a.id = p.action_id
-            WHERE rp.role_id = %s"""
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(query, (role_id,))
-            return {(row["function_name"], row["action_name"]) for row in cur.fetchall()}
+        statement = select(ManagementFunctionModel.name, ActionModel.name).join(PermissionModel, PermissionModel.function_id == ManagementFunctionModel.id).join(ActionModel, ActionModel.id == PermissionModel.action_id).join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id).where(RolePermissionModel.role_id == role_id)
+        with self._sessions() as session:
+            return {(function_name, action_name) for function_name, action_name in session.execute(statement)}
 
-    def save_session(self, session: UserSessionRecord) -> None:
-        query = """INSERT INTO user_sessions (id, user_id, refresh_token_hash, expires_at, created_at, revoked_at)
-            VALUES (%(id)s, %(user_id)s, %(refresh_token_hash)s, %(expires_at)s, %(created_at)s, %(revoked_at)s)"""
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(query, self._session_params(session))
+    def save_session(self, record: UserSessionRecord) -> None:
+        with self._sessions.begin() as session:
+            session.add(self._to_session_model(record))
 
     @staticmethod
-    def _session_params(session: UserSessionRecord) -> dict:
-        """Include secret fields intentionally excluded from normal serialization."""
-        return {
-            "id": session.id,
-            "user_id": session.user_id,
-            "refresh_token_hash": session.refresh_token_hash,
-            "expires_at": session.expires_at,
-            "created_at": session.created_at,
-            "revoked_at": session.revoked_at,
-        }
+    def _to_session_model(record: UserSessionRecord) -> UserSessionModel:
+        return UserSessionModel(id=record.id, user_id=record.user_id, refresh_token_hash=record.refresh_token_hash, expires_at=record.expires_at, created_at=record.created_at, revoked_at=record.revoked_at)
 
     def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None:
-        query = "SELECT id, user_id, refresh_token_hash, expires_at, created_at, revoked_at FROM user_sessions WHERE refresh_token_hash = %s"
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(query, (token_hash,))
-            row = cur.fetchone()
-        return UserSessionRecord.model_validate(row) if row else None
+        with self._sessions() as session:
+            model = session.scalar(select(UserSessionModel).where(UserSessionModel.refresh_token_hash == token_hash))
+            return self._session_record(model)
 
     def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE user_sessions SET revoked_at = %s WHERE id = %s AND revoked_at IS NULL", (revoked_at, session_id))
+        statement = update(UserSessionModel).where(UserSessionModel.id == session_id, UserSessionModel.revoked_at.is_(None)).values(revoked_at=revoked_at)
+        with self._sessions.begin() as session:
+            session.execute(statement)
 
     def is_session_active(self, session_id: UUID) -> bool:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM user_sessions WHERE id = %s AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP", (session_id,))
-            return cur.fetchone() is not None
+        return self.get_active_session(session_id) is not None
 
     def get_active_session(self, session_id: UUID) -> UserSessionRecord | None:
-        query = "SELECT id, user_id, refresh_token_hash, expires_at, created_at, revoked_at FROM user_sessions WHERE id = %s AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP"
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(query, (session_id,))
-            row = cur.fetchone()
-        return UserSessionRecord.model_validate(row) if row else None
+        statement = select(UserSessionModel).where(UserSessionModel.id == session_id, UserSessionModel.revoked_at.is_(None), UserSessionModel.expires_at > datetime.now(UTC))
+        with self._sessions() as session:
+            return self._session_record(session.scalar(statement))
 
     def rotate_session(self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord) -> bool:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE user_sessions SET revoked_at = %s WHERE id = %s AND revoked_at IS NULL AND expires_at > %s", (revoked_at, session_id, revoked_at))
-            if cur.rowcount != 1:
+        statement = update(UserSessionModel).where(UserSessionModel.id == session_id, UserSessionModel.revoked_at.is_(None), UserSessionModel.expires_at > revoked_at).values(revoked_at=revoked_at)
+        with self._sessions.begin() as session:
+            result = session.execute(statement)
+            if result.rowcount != 1:
                 return False
-            cur.execute(
-                """INSERT INTO user_sessions
-                    (id, user_id, refresh_token_hash, expires_at, created_at, revoked_at)
-                    VALUES (%(id)s, %(user_id)s, %(refresh_token_hash)s,
-                            %(expires_at)s, %(created_at)s, %(revoked_at)s)""",
-                self._session_params(replacement),
-            )
+            session.add(self._to_session_model(replacement))
         return True
 
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE users SET last_login_at = %s WHERE id = %s", (logged_in_at, user_id))
+        statement = update(UserModel).where(UserModel.id == user_id).values(last_login_at=logged_in_at)
+        with self._sessions.begin() as session:
+            session.execute(statement)

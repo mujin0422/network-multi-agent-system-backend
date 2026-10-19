@@ -11,6 +11,10 @@ core/
 ├── config/
 │   ├── __init__.py
 │   └── settings.py
+├── database/
+│   ├── __init__.py
+│   ├── base.py
+│   └── session.py
 ├── exceptions/
 │   ├── __init__.py
 │   ├── domain.py
@@ -24,8 +28,7 @@ core/
 ```
 
 Chỉ các thành phần đã có implementation mới được liệt kê ở trên. Các folder
-`cache`, `database`, `middlewares` và `security` đang được dành chỗ theo cấu
-trúc dự án nhưng chưa có code, vì vậy chưa cần thêm file hoặc abstraction.
+`cache`, `middlewares` và `security` chỉ được tạo khi có use case thực tế.
 
 ## Trách nhiệm
 
@@ -42,6 +45,20 @@ trúc dự án nhưng chưa có code, vì vậy chưa cần thêm file hoặc ab
 
 Không đọc trực tiếp `os.environ` ở các module khác. Biến môi trường dùng chung
 phải được khai báo và kiểm tra tại đây.
+
+### `database/`
+
+- `base.py` khai báo SQLAlchemy `Base` dùng chung cho ORM model thuộc các domain.
+- `session.py` chuẩn hóa PostgreSQL URL sang psycopg 3, tạo Engine, connection
+  pool và synchronous session factory.
+- `__init__.py` giữ public import ổn định:
+
+  ```python
+  from app.core.database import Base, create_session_factory
+  ```
+
+ORM model vẫn nằm trong `models/` của domain sở hữu bảng. Query nghiệp vụ vẫn
+nằm trong repository; `core/database` chỉ chứa hạ tầng kết nối dùng chung.
 
 ### `exceptions/`
 
@@ -90,8 +107,8 @@ main / agents / tools / domains
 
 ## Khi nào mở rộng từng folder?
 
-- `database/`: khi có connection pool, transaction helper hoặc database
-  lifecycle thật sự dùng chung cho nhiều domain.
+- `database/`: có thể bổ sung transaction helper hoặc lifecycle khi ứng dụng
+  cần quản lý session theo request.
 - `security/`: khi có password hashing, token hoặc encryption service dùng chung.
 - `middlewares/`: khi ứng dụng có middleware dùng chung như request ID hoặc
   observability.

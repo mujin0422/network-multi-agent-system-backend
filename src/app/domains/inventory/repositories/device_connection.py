@@ -2,9 +2,10 @@
 
 from typing import Protocol
 
-import psycopg
-from psycopg.rows import dict_row
+from sqlalchemy import case, func, or_, select
 
+from app.core.database import create_session_factory
+from app.domains.inventory.models import CredentialModel, DeviceModel
 from app.domains.inventory.schemas import DeviceConfig
 
 
@@ -22,41 +23,40 @@ class PostgresDeviceConfigRepository:
     """
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
-        self._database_url = database_url
+        self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
-
-    def _connect(self):
-        return psycopg.connect(self._database_url, row_factory=dict_row)
 
     def get(self, device_identifier: str) -> DeviceConfig | None:
         # Cho phép agent gọi bằng cả primary key (devc-...) và hostname (P1).
         # Credential chỉ được giải mã trong luồng kết nối và không được ghi log.
-        query = """
-            SELECT
-                d.device_type,
-                d.host AS hostname,
-                d.port,
-                c.username,
-                pgp_sym_decrypt(dearmor(c.password), %s) AS password,
-                CASE
-                    WHEN c.secret IS NULL THEN ''
-                    ELSE pgp_sym_decrypt(dearmor(c.secret), %s)
-                END AS secret
-            FROM devices AS d
-            JOIN credentials AS c ON c.id = d.credential_id
-            WHERE d.id = %s OR lower(d.hostname) = lower(%s)
-            ORDER BY CASE WHEN d.id = %s THEN 0 ELSE 1 END
-            LIMIT 1
-        """
-        params = (
-            self._encryption_key,
-            self._encryption_key,
-            device_identifier,
-            device_identifier,
-            device_identifier,
+        statement = (
+            select(
+                DeviceModel.device_type,
+                DeviceModel.host.label("hostname"),
+                DeviceModel.port,
+                CredentialModel.username,
+                func.pgp_sym_decrypt(
+                    func.dearmor(CredentialModel.password),
+                    self._encryption_key,
+                ).label("password"),
+                case(
+                    (CredentialModel.secret.is_(None), ""),
+                    else_=func.pgp_sym_decrypt(
+                        func.dearmor(CredentialModel.secret),
+                        self._encryption_key,
+                    ),
+                ).label("secret"),
+            )
+            .join(CredentialModel, CredentialModel.id == DeviceModel.credential_id)
+            .where(
+                or_(
+                    DeviceModel.id == device_identifier,
+                    func.lower(DeviceModel.hostname) == device_identifier.lower(),
+                )
+            )
+            .order_by(case((DeviceModel.id == device_identifier, 0), else_=1))
+            .limit(1)
         )
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, params)
-                row = cursor.fetchone()
-        return DeviceConfig.model_validate(row) if row else None
+        with self._sessions() as session:
+            row = session.execute(statement).mappings().one_or_none()
+            return DeviceConfig.model_validate(row) if row else None

@@ -33,7 +33,8 @@ Không phải domain nào cũng cần đủ mọi folder:
 - `repositories/` chỉ cần khi domain đọc hoặc ghi persistence.
 - `providers/` chỉ dành cho kết nối dịch vụ hoặc thiết bị bên ngoài.
 - `routers/` expose public service qua HTTP và không chứa business rule.
-- Chưa dùng ORM nên chưa cần `models/`; Pydantic contract không phải ORM model.
+- `models/` chứa SQLAlchemy ORM mapping của các bảng do domain sở hữu; Pydantic
+  trong `schemas/` tiếp tục là contract request/response và không phải ORM model.
 - `app/main.py` tổng hợp router của các domain. Route chat/agent discovery nằm
   trong `app/agents/routers` vì thuộc application layer của agent.
 
@@ -147,20 +148,20 @@ không bị serialize ngoài ý muốn.
 
 Năm domain trên phù hợp với phạm vi hiện tại và chưa cần thêm hoặc loại bỏ:
 
-| Domain | Trách nhiệm | Trạng thái |
-| --- | --- | --- |
-| `identity` | User, session và RBAC | Authentication, session và route permissions implemented |
-| `inventory` | Inventory, credential và kết nối thiết bị | Implemented |
-| `conversation` | Hội thoại và message | Implemented |
-| `execution` | Task, operation và device action audit | All schemas; Task/Operation use cases |
-| `evaluation` | Evaluation và benchmarking | Schema implemented; workflow planned |
-| Domain         | Trách nhiệm                               | Trạng thái                            |
-| -------------- | ----------------------------------------- | ------------------------------------- |
-| `identity`     | User, session và RBAC                     | Schema implemented; use cases planned |
-| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                           |
-| `conversation` | Hội thoại và message                      | Implemented                           |
-| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases |
-| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned  |
+| Domain         | Trách nhiệm                               | Trạng thái                                               |
+| -------------- | ----------------------------------------- | -------------------------------------------------------- |
+| `identity`     | User, session và RBAC                     | Authentication, session và route permissions implemented |
+| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                                              |
+| `conversation` | Hội thoại và message                      | Implemented                                              |
+| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases                    |
+| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned                     |
+| Domain         | Trách nhiệm                               | Trạng thái                                               |
+| -------------- | ----------------------------------------- | -------------------------------------                    |
+| `identity`     | User, session và RBAC                     | Schema implemented; use cases planned                    |
+| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                                              |
+| `conversation` | Hội thoại và message                      | Implemented                                              |
+| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases                    |
+| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned                     |
 
 Chỉ cân nhắc tách thêm trong tương lai khi xuất hiện ranh giới nghiệp vụ độc lập:
 
