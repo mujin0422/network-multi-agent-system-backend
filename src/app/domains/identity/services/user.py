@@ -32,6 +32,19 @@ class UserService:
         self._repository.save_user(record)
         return User.model_validate(record.model_dump())
 
+    def list_users(self) -> list[User]:
+        """Lấy danh sách user công khai, không bao gồm password hash."""
+
+        return self._repository.list_users()
+
+    def get_user(self, user_id: str) -> User:
+        """Lấy user theo ID hoặc phát sinh lỗi nếu không tồn tại."""
+
+        user = self._repository.get_user(user_id)
+        if user is None:
+            raise ResourceNotFoundError(f"Không tìm thấy user '{user_id}'")
+        return user
+
     def update_user(self, user_id: str, payload: UserUpdate) -> User:
         current = self._repository.get_user_with_password(user_id)
         if current is None:

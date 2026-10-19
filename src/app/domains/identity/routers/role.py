@@ -35,6 +35,39 @@ async def create_role(
     return service.create_role(payload, current_user.id)
 
 
+# READ — Lấy danh sách vai trò.
+@router.get("/", response_model=list[Role], summary="Lấy danh sách vai trò")
+async def list_roles(
+    service: Annotated[RoleService, Depends(get_role_service)],
+    _: Annotated[
+        User,
+        Depends(require_permission("Role-Based Access", "View")),
+    ],
+) -> list[Role]:
+    """Trả danh sách role hiện có."""
+
+    return service.list_roles()
+
+
+# READ — Lấy vai trò theo ID.
+@router.get(
+    "/{role_id}",
+    response_model=Role,
+    summary="Lấy vai trò theo ID",
+)
+async def get_role(
+    role_id: str,
+    service: Annotated[RoleService, Depends(get_role_service)],
+    _: Annotated[
+        User,
+        Depends(require_permission("Role-Based Access", "View")),
+    ],
+) -> Role:
+    """Trả role tương ứng hoặc HTTP 404 nếu ID không tồn tại."""
+
+    return service.get_role(role_id)
+
+
 # UPDATE — Sửa vai trò theo ID.
 @router.patch(
     "/{role_id}",
@@ -55,4 +88,4 @@ async def update_role(
     return service.update_role(role_id, payload, current_user.id)
 
 
-# READ và DELETE chưa được triển khai trong phạm vi hiện tại.
+# DELETE chưa được triển khai trong phạm vi hiện tại.

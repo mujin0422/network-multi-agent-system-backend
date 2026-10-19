@@ -28,15 +28,26 @@ class RoleService:
         self._repository.save_role(role)
         return role
 
+    def list_roles(self) -> list[Role]:
+        """Lấy danh sách role hiện có."""
+
+        return self._repository.list_roles()
+
+    def get_role(self, role_id: str) -> Role:
+        """Lấy role theo ID hoặc phát sinh lỗi nếu không tồn tại."""
+
+        role = self._repository.get_role(role_id)
+        if role is None:
+            raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
+        return role
+
     def update_role(
         self,
         role_id: str,
         payload: RoleUpdate,
         actor_id: str,
     ) -> Role:
-        current = self._repository.get_role(role_id)
-        if current is None:
-            raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
+        current = self.get_role(role_id)
 
         changes = payload.model_dump(exclude_unset=True, exclude_none=True)
         if "name" in changes:

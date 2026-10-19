@@ -1,11 +1,12 @@
 """Các use case và quy tắc nghiệp vụ của resource Device."""
 
 from datetime import UTC, datetime
+from math import ceil
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.core.utils import generate_id
 from app.domains.inventory.repositories import DeviceRepository
-from app.domains.inventory.schemas import Device, DeviceCreate, DeviceUpdate
+from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 
 
 class DeviceService:
@@ -29,9 +30,28 @@ class DeviceService:
         self._repository.save(device)
         return device
 
-    def list_devices(self) -> list[Device]:
-        """Lấy danh sách thiết bị từ repository hiện hành."""
-        return self._repository.list()
+    def list_devices(
+        self,
+        page: int,
+        page_size: int,
+        brand_id: str | None = None,
+        category_id: str | None = None,
+    ) -> DevicePage:
+        """Lọc và lấy một trang thiết bị từ repository."""
+
+        items, total = self._repository.list_page(
+            brand_id=brand_id,
+            category_id=category_id,
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        return DevicePage(
+            items=items,
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=ceil(total / page_size),
+        )
 
     def get_device(self, device_id: str) -> Device:
         """Lấy một thiết bị hoặc phát sinh lỗi nghiệp vụ ánh xạ thành HTTP 404."""
