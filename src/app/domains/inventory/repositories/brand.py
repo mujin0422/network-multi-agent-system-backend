@@ -2,9 +2,10 @@
 
 from typing import Protocol
 
-import psycopg
-from psycopg.rows import dict_row
+from sqlalchemy import select
 
+from app.core.database import create_session_factory
+from app.domains.inventory.models import BrandModel
 from app.domains.inventory.schemas import Brand
 
 
@@ -22,53 +23,30 @@ class PostgresBrandRepository:
     """Đọc brand và supported driver từ bảng ``brands``."""
 
     def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
-
-    def _connect(self):
-        return psycopg.connect(self._database_url, row_factory=dict_row)
+        self._sessions = create_session_factory(database_url)
 
     def save(self, brand: Brand) -> None:
         """Thêm mới hoặc cập nhật Brand theo primary key."""
 
-        query = """
-            INSERT INTO brands (id, name, supported_drivers)
-            VALUES (%(id)s, %(name)s, %(supported_drivers)s::jsonb)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                supported_drivers = EXCLUDED.supported_drivers
-        """
-        params = brand.model_dump()
-        params["supported_drivers"] = psycopg.types.json.Jsonb(
-            params["supported_drivers"]
-        )
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, params)
+        with self._sessions.begin() as session:
+            model = session.get(BrandModel, brand.id)
+            if model is None:
+                session.add(BrandModel(**brand.model_dump()))
+                return
+            model.name = brand.name
+            model.supported_drivers = brand.supported_drivers
 
     def get(self, brand_id: str) -> Brand | None:
         """Lấy một Brand theo primary key."""
 
-        query = """
-            SELECT id, name, supported_drivers
-            FROM brands
-            WHERE id = %s
-        """
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, (brand_id,))
-                row = cursor.fetchone()
-        return Brand.model_validate(row) if row else None
+        with self._sessions() as session:
+            model = session.get(BrandModel, brand_id)
+            return Brand.model_validate(model, from_attributes=True) if model else None
 
     def list(self) -> list[Brand]:
         """Trả toàn bộ brand theo thứ tự tên ổn định cho frontend."""
 
-        query = """
-            SELECT id, name, supported_drivers
-            FROM brands
-            ORDER BY lower(name), id
-        """
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query)
-                rows = cursor.fetchall()
-        return [Brand.model_validate(row) for row in rows]
+        statement = select(BrandModel).order_by(BrandModel.name, BrandModel.id)
+        with self._sessions() as session:
+            models = session.scalars(statement).all()
+            return [Brand.model_validate(item, from_attributes=True) for item in models]

@@ -5,6 +5,9 @@ from uuid import uuid4
 
 import httpx
 
+from app.domains.conversation.repositories import InMemoryConversationRepository
+from app.domains.conversation.routers.dependencies import get_conversation_service
+from app.domains.conversation.services import ConversationService
 from app.domains.inventory.routers.dependencies import get_device_service
 from app.domains.inventory.schemas import Device
 from app.domains.inventory.services import DeviceService
@@ -16,7 +19,7 @@ from app.core.config import Settings
 from datetime import UTC, datetime
 
 
-class TestIdentityRepository:
+class StubIdentityRepository:
     def __init__(self):
         now = datetime.now(UTC)
         self.user = UserRecord(
@@ -73,11 +76,17 @@ class TestIdentityRepository:
         self.user = self.user.model_copy(update={"last_login_at": logged_in_at})
 
 
-TEST_IDENTITY_REPOSITORY = TestIdentityRepository()
+TEST_IDENTITY_REPOSITORY = StubIdentityRepository()
 TEST_IDENTITY_SERVICE = IdentityService(
     TEST_IDENTITY_REPOSITORY, Settings(auth_jwt_secret="test-only-secret")
 )
-app.dependency_overrides[get_identity_service] = lambda: TEST_IDENTITY_SERVICE
+
+
+async def override_identity_service() -> IdentityService:
+    return TEST_IDENTITY_SERVICE
+
+
+app.dependency_overrides[get_identity_service] = override_identity_service
 
 
 class StubDeviceRepository:
@@ -115,6 +124,11 @@ async def request(method: str, path: str, json: dict | None = None) -> httpx.Res
 
 
 def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
+    service = ConversationService(InMemoryConversationRepository())
+
+    async def override_conversation_service() -> ConversationService:
+        return service
+
     async def scenario() -> None:
         created = await request(
             "POST",
@@ -135,7 +149,11 @@ def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
         assert detail.status_code == 200
         assert detail.json()["messages"][0]["message"] == "Kiểm tra neighbor trên P1"
 
-    asyncio.run(scenario())
+    app.dependency_overrides[get_conversation_service] = override_conversation_service
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_conversation_service, None)
 
 
 def test_inventory_api_enforces_hostname_uniqueness() -> None:
