@@ -16,7 +16,7 @@ from app.domains.inventory.routers import (
     credential_router,
     router as inventory_router,
 )
-from app.domains.identity.routers import auth_router
+from app.domains.identity.routers import auth_router, role_router, user_router
 
 
 settings = get_settings()
@@ -32,6 +32,8 @@ API_V1_PREFIX = "/api/v1"
 v1_router = APIRouter(prefix=API_V1_PREFIX)
 
 v1_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+v1_router.include_router(user_router, prefix="/users", tags=["Users"])
+v1_router.include_router(role_router, prefix="/roles", tags=["Roles"])
 v1_router.include_router(chat_router, prefix="/chat", tags=["Chat"])
 v1_router.include_router(agents_router, prefix="/agents", tags=["Agents"])
 v1_router.include_router(brand_router, prefix="/brands", tags=["Brands"])

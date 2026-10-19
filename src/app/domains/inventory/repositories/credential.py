@@ -86,12 +86,9 @@ class PostgresCredentialRepository:
             return Credential.model_validate(model, from_attributes=True) if model else None
 
     def list(self) -> list[Credential]:
-        """Lấy danh sách metadata Credential theo tên ổn định."""
+        """Lấy toàn bộ metadata Credential từ database."""
 
-        statement = select(CredentialModel).order_by(
-            CredentialModel.name,
-            CredentialModel.id,
-        )
+        statement = select(CredentialModel)
         with self._sessions() as session:
             models = session.scalars(statement).all()
             return [

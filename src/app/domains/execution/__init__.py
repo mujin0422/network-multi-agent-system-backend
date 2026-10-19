@@ -1,6 +1,6 @@
 """Public API của AI Execution Management domain."""
 
-from app.domains.execution.repositories import InMemoryExecutionRepository
+from app.domains.execution.repositories import PostgresExecutionRepository
 from app.domains.execution.schemas import (
     AccessMode,
     DependencyType,
@@ -35,12 +35,12 @@ __all__ = [
     "DeviceRole",
     "ExecutionService",
     "ExecutionStatus",
-    "InMemoryExecutionRepository",
     "Operation",
     "OperationCreate",
     "OperationDependency",
     "OperationDeviceStatus",
     "OperationStatus",
+    "PostgresExecutionRepository",
     "Task",
     "TaskCreate",
     "TaskDetail",

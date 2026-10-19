@@ -1,7 +1,11 @@
-"""Persistence contract và adapter in-memory của Execution domain."""
+"""Persistence contract và PostgreSQL adapter của Execution domain."""
 
 from typing import Protocol
 
+from sqlalchemy import select
+
+from app.core.database import create_session_factory
+from app.domains.execution.models import OperationModel, TaskModel
 from app.domains.execution.schemas import Operation, Task
 
 
@@ -21,44 +25,77 @@ class ExecutionRepository(Protocol):
     def list_operations(self, task_id: str) -> list[Operation]: ...
 
 
-class InMemoryExecutionRepository:
-    """Kho dữ liệu thử nghiệm giữ cùng contract với SQL repository tương lai."""
+class PostgresExecutionRepository:
+    """Execution repository được triển khai bằng SQLAlchemy ORM."""
 
-    def __init__(self) -> None:
-        self._tasks: dict[str, Task] = {}
-        self._operations: dict[str, Operation] = {}
+    def __init__(self, database_url: str) -> None:
+        self._sessions = create_session_factory(database_url)
 
     def save_task(self, task: Task) -> None:
-        self._tasks[task.id] = task.model_copy(deep=True)
+        with self._sessions.begin() as session:
+            model = session.get(TaskModel, task.id)
+            if model is None:
+                session.add(TaskModel(**task.model_dump()))
+                return
+            model.conversation_id = task.conversation_id
+            model.source_message_id = task.source_message_id
+            model.user_id = task.user_id
+            model.input_message = task.input_message
+            model.task_status = task.task_status
+            model.task_type = task.task_type
+            model.started_at = task.started_at
+            model.completed_at = task.completed_at
 
     def get_task(self, task_id: str) -> Task | None:
-        task = self._tasks.get(task_id)
-        return task.model_copy(deep=True) if task else None
+        with self._sessions() as session:
+            model = session.get(TaskModel, task_id)
+            return Task.model_validate(model, from_attributes=True) if model else None
 
     def list_tasks(self) -> list[Task]:
-        return [item.model_copy(deep=True) for item in self._tasks.values()]
+        statement = select(TaskModel).order_by(TaskModel.created_at.desc(), TaskModel.id)
+        with self._sessions() as session:
+            return [
+                Task.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]
 
     def find_task_by_source_message(self, message_id: str) -> Task | None:
-        return next(
-            (
-                task.model_copy(deep=True)
-                for task in self._tasks.values()
-                if task.source_message_id == message_id
-            ),
-            None,
-        )
+        statement = select(TaskModel).where(TaskModel.source_message_id == message_id)
+        with self._sessions() as session:
+            model = session.scalar(statement)
+            return Task.model_validate(model, from_attributes=True) if model else None
 
     def save_operation(self, operation: Operation) -> None:
-        self._operations[operation.id] = operation.model_copy(deep=True)
+        with self._sessions.begin() as session:
+            model = session.get(OperationModel, operation.id)
+            if model is None:
+                session.add(OperationModel(**operation.model_dump()))
+                return
+            model.task_id = operation.task_id
+            model.operation_intent = operation.operation_intent
+            model.display_order = operation.display_order
+            model.operation_status = operation.operation_status
+            model.operation_parameters = operation.operation_parameters
+            model.started_at = operation.started_at
+            model.completed_at = operation.completed_at
 
     def get_operation(self, operation_id: str) -> Operation | None:
-        operation = self._operations.get(operation_id)
-        return operation.model_copy(deep=True) if operation else None
+        with self._sessions() as session:
+            model = session.get(OperationModel, operation_id)
+            return (
+                Operation.model_validate(model, from_attributes=True)
+                if model
+                else None
+            )
 
     def list_operations(self, task_id: str) -> list[Operation]:
-        operations = [
-            item.model_copy(deep=True)
-            for item in self._operations.values()
-            if item.task_id == task_id
-        ]
-        return sorted(operations, key=lambda item: item.display_order)
+        statement = (
+            select(OperationModel)
+            .where(OperationModel.task_id == task_id)
+            .order_by(OperationModel.display_order, OperationModel.id)
+        )
+        with self._sessions() as session:
+            return [
+                Operation.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]

@@ -44,9 +44,9 @@ class PostgresBrandRepository:
             return Brand.model_validate(model, from_attributes=True) if model else None
 
     def list(self) -> list[Brand]:
-        """Trả toàn bộ brand theo thứ tự tên ổn định cho frontend."""
+        """Trả toàn bộ Brand từ database."""
 
-        statement = select(BrandModel).order_by(BrandModel.name, BrandModel.id)
+        statement = select(BrandModel)
         with self._sessions() as session:
             models = session.scalars(statement).all()
             return [Brand.model_validate(item, from_attributes=True) for item in models]

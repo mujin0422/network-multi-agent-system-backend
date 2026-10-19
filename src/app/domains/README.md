@@ -1,191 +1,284 @@
-# Domains
+# Domain Architecture
 
-`domains` chứa nghiệp vụ cốt lõi của hệ thống. Mỗi domain là một bounded context
-có contract, use case, transport adapter và persistence riêng. Business layer
-không tự đọc biến môi trường và không phụ thuộc trực tiếp vào implementation của
-domain khác.
+Thư mục `domains` chứa nghiệp vụ cốt lõi của hệ thống. Mỗi domain quản lý một
+nhóm nghiệp vụ độc lập, bao gồm dữ liệu, quy tắc xử lý và API của chính nó.
 
-## Cấu trúc chuẩn
+| Domain         | Trách nhiệm                                         |
+| -------------- | --------------------------------------------------- |
+| `identity`     | Người dùng, vai trò, quyền và phiên đăng nhập       |
+| `inventory`    | Thiết bị mạng, hãng, loại thiết bị và credential    |
+| `conversation` | Cuộc hội thoại và tin nhắn                          |
+| `execution`    | Task, operation và quá trình thực thi trên thiết bị |
+| `evaluation`   | Đánh giá kết quả task, RCA, remediation và safety   |
+
+## Cấu trúc một domain
 
 ```text
 domain_name/
-├── __init__.py          # public API ổn định của domain
-├── schemas/             # Pydantic request, response, enum và domain contract
+├── __init__.py
+├── models/
 │   ├── __init__.py
-│   └── <feature>.py
-├── repositories/        # persistence port và adapter
+│   └── <resource>.py
+├── schemas/
 │   ├── __init__.py
-│   └── <aggregate>.py
-├── services/            # use case và business rule
+│   └── <resource>.py
+├── repositories/
 │   ├── __init__.py
-│   └── <feature>.py
-├── routers/             # FastAPI transport của domain, chỉ tạo khi cần
+│   └── <resource>.py
+├── services/
 │   ├── __init__.py
-│   └── <feature>.py
-└── providers/           # tích hợp hệ thống ngoài, chỉ tạo khi cần
+│   └── <resource>.py
+├── routers/
+│   ├── __init__.py
+│   ├── dependencies.py
+│   └── <resource>.py
+└── providers/                 # Chỉ tạo khi tích hợp hệ thống bên ngoài
     ├── __init__.py
     └── <provider>.py
 ```
 
-Không phải domain nào cũng cần đủ mọi folder:
+Không bắt buộc domain phải có đủ mọi thư mục. Chỉ tạo một lớp khi có nhu cầu
+thực tế, không tạo file rỗng để giữ chỗ.
 
-- `schemas/` và `services/` được tạo khi domain đã có use case tương ứng.
-- `repositories/` chỉ cần khi domain đọc hoặc ghi persistence.
-- `providers/` chỉ dành cho kết nối dịch vụ hoặc thiết bị bên ngoài.
-- `routers/` expose public service qua HTTP và không chứa business rule.
-- `models/` chứa SQLAlchemy ORM mapping của các bảng do domain sở hữu; Pydantic
-  trong `schemas/` tiếp tục là contract request/response và không phải ORM model.
-- `app/main.py` tổng hợp router của các domain. Route chat/agent discovery nằm
-  trong `app/agents/routers` vì thuộc application layer của agent.
+## Trách nhiệm của từng lớp
 
-Các package con export public symbol qua `__init__.py`. Code bên ngoài ưu tiên
-import từ public API của domain:
+### `models/`
+
+**Chức năng:** Định nghĩa cấu trúc các bảng (tables) trong cơ sở dữ liệu
+(Database) bằng SQLAlchemy ORM.
+
+Model mô tả tên bảng, cột, kiểu dữ liệu, khóa chính, khóa ngoại, constraint và
+cách Python object được ánh xạ thành database record. Model không kiểm tra
+request, không chứa HTTP logic và không xử lý nghiệp vụ. Chỉ repository được sử
+dụng model để đọc hoặc ghi database.
 
 ```python
-from app.domains.inventory import DeviceService
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+```
+
+### `schemas/`
+
+**Chức năng:** Định nghĩa cấu trúc dữ liệu để FastAPI kiểm tra (validate), chuyển
+đổi dữ liệu đầu vào từ Client gửi lên (Request) và định dạng dữ liệu đầu ra gửi
+về cho Client (Response).
+
+Schema được viết bằng Pydantic và thường gồm:
+
+- `<Resource>Create`: dữ liệu được phép gửi khi tạo mới.
+- `<Resource>Update`: dữ liệu được phép gửi khi cập nhật.
+- `<Resource>`: dữ liệu công khai trả về Client.
+- `<Resource>Record`: dữ liệu nội bộ đầy đủ khi cần trường nhạy cảm.
+- Enum của resource: ví dụ `UserStatus` nằm trong `user.py`, `TaskStatus` nằm
+  trong `task.py`.
+
+Schema không truy cập database, không gọi repository/service và không xử lý
+nghiệp vụ. Password hash, refresh-token hash, secret hoặc ciphertext phải được
+loại khỏi response công khai.
+
+### `repositories/`
+
+**Chức năng:** Là lớp duy nhất trong domain chịu trách nhiệm truy cập và lưu trữ
+dữ liệu.
+
+Repository nhận/trả schema hoặc domain contract, dùng SQLAlchemy model để truy
+vấn database, và cung cấp các thao tác như `get`, `list`, `save`, `delete`.
+Repository nên có `Protocol` để service phụ thuộc vào contract, không phụ thuộc
+trực tiếp implementation PostgreSQL.
+
+```python
+class UserRepository(Protocol):
+    def get(self, user_id: str) -> UserRecord | None: ...
+    def save(self, user: UserRecord) -> None: ...
+```
+
+Repository không chứa business rule, không tạo HTTP response, không gọi router,
+service hoặc provider.
+
+### `services/`
+
+**Chức năng:** Chứa use case và toàn bộ quy tắc nghiệp vụ của domain.
+
+Service chịu trách nhiệm:
+
+- Kiểm tra resource liên quan có tồn tại.
+- Kiểm tra dữ liệu trùng lặp và trạng thái hợp lệ.
+- Sinh ID, timestamp, hash hoặc dữ liệu nghiệp vụ cần thiết.
+- Phối hợp repository và provider qua contract.
+- Phát sinh domain exception như `ResourceNotFoundError` hoặc
+  `ResourceConflictError`.
+
+Service không biết FastAPI, không nhận `Request`, không trả `Response`, không tạo
+`HTTPException` và không thao tác trực tiếp với ORM model/session.
+
+```python
+class UserService:
+    def create_user(self, payload: UserCreate) -> User:
+        self._ensure_unique_email(payload.email)
+        self._repository.save(user)
+        return public_user
+```
+
+### `routers/`
+
+**Chức năng:** Khai báo HTTP API của domain bằng FastAPI.
+
+Router khai báo URL, HTTP method, status code, request/response schema và kiểm
+tra quyền qua dependency. Mỗi handler chỉ nhận input, gọi public use case của
+service và trả kết quả.
+
+```python
+@router.post("/", response_model=User, status_code=201)
+async def create_user(
+    payload: UserCreate,
+    service: Annotated[UserService, Depends(get_user_service)],
+) -> User:
+    return service.create_user(payload)
+```
+
+Router phải mỏng: không chứa business rule, không viết SQL, không dùng model ORM
+và không gọi repository trực tiếp. Route nên có `summary`, `response_model` và
+chú thích `CREATE`, `READ`, `UPDATE`, `DELETE` để OpenAPI dễ hiểu.
+
+`routers/dependencies.py` khởi tạo repository, provider và service rồi cung cấp
+chúng qua FastAPI dependency injection. File này chỉ composition dependency,
+không chứa nghiệp vụ.
+
+### `providers/`
+
+**Chức năng:** Tích hợp với hệ thống nằm ngoài database của ứng dụng, ví dụ
+Netmiko, GNS3, API bên thứ ba hoặc secret vault.
+
+Repository quản lý dữ liệu của ứng dụng; provider giao tiếp với hệ thống ngoài.
+Provider không gọi router và không tự ghi dữ liệu nghiệp vụ vào database.
+
+### `__init__.py`
+
+**Chức năng:** Công bố public API ổn định của package/domain.
+
+Code bên ngoài nên import từ public package nếu symbol đã được export:
+
+```python
 from app.domains.inventory.schemas import DeviceCreate
+from app.domains.inventory.services import DeviceService
 ```
 
-Không import xuyên vào file implementation nếu symbol đã được export.
+Không import xuyên sâu vào file implementation nếu không cần thiết.
 
-## Quy tắc tách file con
-
-Folder chỉ dùng để phân lớp; bên trong tiếp tục tách file theo resource hoặc
-aggregate, không gom tất cả class vào một `schemas.py` lớn:
+## Luồng xử lý chuẩn
 
 ```text
-conversation/schemas/
-├── conversation.py
-└── message.py
-
-execution/schemas/
-├── device_action_log.py
-├── task.py
-├── operation.py
-├── operation_dependency.py
-├── operation_device.py
-├── task_execution.py
-└── status.py
-
-inventory/schemas/
-├── brand.py
-├── category.py
-├── credential.py
-├── device.py
-└── device_connection.py
+Client
+  ↓ HTTP request
+Router
+  ↓ gọi use case
+Service
+  ↓ gọi persistence contract
+Repository
+  ↓ sử dụng ORM mapping
+Model
+  ↓
+Database
 ```
 
-Một file có thể chứa các contract rất gần nhau như `Device`, `DeviceCreate` và
-`DeviceUpdate`. Chỉ tách tiếp khi chúng thuộc resource khác hoặc file bắt đầu có
-nhiều trách nhiệm.
-
-## Năm domain của hệ thống
-
-Tên domain ánh xạ trực tiếp với năm nhóm trong tài liệu database:
-
-| Nhóm tài liệu                      | Domain source  |
-| ---------------------------------- | -------------- |
-| 3.1 Authentication & Authorization | `identity`     |
-| 3.2 Network Inventory              | `inventory`    |
-| 3.3 Conversation Management        | `conversation` |
-| 3.4 AI Execution Management        | `execution`    |
-| 3.5 AI Evaluation & Benchmarking   | `evaluation`   |
-
-### `identity`
-
-Sở hữu user, session, role, permission và authentication/authorization. Database
-record schemas đã được định nghĩa theo đúng bảy bảng trong tài liệu. Domain có
-PostgreSQL repository, login/refresh/logout, current-user endpoint và dependency
-RBAC theo function/action.
-
-### `inventory`
-
-Sở hữu toàn bộ nhóm Network Inventory trong tài liệu: device, brand, category,
-credential và khả năng kết nối GNS3/Netmiko. Domain cung cấp Device API,
-uniqueness rule, PostgreSQL repository và provider kết nối thiết bị. Test dùng
-stub repository cục bộ, không đưa memory adapter vào production code.
-
-Public Device contract không trả password/secret. Credential chỉ được giải mã
-trong repository dành cho luồng kết nối và không được ghi log.
-
-### `conversation`
-
-Sở hữu conversation, message và thứ tự lịch sử hội thoại. Domain chỉ quản lý dữ
-liệu hội thoại; việc chọn hoặc điều phối AI agent nằm ở application layer.
-
-### `execution`
-
-Sở hữu Task, Operation, dependency, trạng thái thực thi và device action audit.
-Schema đã bao phủ toàn bộ sáu bảng; hiện service, repository và router mới triển
-khai use case Task/Operation.
-
-### `evaluation`
-
-Sở hữu AI evaluation và benchmarking: goal result, RCA, remediation, safety và
-evidence. Schema `TaskEvaluation` đã ánh xạ bảng `task_evaluations`; repository,
-service và router sẽ được tạo khi có workflow đánh giá thực tế.
-
-## Phạm vi schema database
-
-Hai mươi bảng trong tài liệu đã có record schema tương ứng. Tên trường trong các
-record schema giữ nguyên theo database; các request/response schema bổ sung như
-`DeviceCreate` hoặc `TaskDetail` không được tính là bảng mới.
-
-| Domain         | Bảng và record schema                                                                                                                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `identity`     | `roles` → `Role`, `management_functions` → `ManagementFunction`, `actions` → `Action`, `permissions` → `Permission`, `role_permissions` → `RolePermission`, `users` → `UserRecord`, `user_sessions` → `UserSessionRecord`            |
-| `inventory`    | `brands` → `Brand`, `categories` → `Category`, `credentials` → `CredentialRecord`, `devices` → `Device`                                                                                                                              |
-| `conversation` | `conversations` → `Conversation`, `messages` → `Message`                                                                                                                                                                             |
-| `execution`    | `tasks` → `Task`, `task_operations` → `Operation`, `operation_dependencies` → `OperationDependency`, `task_operation_devices` → `TaskOperationDevice`, `task_executions` → `TaskExecution`, `device_action_logs` → `DeviceActionLog` |
-| `evaluation`   | `task_evaluations` → `TaskEvaluation`                                                                                                                                                                                                |
-
-`User`, `Credential` là public response schema đã loại dữ liệu nhạy cảm.
-`UserRecord`, `UserSessionRecord` và `CredentialRecord` vẫn nhận đủ trường nội bộ
-nhưng password, refresh-token hash và ciphertext được đánh dấu `exclude=True` để
-không bị serialize ngoài ý muốn.
-
-## Đánh giá ranh giới domain
-
-Năm domain trên phù hợp với phạm vi hiện tại và chưa cần thêm hoặc loại bỏ:
-
-| Domain         | Trách nhiệm                               | Trạng thái                                               |
-| -------------- | ----------------------------------------- | -------------------------------------------------------- |
-| `identity`     | User, session và RBAC                     | Authentication, session và route permissions implemented |
-| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                                              |
-| `conversation` | Hội thoại và message                      | Implemented                                              |
-| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases                    |
-| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned                     |
-| Domain         | Trách nhiệm                               | Trạng thái                                               |
-| -------------- | ----------------------------------------- | -------------------------------------                    |
-| `identity`     | User, session và RBAC                     | Schema implemented; use cases planned                    |
-| `inventory`    | Inventory, credential và kết nối thiết bị | Implemented                                              |
-| `conversation` | Hội thoại và message                      | Implemented                                              |
-| `execution`    | Task, operation và device action audit    | All schemas; Task/Operation use cases                    |
-| `evaluation`   | Evaluation và benchmarking                | Schema implemented; workflow planned                     |
-
-Chỉ cân nhắc tách thêm trong tương lai khi xuất hiện ranh giới nghiệp vụ độc lập:
-
-- Tách `credential` khỏi `inventory` khi secret lifecycle, rotation và vault trở
-  thành một bounded context độc lập.
-- Không biến `agents` hoặc `tools` thành domain; chúng là lớp orchestration và
-  adapter sử dụng các domain service.
-
-## Quy tắc phụ thuộc
+Kết quả đi theo chiều ngược lại:
 
 ```text
-api / agents / tools
-         ↓
-   domain service
-      ↙      ↘
-repository  provider
-      ↘      ↙
-      schemas + core
+Database → Model → Repository → Schema → Service → Router → Client
 ```
 
-- Service phối hợp business rule và chỉ phụ thuộc persistence/provider qua
-  contract.
-- Repository không gọi provider bên ngoài.
-- Provider không ghi trực tiếp dữ liệu nghiệp vụ.
-- API, agent và tool gọi public service; không đi tắt vào repository.
-- Khi hai domain cần phối hợp, application/orchestrator gọi hai public service;
-  không để domain này import implementation nội bộ của domain kia.
+Khi cần gọi thiết bị hoặc dịch vụ ngoài:
+
+```text
+Router → Service → Provider → External system
+```
+
+## Quy tắc phụ thuộc bắt buộc
+
+| Lớp                       | Được phép phụ thuộc                                              | Không được phép gọi                   |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
+| `models`                  | `core.database`, kiểu dữ liệu/enum cần thiết                     | repository, service, router, provider |
+| `schemas`                 | Pydantic, thư viện chuẩn                                         | model, repository, service, router    |
+| `repositories`            | models, schemas, `core.database`                                 | service, router, provider             |
+| `providers`               | schema/config cần thiết, SDK bên ngoài                           | router, repository implementation     |
+| `services`                | schemas, repository/provider contract, core utilities/exceptions | router, FastAPI, ORM model/session    |
+| `routers`                 | schemas, services, router dependencies                           | model, repository trực tiếp, SQL      |
+| `routers/dependencies.py` | repository/provider implementation, service, config              | business rule                         |
+
+Quy tắc bắt buộc:
+
+1. Router chỉ gọi service, không gọi thẳng repository.
+2. Service chỉ gọi repository/provider qua contract; không viết SQL và không sử
+   dụng SQLAlchemy model/session.
+3. Repository là lớp duy nhất sử dụng ORM model và database session.
+4. Model không import service, repository hoặc router.
+5. Schema không thực hiện I/O hoặc truy cập database.
+6. Domain này không import implementation nội bộ của domain khác.
+7. Khi cần phối hợp nhiều domain, application/orchestrator gọi public service
+   của từng domain.
+8. `app/main.py` chỉ đăng ký router dưới prefix `/api/v1`, không chứa nghiệp vụ.
+
+## Những cách gọi bị cấm
+
+```text
+Router     ─X→ Repository
+Router     ─X→ Model
+Service    ─X→ SQLAlchemy Session/Model
+Service    ─X→ Router
+Repository ─X→ Service/Provider
+Schema     ─X→ Database
+Domain A   ─X→ implementation nội bộ của Domain B
+```
+
+Sai:
+
+```python
+@router.post("/")
+async def create_user(payload: UserCreate):
+    session.add(UserModel(...))  # Router đi thẳng vào ORM/database.
+```
+
+Đúng:
+
+```python
+@router.post("/")
+async def create_user(payload: UserCreate, service: UserService):
+    return service.create_user(payload)
+```
+
+## Quy tắc tổ chức file
+
+- Tách file theo resource hoặc aggregate, không gom cả domain vào một file lớn.
+- Schema và enum của resource đặt cùng file. Ví dụ `user.py` chứa `User`,
+  `UserCreate`, `UserUpdate`, `UserRecord`, `UserStatus`.
+- Model của các bảng gần nhau có thể chung file khi vẫn dễ đọc; tách theo
+  resource khi file lớn.
+- Tên file dùng danh từ số ít: `user.py`, `role.py`, `device.py`.
+- Tên router, service và repository tương ứng với resource để dễ tìm kiếm.
+- Chỉ export thành phần thực sự là public API qua `__init__.py`.
+- Không đặt password thô, token, secret hoặc ciphertext trong response và log.
+
+## Ranh giới giữa các domain
+
+Mỗi domain sở hữu model, schema và nghiệp vụ của bảng thuộc domain đó. Domain
+không truy cập trực tiếp repository hoặc model của domain khác.
+
+Workflow cần nhiều domain phải được phối hợp tại application/orchestration layer:
+
+```text
+Application service
+   ├── gọi ConversationService
+   └── gọi ExecutionService
+```
+
+Không được gọi theo cách:
+
+```text
+ConversationService ─X→ PostgresExecutionRepository
+```
+
+Quy tắc này giữ các domain độc lập, dễ kiểm thử và tránh phụ thuộc vòng tròn khi
+hệ thống phát triển lớn hơn.
