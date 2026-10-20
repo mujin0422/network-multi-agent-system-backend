@@ -1,6 +1,6 @@
 """Public API của AI Execution Management domain."""
 
-from app.domains.execution.repositories import PostgresExecutionRepository
+from app.domains.execution.repositories import ExecutionRepository
 from app.domains.execution.schemas import (
     AccessMode,
     DependencyType,
@@ -9,12 +9,16 @@ from app.domains.execution.schemas import (
     DeviceActionStatus,
     DeviceActionType,
     DeviceRole,
+    ExecutionPlanCreate,
     ExecutionStatus,
     Operation,
     OperationCreate,
     OperationDependency,
     OperationDeviceStatus,
     OperationStatus,
+    PlannedDependency,
+    PlannedDevice,
+    PlannedOperation,
     Task,
     TaskCreate,
     TaskDetail,
@@ -35,12 +39,16 @@ __all__ = [
     "DeviceRole",
     "ExecutionService",
     "ExecutionStatus",
+    "ExecutionPlanCreate",
     "Operation",
     "OperationCreate",
     "OperationDependency",
     "OperationDeviceStatus",
     "OperationStatus",
-    "PostgresExecutionRepository",
+    "PlannedDependency",
+    "PlannedDevice",
+    "PlannedOperation",
+    "ExecutionRepository",
     "Task",
     "TaskCreate",
     "TaskDetail",

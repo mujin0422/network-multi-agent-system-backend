@@ -1,16 +1,15 @@
 """Authentication and role permission use cases."""
 
-import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
-import bcrypt
 import jwt
 
 from app.core.config import Settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
-from app.domains.identity.repositories import IdentityRepository
+from app.core.utils import generate_uuid
+from app.domains.identity.repositories import IdentityRepositoryProtocol
 from app.domains.identity.schemas import (
     AccessTokenPayload,
     TokenResponse,
@@ -18,36 +17,24 @@ from app.domains.identity.schemas import (
     UserSessionRecord,
     UserStatus,
 )
+from app.domains.identity.utils import (
+    hash_refresh_token,
+    verify_password,
+)
 
 
 class IdentityService:
-    def __init__(self, repository: IdentityRepository, settings: Settings) -> None:
+    def __init__(
+        self,
+        repository: IdentityRepositoryProtocol,
+        settings: Settings,
+    ) -> None:
         self._repository = repository
         self._settings = settings
 
-    @staticmethod
-    def hash_password(password: str) -> str:
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-    @staticmethod
-    def _verify_password(password: str, password_hash: str) -> bool:
-        try:
-            encoded = password_hash.encode()
-            if encoded.startswith((b"$2a$", b"$2b$", b"$2y$")):
-                return bcrypt.checkpw(password.encode(), encoded)
-            # Development seed uses PostgreSQL pgcrypto crypt() bcrypt hashes.
-            import crypt
-            return crypt.crypt(password, password_hash) == password_hash
-        except (ValueError, OSError):
-            return False
-
-    @staticmethod
-    def _hash_refresh_token(token: str) -> str:
-        return hashlib.sha256(token.encode()).hexdigest()
-
     def login(self, email: str, password: str) -> TokenResponse:
         user = self._repository.get_user_by_email(email)
-        if not user or not self._verify_password(password, user.password_hash):
+        if not user or not verify_password(password, user.password_hash):
             raise AuthenticationError("Email hoặc mật khẩu không đúng")
         if user.user_status != UserStatus.ACTIVE:
             raise AuthenticationError("Tài khoản đã bị vô hiệu hóa")
@@ -56,7 +43,7 @@ class IdentityService:
         return self._new_session(user, now)
 
     def refresh(self, refresh_token: str) -> TokenResponse:
-        session = self._repository.get_session_by_hash(self._hash_refresh_token(refresh_token))
+        session = self._repository.get_session_by_hash(hash_refresh_token(refresh_token))
         now = datetime.now(UTC)
         if not session or session.revoked_at or session.expires_at <= now:
             raise AuthenticationError("Refresh token không hợp lệ hoặc đã hết hạn")
@@ -90,10 +77,10 @@ class IdentityService:
             raise AuthorizationError("Không có quyền thực hiện thao tác này")
 
     def _new_session(self, user: User, now: datetime) -> TokenResponse:
-        return self._issue_tokens(user, now, uuid4(), save_session=True)
+        return self._issue_tokens(user, now, generate_uuid(), save_session=True)
 
     def _rotate_session(self, user: User, old_session_id: UUID, now: datetime) -> TokenResponse:
-        response = self._issue_tokens(user, now, uuid4(), save_session=False)
+        response = self._issue_tokens(user, now, generate_uuid(), save_session=False)
         new_session = self._session_record(user.id, response.refresh_token, response.access_token, now)
         if not self._repository.rotate_session(old_session_id, now, new_session):
             raise AuthenticationError("Refresh token đã được sử dụng")
@@ -104,7 +91,7 @@ class IdentityService:
         return UserSessionRecord(
             id=UUID(claims["sid"]),
             user_id=user_id,
-            refresh_token_hash=self._hash_refresh_token(refresh),
+            refresh_token_hash=hash_refresh_token(refresh),
             expires_at=now + timedelta(days=self._settings.auth_refresh_token_days),
             created_at=now,
         )
@@ -115,7 +102,7 @@ class IdentityService:
         session = UserSessionRecord(
             id=session_id,
             user_id=user.id,
-            refresh_token_hash=self._hash_refresh_token(raw_refresh),
+            refresh_token_hash=hash_refresh_token(raw_refresh),
             expires_at=expires,
             created_at=now,
         )

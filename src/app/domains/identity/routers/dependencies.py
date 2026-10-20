@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
-from app.domains.identity.repositories import PostgresIdentityRepository
+from app.domains.identity.repositories import IdentityRepository
 from app.domains.identity.schemas import User
 from app.domains.identity.services import IdentityService, RoleService, UserService
 
@@ -16,8 +16,8 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 @lru_cache
-def _build_identity_repository() -> PostgresIdentityRepository:
-    return PostgresIdentityRepository(get_settings().database_url)
+def _build_identity_repository() -> IdentityRepository:
+    return IdentityRepository(get_settings().database_url)
 
 
 @lru_cache

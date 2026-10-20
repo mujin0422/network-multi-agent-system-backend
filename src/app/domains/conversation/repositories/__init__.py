@@ -2,10 +2,16 @@
 
 from app.domains.conversation.repositories.conversation import (
     ConversationRepository,
-    PostgresConversationRepository,
+    ConversationRepositoryProtocol,
+)
+from app.domains.conversation.repositories.message import (
+    MessageRepository,
+    MessageRepositoryProtocol,
 )
 
 __all__ = [
     "ConversationRepository",
-    "PostgresConversationRepository",
+    "ConversationRepositoryProtocol",
+    "MessageRepository",
+    "MessageRepositoryProtocol",
 ]

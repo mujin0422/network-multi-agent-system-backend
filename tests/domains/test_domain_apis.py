@@ -18,6 +18,12 @@ from app.main import app
 from app.domains.identity.routers.dependencies import get_identity_service
 from app.domains.identity.schemas import User, UserRecord, UserStatus
 from app.domains.identity.services import IdentityService
+from app.domains.identity.utils import hash_password
+from app.agents.dependencies import (
+    get_execution_orchestrator,
+    get_gns3_provider,
+    get_planning_orchestrator,
+)
 from app.core.config import Settings
 from datetime import UTC, datetime
 
@@ -26,9 +32,13 @@ class StubIdentityRepository:
     def __init__(self):
         now = datetime.now(UTC)
         self.user = UserRecord(
-            id="user-test", role_id="role-test", email="test@example.com",
-            password_hash=IdentityService.hash_password("test-password"),
-            full_name="Test", user_status=UserStatus.ACTIVE, created_at=now,
+            id="user-test",
+            role_id="role-test",
+            email="test@example.com",
+            password_hash=hash_password("test-password"),
+            full_name="Test",
+            user_status=UserStatus.ACTIVE,
+            created_at=now,
         )
         self.sessions = {}
 
@@ -36,7 +46,11 @@ class StubIdentityRepository:
         return self.user if email == self.user.email else None
 
     def get_user(self, user_id):
-        return User.model_validate(self.user.model_dump()) if user_id == self.user.id else None
+        return (
+            User.model_validate(self.user.model_dump())
+            if user_id == self.user.id
+            else None
+        )
 
     def get_user_with_password(self, user_id):
         return self.user if user_id == self.user.id else None
@@ -46,9 +60,12 @@ class StubIdentityRepository:
 
     def get_permissions(self, role_id):
         return {
-            ("Chatbot", "View"), ("Chatbot", "Execute"),
-            ("Device Management", "Add"), ("Device Management", "View"),
-            ("Device Management", "Edit"), ("Task Management", "View"),
+            ("Chatbot", "View"),
+            ("Chatbot", "Execute"),
+            ("Device Management", "Add"),
+            ("Device Management", "View"),
+            ("Device Management", "Edit"),
+            ("Task Management", "View"),
             ("Task Management", "Execute"),
         }
 
@@ -56,17 +73,26 @@ class StubIdentityRepository:
         self.sessions[session.id] = session
 
     def get_session_by_hash(self, token_hash):
-        return next((s for s in self.sessions.values() if s.refresh_token_hash == token_hash), None)
+        return next(
+            (s for s in self.sessions.values() if s.refresh_token_hash == token_hash),
+            None,
+        )
 
     def revoke_session(self, session_id, revoked_at):
-        self.sessions[session_id] = self.sessions[session_id].model_copy(update={"revoked_at": revoked_at})
+        self.sessions[session_id] = self.sessions[session_id].model_copy(
+            update={"revoked_at": revoked_at}
+        )
 
     def is_session_active(self, session_id):
         s = self.sessions.get(session_id)
         return bool(s and s.revoked_at is None and s.expires_at > datetime.now(UTC))
 
     def get_active_session(self, session_id):
-        return self.sessions.get(session_id) if self.is_session_active(session_id) else None
+        return (
+            self.sessions.get(session_id)
+            if self.is_session_active(session_id)
+            else None
+        )
 
     def rotate_session(self, session_id, revoked_at, replacement):
         if not self.is_session_active(session_id):
@@ -90,6 +116,42 @@ async def override_identity_service() -> IdentityService:
 
 
 app.dependency_overrides[get_identity_service] = override_identity_service
+
+
+class StubPlanningOrchestrator:
+    async def plan_user_message(self, conversation, message):
+        return None
+
+
+async def override_planning_orchestrator() -> StubPlanningOrchestrator:
+    return StubPlanningOrchestrator()
+
+
+app.dependency_overrides[get_planning_orchestrator] = override_planning_orchestrator
+
+
+class StubExecutionOrchestrator:
+    async def execute_task(self, task):
+        return []
+
+
+async def override_execution_orchestrator() -> StubExecutionOrchestrator:
+    return StubExecutionOrchestrator()
+
+
+app.dependency_overrides[get_execution_orchestrator] = override_execution_orchestrator
+
+
+class StubGNS3Provider:
+    def check_server_available(self):
+        return {"version": "test"}
+
+
+async def override_gns3_provider() -> StubGNS3Provider:
+    return StubGNS3Provider()
+
+
+app.dependency_overrides[get_gns3_provider] = override_gns3_provider
 
 
 class StubDeviceRepository:
@@ -128,10 +190,10 @@ class StubConversationRepository:
         values = self._conversations.values()
         return [item for item in values if user_id is None or item.user_id == user_id]
 
-    def save_message(self, message: Message) -> None:
+    def save(self, message: Message) -> None:
         self._messages.setdefault(message.conversation_id, []).append(message)
 
-    def list_messages(self, conversation_id: str) -> list[Message]:
+    def list_by_conversation(self, conversation_id: str) -> list[Message]:
         return list(self._messages.get(conversation_id, []))
 
 
@@ -190,7 +252,8 @@ async def request(method: str, path: str, json: dict | None = None) -> httpx.Res
 
 
 def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
-    service = ConversationService(StubConversationRepository())
+    repository = StubConversationRepository()
+    service = ConversationService(repository, repository)
 
     async def override_conversation_service() -> ConversationService:
         return service

@@ -3,12 +3,12 @@
 from functools import lru_cache
 
 from app.core.config import get_settings
-from app.domains.execution import ExecutionService, PostgresExecutionRepository
+from app.domains.execution import ExecutionRepository, ExecutionService
 
 
 @lru_cache
 def _build_execution_service() -> ExecutionService:
-    repository = PostgresExecutionRepository(get_settings().database_url)
+    repository = ExecutionRepository(get_settings().database_url)
     return ExecutionService(repository)
 
 

@@ -10,18 +10,18 @@ from app.domains.inventory import (
     DeviceConnectionProvider,
     DeviceService,
     NetworkService,
-    PostgresBrandRepository,
-    PostgresCategoryRepository,
-    PostgresCredentialRepository,
-    PostgresDeviceConfigRepository,
-    PostgresDeviceRepository,
+    BrandRepository,
+    CategoryRepository,
+    CredentialRepository,
+    DeviceConfigRepository,
+    DeviceRepository,
 )
 
 
 @lru_cache
 def _build_brand_service() -> BrandService:
     settings = get_settings()
-    return BrandService(PostgresBrandRepository(settings.database_url))
+    return BrandService(BrandRepository(settings.database_url))
 
 
 async def get_brand_service() -> BrandService:
@@ -31,7 +31,7 @@ async def get_brand_service() -> BrandService:
 @lru_cache
 def _build_category_service() -> CategoryService:
     settings = get_settings()
-    return CategoryService(PostgresCategoryRepository(settings.database_url))
+    return CategoryService(CategoryRepository(settings.database_url))
 
 
 async def get_category_service() -> CategoryService:
@@ -41,7 +41,7 @@ async def get_category_service() -> CategoryService:
 @lru_cache
 def _build_credential_service() -> CredentialService:
     settings = get_settings()
-    repository = PostgresCredentialRepository(
+    repository = CredentialRepository(
         database_url=settings.database_url,
         encryption_key=settings.device_credential_encryption_key,
     )
@@ -55,7 +55,7 @@ async def get_credential_service() -> CredentialService:
 @lru_cache
 def _build_device_service() -> DeviceService:
     settings = get_settings()
-    return DeviceService(PostgresDeviceRepository(settings.database_url))
+    return DeviceService(DeviceRepository(settings.database_url))
 
 
 async def get_device_service() -> DeviceService:
@@ -65,7 +65,7 @@ async def get_device_service() -> DeviceService:
 @lru_cache
 def _build_network_service() -> NetworkService:
     settings = get_settings()
-    repository = PostgresDeviceConfigRepository(
+    repository = DeviceConfigRepository(
         database_url=settings.database_url,
         encryption_key=settings.device_credential_encryption_key,
     )

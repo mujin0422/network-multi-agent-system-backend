@@ -4,15 +4,15 @@ from datetime import UTC, datetime
 from math import ceil
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.core.utils import generate_id
-from app.domains.inventory.repositories import DeviceRepository
+from app.core.utils import IdPrefix, generate_id
+from app.domains.inventory.repositories import DeviceRepositoryProtocol
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 
 
 class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
-    def __init__(self, repository: DeviceRepository) -> None:
+    def __init__(self, repository: DeviceRepositoryProtocol) -> None:
         self._repository = repository
 
     def create_device(self, payload: DeviceCreate) -> Device:
@@ -21,7 +21,7 @@ class DeviceService:
         # Dùng UTC để timestamp nhất quán giữa local, Docker và production.
         now = datetime.now(UTC)
         device = Device(
-            id=generate_id("devc"),
+            id=generate_id(IdPrefix.DEVICE),
             **payload.model_dump(),
             created_by=payload.last_updated_by,
             created_at=now,
@@ -52,6 +52,11 @@ class DeviceService:
             total=total,
             total_pages=ceil(total / page_size),
         )
+
+    def list_available_devices(self) -> list[Device]:
+        """Cung cấp inventory công khai cho application-layer orchestrator."""
+
+        return self._repository.list()
 
     def get_device(self, device_id: str) -> Device:
         """Lấy một thiết bị hoặc phát sinh lỗi nghiệp vụ ánh xạ thành HTTP 404."""

@@ -1,14 +1,28 @@
-"""Built-in analyst agent."""
+"""Analyst Agent phân tích output, không kết nối thiết bị."""
 
-from app.agents.base import BaseAgent
-from app.agents.schemas import ChatResponse
+import json
+from typing import Any
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
+from app.agents.analyst.schemas import AnalysisResult
 
 
-class AnalystAgent(BaseAgent):
-    name = "analyst_agent"
+class AnalystAgent:
+    name = "analyst-agent"
 
-    async def execute(self, message: str) -> ChatResponse:
-        return ChatResponse(
-            agent=self.name,
-            response=f"Analyst processed: {message}",
+    def __init__(self, chat_model: Any) -> None:
+        self._analyst = chat_model.with_structured_output(AnalysisResult)
+
+    # Phân tích output từ execution agent, trả về kết quả phân tích có cấu trúc.
+    async def analyze(self, execution_outputs: list[dict[str, Any]]) -> AnalysisResult:
+        result = await self._analyst.ainvoke(
+            [
+                SystemMessage(content=ANALYST_SYSTEM_PROMPT),
+                HumanMessage(
+                    content=json.dumps(execution_outputs, ensure_ascii=False)
+                ),
+            ]
         )
+        return AnalysisResult.model_validate(result)

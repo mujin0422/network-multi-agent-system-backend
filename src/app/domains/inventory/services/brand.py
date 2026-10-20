@@ -1,22 +1,22 @@
 """Use cases cho resource Brand."""
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.core.utils import generate_id
-from app.domains.inventory.repositories import BrandRepository
+from app.core.utils import IdPrefix, generate_id
+from app.domains.inventory.repositories import BrandRepositoryProtocol
 from app.domains.inventory.schemas import Brand, BrandCreate, BrandUpdate
 
 
 class BrandService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới hãng thiết bị."""
 
-    def __init__(self, repository: BrandRepository) -> None:
+    def __init__(self, repository: BrandRepositoryProtocol) -> None:
         self._repository = repository
 
     def create_brand(self, payload: BrandCreate) -> Brand:
         """Kiểm tra tên duy nhất, sinh ID và lưu Brand mới."""
 
         self._ensure_unique_name(payload.name)
-        brand = Brand(id=generate_id("brnd"), **payload.model_dump())
+        brand = Brand(id=generate_id(IdPrefix.BRAND), **payload.model_dump())
         self._repository.save(brand)
         return brand
 

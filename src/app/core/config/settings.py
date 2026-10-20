@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # Application/API settings được gom riêng để `.env` dễ quan sát.
@@ -39,16 +40,34 @@ class Settings(BaseSettings):
     # GNS3 project settings.
     gns3_ip: str = "127.0.0.1"
     gns3_port: int = Field(default=3080, gt=0, le=65535)
-    project_id: str = ""
+    gns3_project_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("GNS3_PROJECT_ID", "PROJECT_ID"),
+    )
+    gns3_request_timeout: float = Field(default=10.0, gt=0)
 
     # Network connection timeouts.
     ssh_timeout: int = Field(default=60, gt=0)
     ssh_auth_timeout: int = Field(default=30, gt=0)
     ssh_delay_factor: float = Field(default=0.5, gt=0)
+    network_backend: Literal["netmiko", "nornir"] = "netmiko"
+    nornir_num_workers: int = Field(default=20, gt=0, le=200)
 
     # AI provider settings.
     nvidia_api_key: str = ""
     nvidia_model: str = ""
+
+    @property
+    def gns3_base_url(self) -> str:
+        """Canonical URL của GNS3 Controller API."""
+
+        return f"http://{self.gns3_ip}:{self.gns3_port}/v2"
+
+    @property
+    def gns3_project_url(self) -> str:
+        """Canonical URL của GNS3 project đã cấu hình."""
+
+        return f"{self.gns3_base_url}/projects/{self.gns3_project_id}"
 
 
 @lru_cache

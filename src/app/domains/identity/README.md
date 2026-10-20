@@ -55,6 +55,8 @@ identity/
 │   ├── identity.py
 │   ├── role.py
 │   └── user.py
+├── utils/
+│   └── security.py
 └── routers/
     ├── auth.py
     ├── dependencies.py
@@ -86,7 +88,7 @@ một file `status.py` riêng.
 ### `repositories/`
 
 `IdentityRepository` định nghĩa persistence contract mà các service sử dụng.
-`PostgresIdentityRepository` triển khai contract đó bằng SQLAlchemy ORM.
+`IdentityRepository` triển khai `IdentityRepositoryProtocol` bằng SQLAlchemy ORM.
 
 Repository chịu trách nhiệm:
 
@@ -108,6 +110,17 @@ Chỉ repository được dùng ORM model và database session.
 
 Service chứa business rule nhưng không phụ thuộc FastAPI và không thao tác trực
 tiếp với ORM model.
+
+### `utils/`
+
+`security.py` chứa các hàm kỹ thuật không trạng thái:
+
+- `hash_password`: tạo bcrypt password hash.
+- `verify_password`: kiểm tra password với hash.
+- `hash_refresh_token`: tạo SHA-256 digest trước khi lưu refresh token.
+
+Service quyết định khi nào cần xác thực hoặc phát hành token; utility chỉ thực
+hiện phép biến đổi kỹ thuật và không truy cập database.
 
 ### `routers/`
 
@@ -210,7 +223,7 @@ Luồng hợp lệ trong Identity:
 ```text
 Router → Service → IdentityRepository contract
                          ↓
-             PostgresIdentityRepository → ORM Model → Database
+             IdentityRepository → ORM Model → Database
 ```
 
 Các cách gọi bị cấm:
@@ -224,7 +237,7 @@ Schema     ─X→ Database
 
 Domain khác cần kiểm tra người dùng hoặc quyền phải sử dụng public service hoặc
 FastAPI dependency của Identity, không truy cập trực tiếp `UserModel`,
-`RoleModel` hoặc `PostgresIdentityRepository`.
+`RoleModel` hoặc `IdentityRepository`.
 
 ## Quy tắc bảo mật
 

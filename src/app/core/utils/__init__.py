@@ -1,5 +1,5 @@
 """Public exports for small, dependency-free shared utilities."""
 
-from app.core.utils.ids import generate_id
+from app.core.utils.ids import IdPrefix, generate_id, generate_uuid
 
-__all__ = ["generate_id"]
+__all__ = ["IdPrefix", "generate_id", "generate_uuid"]

@@ -11,7 +11,7 @@ from app.domains.identity.models import ActionModel, ManagementFunctionModel, Pe
 from app.domains.identity.schemas import Role, User, UserRecord, UserSessionRecord
 
 
-class IdentityRepository(Protocol):
+class IdentityRepositoryProtocol(Protocol):
     def get_user_by_email(self, email: str) -> UserRecord | None: ...
     def get_user(self, user_id: str) -> User | None: ...
     def list_users(self) -> list[User]: ...
@@ -31,7 +31,7 @@ class IdentityRepository(Protocol):
     def update_login(self, user_id: str, logged_in_at: datetime) -> None: ...
 
 
-class PostgresIdentityRepository:
+class IdentityRepository:
     """Identity repository implemented with SQLAlchemy ORM."""
 
     def __init__(self, database_url: str) -> None:

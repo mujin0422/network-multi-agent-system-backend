@@ -1,15 +1,18 @@
 """Persistence port và PostgreSQL adapter cho resource Credential."""
 
+from __future__ import annotations
+
 from typing import Protocol
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import CredentialModel
 from app.domains.inventory.schemas import Credential
+from app.domains.inventory.utils import encrypted_credential
 
 
-class CredentialRepository(Protocol):
+class CredentialRepositoryProtocol(Protocol):
     """Persistence contract cho các use case Credential."""
 
     def create(self, credential: Credential, password: str, secret: str | None) -> None: ...
@@ -28,29 +31,24 @@ class CredentialRepository(Protocol):
     def list(self) -> list[Credential]: ...
 
 
-class PostgresCredentialRepository:
+class CredentialRepository:
     """Lưu metadata và ciphertext Credential trong PostgreSQL."""
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
-    def _encrypted(self, value: str):
-        return func.armor(
-            func.pgp_sym_encrypt(
-                value,
-                self._encryption_key,
-                "cipher-algo=aes256,compress-algo=1",
-            )
-        )
-
     def create(self, credential: Credential, password: str, secret: str | None) -> None:
         """Mã hóa password/secret bằng AES-256 trước khi insert."""
 
         model = CredentialModel(
             **credential.model_dump(),
-            password=self._encrypted(password),
-            secret=self._encrypted(secret) if secret is not None else None,
+            password=encrypted_credential(password, self._encryption_key),
+            secret=(
+                encrypted_credential(secret, self._encryption_key)
+                if secret is not None
+                else None
+            ),
         )
         with self._sessions.begin() as session:
             session.add(model)
@@ -67,9 +65,13 @@ class PostgresCredentialRepository:
 
         values = credential.model_dump(exclude={"id", "created_by", "created_at"})
         if update_password and password is not None:
-            values["password"] = self._encrypted(password)
+            values["password"] = encrypted_credential(password, self._encryption_key)
         if update_secret:
-            values["secret"] = self._encrypted(secret) if secret is not None else None
+            values["secret"] = (
+                encrypted_credential(secret, self._encryption_key)
+                if secret is not None
+                else None
+            )
         statement = (
             update(CredentialModel)
             .where(CredentialModel.id == credential.id)

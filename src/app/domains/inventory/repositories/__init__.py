@@ -2,34 +2,34 @@
 
 from app.domains.inventory.repositories.brand import (
     BrandRepository,
-    PostgresBrandRepository,
+    BrandRepositoryProtocol,
 )
 from app.domains.inventory.repositories.category import (
     CategoryRepository,
-    PostgresCategoryRepository,
+    CategoryRepositoryProtocol,
 )
 from app.domains.inventory.repositories.credential import (
     CredentialRepository,
-    PostgresCredentialRepository,
+    CredentialRepositoryProtocol,
 )
 from app.domains.inventory.repositories.device import (
     DeviceRepository,
-    PostgresDeviceRepository,
+    DeviceRepositoryProtocol,
 )
 from app.domains.inventory.repositories.device_connection import (
     DeviceConfigRepository,
-    PostgresDeviceConfigRepository,
+    DeviceConfigRepositoryProtocol,
 )
 
 __all__ = [
     "BrandRepository",
+    "BrandRepositoryProtocol",
     "CategoryRepository",
+    "CategoryRepositoryProtocol",
     "CredentialRepository",
+    "CredentialRepositoryProtocol",
     "DeviceRepository",
+    "DeviceRepositoryProtocol",
     "DeviceConfigRepository",
-    "PostgresBrandRepository",
-    "PostgresCategoryRepository",
-    "PostgresCredentialRepository",
-    "PostgresDeviceConfigRepository",
-    "PostgresDeviceRepository",
+    "DeviceConfigRepositoryProtocol",
 ]

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.core.exceptions.domain import (
     AuthenticationError,
     AuthorizationError,
+    ExternalServiceUnavailableError,
     InvalidStateTransitionError,
     ResourceConflictError,
     ResourceNotFoundError,
@@ -26,7 +27,11 @@ def register_error_handlers(app: FastAPI) -> None:
     async def handle_authentication(
         _request: Request, exc: AuthenticationError
     ) -> JSONResponse:
-        return JSONResponse(status_code=401, content={"detail": str(exc)}, headers={"WWW-Authenticate": "Bearer"})
+        return JSONResponse(
+            status_code=401,
+            content={"detail": str(exc)},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     @app.exception_handler(AuthorizationError)
     async def handle_authorization(
@@ -47,3 +52,10 @@ def register_error_handlers(app: FastAPI) -> None:
         exc: InvalidStateTransitionError,
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(ExternalServiceUnavailableError)
+    async def handle_external_service_unavailable(
+        _request: Request,
+        exc: ExternalServiceUnavailableError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})

@@ -6,6 +6,12 @@ from app.domains.execution.schemas.device_action_log import (
     DeviceActionStatus,
     DeviceActionType,
 )
+from app.domains.execution.schemas.execution_plan import (
+    ExecutionPlanCreate,
+    PlannedDependency,
+    PlannedDevice,
+    PlannedOperation,
+)
 from app.domains.execution.schemas.operation import (
     Operation,
     OperationCreate,
@@ -39,11 +45,15 @@ __all__ = [
     "DeviceActionType",
     "DeviceRole",
     "ExecutionStatus",
+    "ExecutionPlanCreate",
     "Operation",
     "OperationCreate",
     "OperationDependency",
     "OperationDeviceStatus",
     "OperationStatus",
+    "PlannedDependency",
+    "PlannedDevice",
+    "PlannedOperation",
     "Task",
     "TaskCreate",
     "TaskDetail",

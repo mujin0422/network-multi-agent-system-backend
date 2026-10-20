@@ -3,22 +3,22 @@
 from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.core.utils import generate_id
-from app.domains.identity.repositories import IdentityRepository
+from app.core.utils import IdPrefix, generate_id
+from app.domains.identity.repositories import IdentityRepositoryProtocol
 from app.domains.identity.schemas import Role, RoleCreate, RoleUpdate
 
 
 class RoleService:
     """Tạo và cập nhật role cùng thông tin audit."""
 
-    def __init__(self, repository: IdentityRepository) -> None:
+    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
         self._repository = repository
 
     def create_role(self, payload: RoleCreate, actor_id: str) -> Role:
         self._ensure_unique_name(payload.name)
         now = datetime.now(UTC)
         role = Role(
-            id=generate_id("role"),
+            id=generate_id(IdPrefix.ROLE),
             **payload.model_dump(),
             created_by=actor_id,
             last_updated_by=actor_id,
