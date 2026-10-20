@@ -1,4 +1,4 @@
-"""Analyst agent implementation."""
+"""Planner Agent public API."""
 
 from app.agents.planner.agent import PlannerAgent
 

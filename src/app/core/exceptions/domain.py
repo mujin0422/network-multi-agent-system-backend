@@ -23,3 +23,7 @@ class AuthenticationError(DomainError):
 
 class AuthorizationError(DomainError):
     """Người dùng đã xác thực nhưng không có quyền phù hợp."""
+
+
+class ExternalServiceUnavailableError(DomainError):
+    """Dịch vụ hạ tầng bên ngoài không thể truy cập."""

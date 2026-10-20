@@ -10,6 +10,7 @@ class StubDeviceConfigRepository:
         if device_identifier != "R1":
             return None
         return DeviceConfig(
+            gns3_node_name="R1",
             hostname="192.0.2.1",
             port=22,
             device_type="cisco_ios",
@@ -25,8 +26,9 @@ def test_provider_loads_inventory_from_repository() -> None:
         StubDeviceConfigRepository(),
     )
 
-    device = provider.get_device_config("R1")
+    device = provider.prepare_device("R1")
 
     assert device is not None
     assert device.username == "admin"
     assert device.to_netmiko_params()["host"] == "192.0.2.1"
+    assert "gns3_node_name" not in device.to_netmiko_params()

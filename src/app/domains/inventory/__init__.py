@@ -10,13 +10,9 @@ from app.domains.inventory.repositories import (
     CategoryRepository,
     CredentialRepository,
     DeviceConfigRepository,
-    PostgresBrandRepository,
-    PostgresCategoryRepository,
-    PostgresCredentialRepository,
-    PostgresDeviceConfigRepository,
-    PostgresDeviceRepository,
+    DeviceRepository,
 )
-from app.domains.inventory.providers import DeviceConnectionProvider
+from app.domains.inventory.providers import DeviceConnectionProvider, GNS3Provider
 from app.domains.inventory.schemas import (
     Brand,
     BrandCreate,
@@ -59,13 +55,9 @@ __all__ = [
     "DeviceCreate",
     "DeviceConfigRepository",
     "DeviceConnectionProvider",
+    "GNS3Provider",
+    "DeviceRepository",
     "DeviceUpdate",
     "DeviceService",
     "NetworkService",
-    "PostgresBrandRepository",
-    "PostgresCategoryRepository",
-    "PostgresCredentialRepository",
-    "PostgresDeviceConfigRepository",
-    # Adapter production đọc và ghi bảng devices trong PostgreSQL.
-    "PostgresDeviceRepository",
 ]

@@ -1,5 +1,7 @@
 """Persistence contract và PostgreSQL adapter cho resource Device."""
 
+from __future__ import annotations
+
 from typing import Protocol
 
 from sqlalchemy import func, select
@@ -9,7 +11,7 @@ from app.domains.inventory.models import DeviceModel
 from app.domains.inventory.schemas import Device
 
 
-class DeviceRepository(Protocol):
+class DeviceRepositoryProtocol(Protocol):
     """Cổng persistence tối thiểu mà ``DeviceService`` yêu cầu."""
 
     def save(self, device: Device) -> None: ...
@@ -29,7 +31,7 @@ class DeviceRepository(Protocol):
     ) -> tuple[list[Device], int]: ...
 
 
-class PostgresDeviceRepository:
+class DeviceRepository:
     """Lưu và đọc inventory từ bảng ``devices`` trong PostgreSQL.
 
     Repository chỉ truy vấn bảng thiết bị, không đọc hay trả về password/secret

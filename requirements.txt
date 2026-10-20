@@ -20,6 +20,8 @@ protobuf==7.35.1
 
 # Network automation
 netmiko==4.7.0
+nornir==3.6.0
+nornir-netmiko==1.0.1
 
 # API and Web UI
 fastapi==0.137.1

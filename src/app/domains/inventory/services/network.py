@@ -15,5 +15,8 @@ class NetworkService:
     def get_device(self, device_identifier: str) -> DeviceConfig | None:
         return self._provider.get_device_config(device_identifier)
 
+    def prepare_device(self, device_identifier: str) -> DeviceConfig:
+        return self._provider.prepare_device(device_identifier)
+
     def connect(self, device_identifier: str) -> dict[str, Any]:
         return self._provider.connect(device_identifier)

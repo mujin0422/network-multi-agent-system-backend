@@ -32,6 +32,9 @@ domain_name/
 │   ├── __init__.py
 │   ├── dependencies.py
 │   └── <resource>.py
+├── utils/
+│   ├── __init__.py
+│   └── <capability>.py
 └── providers/                 # Chỉ tạo khi tích hợp hệ thống bên ngoài
     ├── __init__.py
     └── <provider>.py
@@ -98,6 +101,25 @@ class UserRepository(Protocol):
 Repository không chứa business rule, không tạo HTTP response, không gọi router,
 service hoặc provider.
 
+Repository được tách theo bảng/resource. Ví dụ:
+
+```text
+conversation/repositories/
+├── conversation.py          # conversations
+└── message.py               # messages
+
+execution/repositories/
+├── task.py                  # tasks
+├── operation.py             # task_operations
+├── operation_dependency.py  # operation_dependencies
+├── operation_device.py      # task_operation_devices
+└── unit_of_work.py          # facade transaction của execution plan
+```
+
+Facade nhiều bảng chỉ được dùng khi một use case bắt buộc phải commit nguyên tử.
+Nó điều phối các repository theo bảng trong cùng transaction, không chứa business
+rule. Không tạo repository cho bảng chưa có use case đọc/ghi thực tế.
+
 ### `services/`
 
 **Chức năng:** Chứa use case và toàn bộ quy tắc nghiệp vụ của domain.
@@ -155,6 +177,24 @@ Netmiko, GNS3, API bên thứ ba hoặc secret vault.
 Repository quản lý dữ liệu của ứng dụng; provider giao tiếp với hệ thống ngoài.
 Provider không gọi router và không tự ghi dữ liệu nghiệp vụ vào database.
 
+### `utils/`
+
+**Chức năng:** Chứa các hàm hỗ trợ nhỏ, không trạng thái và chỉ có ý nghĩa bên
+trong một domain. Ví dụ: hash/verify password của Identity hoặc tạo biểu thức mã
+hóa credential của Inventory.
+
+Không chuyển code vào `utils` chỉ vì chưa biết đặt ở đâu. Những thành phần sau
+vẫn phải ở đúng lớp của chúng:
+
+- Quy tắc/use case nghiệp vụ thuộc `services`.
+- Truy vấn và ánh xạ dữ liệu thuộc `repositories`.
+- Kết nối hệ thống bên ngoài thuộc `providers`.
+- Validation request/response thuộc `schemas`.
+- Helper dùng chung từ hai domain trở lên thuộc `core/utils`.
+
+`utils` không được gọi service, repository, router hoặc thực hiện I/O. Riêng
+helper gắn với persistence framework chỉ được repository cùng domain sử dụng.
+
 ### `__init__.py`
 
 **Chức năng:** Công bố public API ổn định của package/domain.
@@ -207,6 +247,7 @@ Router → Service → Provider → External system
 | `services`                | schemas, repository/provider contract, core utilities/exceptions | router, FastAPI, ORM model/session    |
 | `routers`                 | schemas, services, router dependencies                           | model, repository trực tiếp, SQL      |
 | `routers/dependencies.py` | repository/provider implementation, service, config              | business rule                         |
+| `utils`                   | thư viện chuẩn hoặc SDK cần cho helper thuần                      | router, service, repository, I/O      |
 
 Quy tắc bắt buộc:
 
@@ -259,6 +300,8 @@ async def create_user(payload: UserCreate, service: UserService):
 - Tên file dùng danh từ số ít: `user.py`, `role.py`, `device.py`.
 - Tên router, service và repository tương ứng với resource để dễ tìm kiếm.
 - Chỉ export thành phần thực sự là public API qua `__init__.py`.
+- Utility đặt tên theo capability (`security.py`, `credential_crypto.py`), không
+  tạo file chung chung như `helpers.py` hoặc `common.py`.
 - Không đặt password thô, token, secret hoặc ciphertext trong response và log.
 
 ## Ranh giới giữa các domain
@@ -277,7 +320,7 @@ Application service
 Không được gọi theo cách:
 
 ```text
-ConversationService ─X→ PostgresExecutionRepository
+ConversationService ─X→ ExecutionRepository
 ```
 
 Quy tắc này giữ các domain độc lập, dễ kiểm thử và tránh phụ thuộc vòng tròn khi

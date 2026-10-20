@@ -90,8 +90,6 @@ GET http://127.0.0.1:8000/health
 Toàn bộ public business API dùng prefix `/api/v1`. Ví dụ:
 
 ```text
-POST /api/v1/chat/
-GET  /api/v1/agents/
 GET  /api/v1/conversations/
 GET  /api/v1/devices/
 GET  /api/v1/tasks/
@@ -208,6 +206,17 @@ Các device được seed với `host = 127.0.0.1` đúng dữ liệu đầu và
 chạy trong container và cần kết nối console GNS3 trên máy host, cập nhật `host`
 thành `host.docker.internal` hoặc bổ sung bước ánh xạ tại network provider.
 
+Sau khi lưu USER message, route gọi GNS3 Controller `GET /v2/version` để
+kiểm tra GNS3 Server có đang bật hay không. Nếu không truy cập được,
+API trả HTTP `503` và không gọi Planner. Bước này không mở project,
+không bật node và không khởi động tiến trình GNS3 trên hệ điều hành.
+
+```env
+GNS3_IP=127.0.0.1
+GNS3_PORT=3080
+GNS3_REQUEST_TIMEOUT=10
+```
+
 ## Chạy test
 
 Sau khi cài editable package, unit test identity không cần PostgreSQL:
@@ -282,6 +291,3 @@ src/app/
 ├── tools/           # Agent tool adapters
 └── main.py           # FastAPI entry point và router composition
 ```
-
-Prototype cũ được lưu riêng trong `src_legacy/` để tham khảo; nó không thuộc
-package được khai báo trong `pyproject.toml` và không phải một phần của schema v1.

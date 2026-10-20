@@ -46,6 +46,17 @@ Chỉ các thành phần đã có implementation mới được liệt kê ở t
 Không đọc trực tiếp `os.environ` ở các module khác. Biến môi trường dùng chung
 phải được khai báo và kiểm tra tại đây.
 
+Các endpoint hạ tầng được quản lý tập trung:
+
+| Hạ tầng | Cấu hình nguồn | Giá trị dùng trong code |
+| --- | --- | --- |
+| PostgreSQL | `DATABASE_URL` | `settings.database_url` |
+| GNS3 controller | `GNS3_IP`, `GNS3_PORT` | `settings.gns3_base_url` |
+| GNS3 project | `GNS3_PROJECT_ID` | `settings.gns3_project_url` |
+
+`PROJECT_ID` cũ vẫn được chấp nhận khi đọc môi trường để tương thích,
+nhưng cấu hình mới nên dùng tên rõ nghĩa `GNS3_PROJECT_ID`.
+
 ### `database/`
 
 - `base.py` khai báo SQLAlchemy `Base` dùng chung cho ORM model thuộc các domain.
@@ -76,15 +87,25 @@ HTTP handler chịu trách nhiệm chuyển exception thành response. Exception
 
 ### `utils/`
 
-Chứa các hàm nhỏ, thuần và không phụ thuộc framework. Hiện `utils/ids.py` cung
-cấp `generate_id()` để tạo ID nghiệp vụ theo prefix, ngày UTC và phần ngẫu nhiên:
+Chứa các hàm nhỏ, thuần và không phụ thuộc framework. `utils/ids.py` tập trung
+toàn bộ quy ước ID của database design:
 
 ```python
-from app.core.utils import generate_id
+from app.core.utils import IdPrefix, generate_id, generate_uuid
+
+user_id = generate_id(IdPrefix.USER)
+# user-171026-a1b2c3d4
+
+audit_id = generate_uuid()
 ```
 
-Quy ước prefix cụ thể thuộc về domain gọi hàm. Không đưa service, repository,
-settings hoặc code tích hợp hạ tầng vào `utils`.
+- ID nghiệp vụ `VARCHAR(64)` dùng `prefix-DDMMYY-xxxxxxxx`.
+- Prefix phải lấy từ `IdPrefix`, không truyền chuỗi tự do.
+- Seed có thể dùng suffix số tuần tự như `user-171026-0001` để dễ đọc.
+- Runtime dùng tám ký tự hexadecimal ngẫu nhiên để tránh phụ thuộc bộ đếm.
+- `user_sessions`, audit log và evaluation dùng UUID theo database design.
+
+Không đưa service, repository, settings hoặc code tích hợp hạ tầng vào `utils`.
 
 ### `logging.py`
 

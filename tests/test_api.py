@@ -20,26 +20,12 @@ def test_health() -> None:
     assert response.json() == {"status": "running"}
 
 
-def test_chat_routes_to_network_agent() -> None:
-    response = asyncio.run(
-        request("POST", "/api/v1/chat/", {"message": "ping router R1"})
-    )
+def test_agent_internal_apis_are_not_exposed() -> None:
+    chat_response = asyncio.run(request("POST", "/api/v1/chat/", {"message": "ping"}))
+    agents_response = asyncio.run(request("GET", "/api/v1/agents/"))
 
-    assert response.status_code == 200
-    assert response.json()["agent"] == "network_agent"
-
-
-def test_chat_rejects_blank_message() -> None:
-    response = asyncio.run(request("POST", "/api/v1/chat/", {"message": "  "}))
-
-    assert response.status_code == 422
-
-
-def test_agents_endpoint() -> None:
-    response = asyncio.run(request("GET", "/api/v1/agents/"))
-
-    assert response.status_code == 200
-    assert response.json() == {"agents": ["network_agent", "analyst_agent"]}
+    assert chat_response.status_code == 404
+    assert agents_response.status_code == 404
 
 
 def test_unversioned_api_is_not_exposed() -> None:

@@ -9,6 +9,7 @@ from app.core.config import Settings
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.domains.identity.schemas import User, UserRecord, UserStatus
 from app.domains.identity.services import IdentityService
+from app.domains.identity.utils import hash_password
 
 
 class MemoryIdentityRepository:
@@ -16,7 +17,7 @@ class MemoryIdentityRepository:
         now = datetime.now(UTC)
         self.user = UserRecord(
             id="user-test", role_id="role-test", email="test@example.com",
-            password_hash=IdentityService.hash_password("correct-password"),
+            password_hash=hash_password("correct-password"),
             full_name="Test User", user_status=UserStatus.ACTIVE,
             created_at=now,
         )

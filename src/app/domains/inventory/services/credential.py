@@ -3,15 +3,15 @@
 from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.core.utils import generate_id
-from app.domains.inventory.repositories import CredentialRepository
+from app.core.utils import IdPrefix, generate_id
+from app.domains.inventory.repositories import CredentialRepositoryProtocol
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
 
 
 class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
-    def __init__(self, repository: CredentialRepository) -> None:
+    def __init__(self, repository: CredentialRepositoryProtocol) -> None:
         self._repository = repository
 
     def create_credential(self, payload: CredentialCreate) -> Credential:
@@ -20,7 +20,7 @@ class CredentialService:
         self._ensure_unique_name(payload.name)
         now = datetime.now(UTC)
         credential = Credential(
-            id=generate_id("cred"),
+            id=generate_id(IdPrefix.CREDENTIAL),
             name=payload.name,
             description=payload.description,
             username=payload.username,

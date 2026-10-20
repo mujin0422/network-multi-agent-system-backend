@@ -1,5 +1,7 @@
 """Persistence port và adapters cho resource Brand."""
 
+from __future__ import annotations
+
 from typing import Protocol
 
 from sqlalchemy import select
@@ -9,7 +11,7 @@ from app.domains.inventory.models import BrandModel
 from app.domains.inventory.schemas import Brand
 
 
-class BrandRepository(Protocol):
+class BrandRepositoryProtocol(Protocol):
     """Persistence contract cho các use case Brand."""
 
     def save(self, brand: Brand) -> None: ...
@@ -19,7 +21,7 @@ class BrandRepository(Protocol):
     def list(self) -> list[Brand]: ...
 
 
-class PostgresBrandRepository:
+class BrandRepository:
     """Đọc brand và supported driver từ bảng ``brands``."""
 
     def __init__(self, database_url: str) -> None:

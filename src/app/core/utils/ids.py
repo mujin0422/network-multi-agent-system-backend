@@ -1,10 +1,47 @@
 """Tiện ích tạo mã định danh theo quy ước trong tài liệu thiết kế."""
 
 from datetime import UTC, datetime
-from uuid import uuid4
+from enum import StrEnum
+from uuid import UUID, uuid4
 
 
-def generate_id(prefix: str) -> str:
-    """Tạo ID dễ đọc, có ngày tạo và phần ngẫu nhiên để tránh trùng."""
+class IdPrefix(StrEnum):
+    """Prefix của các khóa nghiệp vụ VARCHAR(64) trong database design."""
+
+    ROLE = "role"
+    MANAGEMENT_FUNCTION = "func"
+    ACTION = "acts"
+    PERMISSION = "perm"
+    USER = "user"
+    BRAND = "brnd"
+    CATEGORY = "catg"
+    CREDENTIAL = "cred"
+    DEVICE = "devc"
+    CONVERSATION = "cons"
+    MESSAGE = "mesg"
+    TASK = "task"
+    OPERATION = "oper"
+    OPERATION_DEPENDENCY = "opdp"
+    OPERATION_DEVICE = "oper-devv"
+    TASK_EXECUTION = "exec"
+
+
+def generate_id(prefix: IdPrefix) -> str:
+    """Tạo ID runtime dạng ``prefix-DDMMYY-xxxxxxxx`` và nhỏ hơn 64 ký tự.
+
+    Seed dùng số thứ tự dễ đọc như ``user-171026-0001``. Runtime dùng tám ký
+    tự hexadecimal ngẫu nhiên để tránh phụ thuộc bộ đếm database nhưng vẫn giữ
+    đúng prefix và ngày UTC của tài liệu.
+    """
+
     date_part = datetime.now(UTC).strftime("%d%m%y")
-    return f"{prefix}-{date_part}-{uuid4().hex[:8]}"
+    identifier = f"{prefix.value}-{date_part}-{uuid4().hex[:8]}"
+    if len(identifier) > 64:
+        raise ValueError("ID nghiệp vụ vượt quá giới hạn VARCHAR(64)")
+    return identifier
+
+
+def generate_uuid() -> UUID:
+    """Tạo UUIDv4 cho session và các bảng audit/evaluation dùng UUID."""
+
+    return uuid4()

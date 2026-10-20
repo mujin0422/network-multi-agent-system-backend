@@ -3,26 +3,26 @@
 from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.core.utils import generate_id
-from app.domains.identity.repositories import IdentityRepository
+from app.core.utils import IdPrefix, generate_id
+from app.domains.identity.repositories import IdentityRepositoryProtocol
 from app.domains.identity.schemas import User, UserCreate, UserRecord, UserUpdate
-from app.domains.identity.services.identity import IdentityService
+from app.domains.identity.utils import hash_password
 
 
 class UserService:
     """Tạo và cập nhật user, không để lộ password hash qua API."""
 
-    def __init__(self, repository: IdentityRepository) -> None:
+    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
         self._repository = repository
 
     def create_user(self, payload: UserCreate) -> User:
         self._ensure_role_exists(payload.role_id)
         self._ensure_unique_email(payload.email)
         record = UserRecord(
-            id=generate_id("usr"),
+            id=generate_id(IdPrefix.USER),
             role_id=payload.role_id,
             email=payload.email,
-            password_hash=IdentityService.hash_password(payload.password),
+            password_hash=hash_password(payload.password),
             full_name=payload.full_name,
             user_status=payload.user_status,
             created_at=datetime.now(UTC),
@@ -60,7 +60,7 @@ class UserService:
         if "email" in changes:
             self._ensure_unique_email(changes["email"], exclude_user_id=user_id)
         if payload.password is not None:
-            changes["password_hash"] = IdentityService.hash_password(payload.password)
+            changes["password_hash"] = hash_password(payload.password)
         changes["last_updated_at"] = datetime.now(UTC)
 
         updated = current.model_copy(update=changes)

@@ -9,13 +9,13 @@ from app.domains.inventory.models import CredentialModel, DeviceModel
 from app.domains.inventory.schemas import DeviceConfig
 
 
-class DeviceConfigRepository(Protocol):
+class DeviceConfigRepositoryProtocol(Protocol):
     """Contract for retrieving one device together with its credential."""
 
     def get(self, device_identifier: str) -> DeviceConfig | None: ...
 
 
-class PostgresDeviceConfigRepository:
+class DeviceConfigRepository:
     """Read device metadata and decrypted credentials from PostgreSQL.
 
     Password and enable secret are only materialized for the Netmiko connection
@@ -31,6 +31,7 @@ class PostgresDeviceConfigRepository:
         # Credential chỉ được giải mã trong luồng kết nối và không được ghi log.
         statement = (
             select(
+                DeviceModel.hostname.label("gns3_node_name"),
                 DeviceModel.device_type,
                 DeviceModel.host.label("hostname"),
                 DeviceModel.port,
