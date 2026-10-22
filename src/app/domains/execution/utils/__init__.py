@@ -1,3 +1,5 @@
-"""Helper nội bộ của Execution domain; hiện chưa có helper cần công bố."""
+"""Pure helpers for the Execution domain."""
 
-__all__: list[str] = []
+from app.domains.execution.utils.approval import build_approval_request_hash
+
+__all__ = ["build_approval_request_hash"]

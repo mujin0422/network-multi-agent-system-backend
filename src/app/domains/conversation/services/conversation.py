@@ -12,11 +12,15 @@ from app.domains.conversation.repositories import (
 )
 from app.domains.conversation.schemas import (
     Conversation,
-    ConversationCreate,
     ConversationDetail,
+    ConversationStart,
+    ConversationStarted,
     Message,
     MessageCreate,
+    MessageSender,
+    MessageType,
 )
+from app.domains.conversation.utils import DEFAULT_CONVERSATION_TITLE
 
 
 class ConversationService:
@@ -28,18 +32,47 @@ class ConversationService:
         self._conversation_repository = conversation_repository
         self._message_repository = message_repository
 
-    # CREATE (Conversation) — Tạo conversation mới.
-    def create(self, payload: ConversationCreate) -> Conversation:
+    def start(
+        self,
+        user_id: str,
+        payload: ConversationStart,
+    ) -> ConversationStarted:
+        """Tạo Conversation và USER_REQUEST đầu tiên một cách nguyên tử."""
+
         now = datetime.now(UTC)
         conversation = Conversation(
             id=generate_id(IdPrefix.CONVERSATION),
-            user_id=payload.user_id,
-            title=payload.title,
+            user_id=user_id,
+            title=DEFAULT_CONVERSATION_TITLE,
             created_at=now,
             last_updated_at=now,
         )
-        self._conversation_repository.save_conversation(conversation)
-        return conversation
+        message = Message(
+            id=generate_id(IdPrefix.MESSAGE),
+            conversation_id=conversation.id,
+            reply_to_message_id=None,
+            sender_by=MessageSender.USER,
+            message_type=MessageType.USER_REQUEST,
+            message=payload.message,
+            created_at=now,
+        )
+        self._conversation_repository.create_with_first_message(
+            conversation,
+            message,
+        )
+        return ConversationStarted(conversation=conversation, message=message)
+
+    def update_title(self, conversation: Conversation, title: str) -> Conversation:
+        """Lưu title đã chuẩn hóa mà không thay đổi dữ liệu Message đầu tiên."""
+
+        updated = conversation.model_copy(
+            update={
+                "title": title,
+                "last_updated_at": datetime.now(UTC),
+            }
+        )
+        self._conversation_repository.save_conversation(updated)
+        return updated
 
     # READ (Conversation) — Lấy danh sách conversation, có thể lọc theo user_id.
     def list(self, user_id: str | None = None) -> list[Conversation]:
@@ -60,12 +93,19 @@ class ConversationService:
 
     # CREATE (Message) — Lưu message mới vào conversation đã tồn tại.
     def add_message(self, conversation_id: str, payload: MessageCreate) -> Message:
-        conversation = self._require_conversation(conversation_id)
+        self._require_conversation(conversation_id)
         now = datetime.now(UTC)
         message = Message(
             id=generate_id(IdPrefix.MESSAGE),
             conversation_id=conversation_id,
+            reply_to_message_id=payload.reply_to_message_id,
             sender_by=payload.sender_by,
+            message_type=payload.message_type
+            or (
+                MessageType.USER_REQUEST
+                if payload.sender_by == MessageSender.USER
+                else MessageType.GENERAL
+            ),
             message=payload.message,
             created_at=now,
         )

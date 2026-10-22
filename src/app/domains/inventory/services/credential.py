@@ -14,7 +14,11 @@ class CredentialService:
     def __init__(self, repository: CredentialRepositoryProtocol) -> None:
         self._repository = repository
 
-    def create_credential(self, payload: CredentialCreate) -> Credential:
+    def create_credential(
+        self,
+        payload: CredentialCreate,
+        actor_user_id: str,
+    ) -> Credential:
         """Tạo metadata và chuyển secret cho repository mã hóa."""
 
         self._ensure_unique_name(payload.name)
@@ -25,8 +29,8 @@ class CredentialService:
             description=payload.description,
             username=payload.username,
             encryption_type=payload.encryption_type,
-            created_by=payload.created_by,
-            last_updated_by=payload.created_by,
+            created_by=actor_user_id,
+            last_updated_by=actor_user_id,
             created_at=now,
             last_updated_at=now,
         )
@@ -52,12 +56,13 @@ class CredentialService:
         self,
         credential_id: str,
         payload: CredentialUpdate,
+        actor_user_id: str,
     ) -> Credential:
         """Cập nhật metadata và các secret được gửi rõ ràng trong request."""
 
         current = self.get_credential(credential_id)
         fields_set = payload.model_fields_set
-        changes = {"last_updated_by": payload.last_updated_by}
+        changes = {"last_updated_by": actor_user_id}
         if "name" in fields_set and payload.name is not None:
             changes["name"] = payload.name
         if "description" in fields_set:

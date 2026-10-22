@@ -150,7 +150,7 @@ Password:             giá trị POSTGRES_PASSWORD
 `db` là hostname dùng khi pgAdmin chạy trong cùng Docker Compose. Nếu dùng một
 pgAdmin cài trực tiếp trên máy, host là `localhost` và port là `POSTGRES_PORT`.
 
-### Kiểm tra schema và dữ liệu seed
+### Kiểm tra schema
 
 ```bash
 docker compose exec db psql \
@@ -158,15 +158,12 @@ docker compose exec db psql \
   -d network_automation_db \
   -c "\\dt"
 
-docker compose exec db psql \
-  -U network_automation_user \
-  -d network_automation_db \
-  -c "SELECT hostname, host, port, device_type FROM devices ORDER BY port;"
 ```
 
-Schema có 20 bảng nghiệp vụ, gồm authentication/RBAC, inventory, conversation,
-AI runtime và evaluation/benchmarking.
-Init script chỉ chạy khi PostgreSQL volume được tạo lần đầu.
+Schema có 22 bảng nghiệp vụ, gồm authentication/RBAC, inventory, conversation,
+AI runtime, activity timeline, operation-device approval và evaluation/benchmarking.
+Docker bootstrap tạo schema rồi chèn reference/development seed từ
+`02_seed.sql.template`. Init script chỉ chạy khi PostgreSQL volume được tạo lần đầu.
 
 ### Initial migration
 
@@ -188,7 +185,7 @@ lock. Database không trống nhưng không đúng initial schema sẽ bị từ
 tự động thay đổi. Chi tiết xem
 [`migrations/README.md`](migrations/README.md).
 
-Muốn chạy lại schema/seed từ đầu, lệnh sau sẽ **xóa toàn bộ dữ liệu database và
+Muốn chạy lại schema từ đầu, lệnh sau sẽ **xóa toàn bộ dữ liệu database và
 pgAdmin đang lưu trong Docker volumes**:
 
 ```bash
@@ -202,9 +199,8 @@ Dừng hệ thống nhưng giữ dữ liệu:
 docker compose down
 ```
 
-Các device được seed với `host = 127.0.0.1` đúng dữ liệu đầu vào. Khi backend
-chạy trong container và cần kết nối console GNS3 trên máy host, cập nhật `host`
-thành `host.docker.internal` hoặc bổ sung bước ánh xạ tại network provider.
+Khi thêm Device chạy trên GNS3 của máy host, dùng `host.docker.internal` làm
+`host` để API trong container có thể kết nối tới console của thiết bị.
 
 Sau khi lưu USER message, route gọi GNS3 Controller `GET /v2/version` để
 kiểm tra GNS3 Server có đang bật hay không. Nếu không truy cập được,
@@ -225,7 +221,8 @@ Sau khi cài editable package, unit test identity không cần PostgreSQL:
 pytest tests/domains/test_identity_service.py -q
 ```
 
-Identity API cần PostgreSQL đã có schema và seed. Với Docker Compose, tạo `.env`,
+Identity API cần PostgreSQL đã có schema và ít nhất một Role/User hợp lệ. Với
+Docker Compose, tạo `.env`,
 đặt secret ngẫu nhiên cho `AUTH_JWT_SECRET`, `POSTGRES_PASSWORD`,
 `PGADMIN_DEFAULT_PASSWORD` và `DEVICE_CREDENTIAL_ENCRYPTION_KEY`, sau đó chạy:
 
@@ -235,27 +232,28 @@ docker compose ps
 curl http://localhost:8000/health
 ```
 
-Tài khoản development được seed trong database:
-
-```text
-admin@network.local / Admin@123
-sysadmin@network.local / SysAdmin@123
-engineer@network.local / Engineer@123
-operator@network.local / Operator@123
-```
-
-Đăng nhập rồi kiểm tra token và quyền qua API:
+Sau khi database mới được bootstrap, đăng nhập bằng tài khoản seed rồi kiểm tra
+token và quyền qua API:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/login \\
   -H 'Content-Type: application/json' \\
-  -d '{"email":"admin@network.local","password":"Admin@123"}'
+  -d '{"email":"phamdinhduythai@gmail.com","password":"Admin@123"}'
 ```
 
 Lấy `access_token` trong response và dùng header `Authorization: Bearer <token>`
 để gọi `/api/v1/auth/me` hoặc route cần quyền như `/api/v1/devices/`. Refresh
 bằng `POST /api/v1/auth/refresh` với `{"refresh_token":"..."}`; refresh token cũ
 sẽ bị thu hồi. Swagger UI tại `/docs` cho phép thực hiện các bước này trực tiếp.
+
+Luồng chỉ tạo Conversation khi người dùng gửi Message đầu tiên được mô tả tại
+[`docs/conversation-first-message-flow.md`](docs/conversation-first-message-flow.md).
+
+Các luồng bảo mật và thực thi chi tiết:
+
+- [End-to-end từ USER message đến khi thực thi hoàn tất](docs/end-to-end-ai-request-execution-flow.md)
+- [Credential thiết bị, đăng nhập và thực thi command](docs/network-device-credential-execution-flow.md)
+- [Đăng nhập API, JWT, session và phân quyền RBAC](docs/authentication-authorization-jwt-flow.md)
 
 Chạy toàn bộ test:
 
@@ -277,9 +275,8 @@ src/app/domains/
 └── evaluation/      # Evaluation và benchmarking (planned)
 ```
 
-`conversation` và `execution` hiện dùng repository in-memory để
-frontend có thể test contract API. Dữ liệu mất khi API restart. Repository SQL có
-thể được thay qua dependency injection mà không đổi route hoặc domain service.
+Các domain sử dụng PostgreSQL repository qua dependency injection. Unit test có
+thể thay repository thật bằng stub mà không đổi route hoặc domain service.
 
 ## Source layout
 

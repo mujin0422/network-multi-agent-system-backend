@@ -19,6 +19,10 @@ def test_canonical_schema_is_safe_for_transactional_bootstrap() -> None:
     assert "\nBEGIN;\n" not in schema
     assert not schema.rstrip().endswith("COMMIT;")
     assert "CREATE TABLE task_evaluations" in schema
+    assert "CREATE TABLE task_activity_events" in schema
+    assert "CREATE TABLE operation_device_approvals" in schema
+    assert "reply_to_message_id VARCHAR(64)" in schema
+    assert "message_type message_type NOT NULL" in schema
 
 
 def test_initial_migration_resolves_to_canonical_schema() -> None:

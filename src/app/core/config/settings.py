@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000, gt=0, le=65535)
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # PostgreSQL URL được Docker Compose override thành hostname `db`.
     database_url: str = (
@@ -56,6 +57,7 @@ class Settings(BaseSettings):
     # AI provider settings.
     nvidia_api_key: str = ""
     nvidia_model: str = ""
+    conversation_title_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
     @property
     def gns3_base_url(self) -> str:
@@ -68,6 +70,16 @@ class Settings(BaseSettings):
         """Canonical URL của GNS3 project đã cấu hình."""
 
         return f"{self.gns3_base_url}/projects/{self.gns3_project_id}"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Parse comma-separated browser origins into an explicit allowlist."""
+
+        return [
+            origin.strip()
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
 
 
 @lru_cache

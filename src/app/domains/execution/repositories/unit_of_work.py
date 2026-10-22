@@ -1,5 +1,6 @@
 """Repository facade giữ transaction nguyên tử khi lưu execution plan."""
 
+from datetime import datetime
 from typing import Protocol
 
 from app.core.database import create_session_factory
@@ -17,16 +18,27 @@ from app.domains.execution.repositories.operation_device import (
     OperationDeviceRepository,
     OperationDeviceRepositoryProtocol,
 )
+from app.domains.execution.repositories.operation_device_approval import (
+    OperationDeviceApprovalRepository,
+    OperationDeviceApprovalRepositoryProtocol,
+)
 from app.domains.execution.repositories.task import (
     TaskRepository,
     TaskRepositoryProtocol,
 )
+from app.domains.execution.repositories.task_activity_event import (
+    TaskActivityEventRepository,
+    TaskActivityEventRepositoryProtocol,
+)
 from app.domains.execution.repositories.task_execution import TaskExecutionRepository
 from app.domains.execution.schemas import (
+    ApprovalDecision,
     DeviceActionLog,
     Operation,
+    OperationDeviceApproval,
     OperationDependency,
     Task,
+    TaskActivityEvent,
     TaskExecution,
     TaskOperationDevice,
 )
@@ -36,6 +48,8 @@ class ExecutionRepositoryProtocol(
     TaskRepositoryProtocol,
     OperationRepositoryProtocol,
     OperationDeviceRepositoryProtocol,
+    TaskActivityEventRepositoryProtocol,
+    OperationDeviceApprovalRepositoryProtocol,
     Protocol,
 ):
     """Contract tổng hợp mà ExecutionService cần cho toàn bộ use case."""
@@ -65,6 +79,10 @@ class ExecutionRepository:
         self._operation_dependencies = OperationDependencyRepository(database_url)
         self._task_executions = TaskExecutionRepository(database_url)
         self._device_action_logs = DeviceActionLogRepository(database_url)
+        self._task_activity_events = TaskActivityEventRepository(database_url)
+        self._operation_device_approvals = OperationDeviceApprovalRepository(
+            database_url
+        )
 
     def save_task(self, task: Task) -> None:
         """Chuyển thao tác bảng tasks tới TaskRepository."""
@@ -109,6 +127,12 @@ class ExecutionRepository:
 
         return self._operation_devices.list_operation_devices(operation_id)
 
+    def get_operation_device(
+        self,
+        operation_device_id: str,
+    ) -> TaskOperationDevice | None:
+        return self._operation_devices.get_operation_device(operation_device_id)
+
     def save_operation_device(self, mapping: TaskOperationDevice) -> None:
         self._operation_devices.save_operation_device(mapping)
 
@@ -120,6 +144,49 @@ class ExecutionRepository:
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
         self._device_action_logs.add_all(logs)
+
+    def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]:
+        return self._task_activity_events.list_task_activity_events(task_id)
+
+    def save_task_activity_event(self, event: TaskActivityEvent) -> None:
+        self._task_activity_events.save_task_activity_event(event)
+
+    def list_operation_approvals(
+        self,
+        operation_id: str,
+    ) -> list[OperationDeviceApproval]:
+        return self._operation_device_approvals.list_operation_approvals(operation_id)
+
+    def get_operation_approval(
+        self,
+        approval_id: str,
+    ) -> OperationDeviceApproval | None:
+        return self._operation_device_approvals.get_operation_approval(approval_id)
+
+    def get_operation_device_approval(
+        self,
+        operation_device_id: str,
+    ) -> OperationDeviceApproval | None:
+        return self._operation_device_approvals.get_operation_device_approval(
+            operation_device_id
+        )
+
+    def expire_operation_approval(self, approval_id: str) -> None:
+        self._operation_device_approvals.expire_operation_approval(approval_id)
+
+    def decide_operation_approval(
+        self,
+        approval_id: str,
+        user_id: str,
+        decision: ApprovalDecision,
+        decided_at: datetime,
+    ) -> OperationDeviceApproval | None:
+        return self._operation_device_approvals.decide_operation_approval(
+            approval_id,
+            user_id,
+            decision,
+            decided_at,
+        )
 
     def save_execution_plan(
         self,

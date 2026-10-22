@@ -1,3 +1,15 @@
-"""Helper nội bộ của Conversation domain; hiện chưa có helper cần công bố."""
+"""Helper nội bộ của Conversation domain."""
 
-__all__: list[str] = []
+from app.domains.conversation.utils.title import (
+    DEFAULT_CONVERSATION_TITLE,
+    MAX_CONVERSATION_TITLE_LENGTH,
+    fallback_conversation_title,
+    normalize_conversation_title,
+)
+
+__all__ = [
+    "DEFAULT_CONVERSATION_TITLE",
+    "MAX_CONVERSATION_TITLE_LENGTH",
+    "fallback_conversation_title",
+    "normalize_conversation_title",
+]

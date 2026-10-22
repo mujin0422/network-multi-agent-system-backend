@@ -1,5 +1,9 @@
 """HTTP transport for the Execution domain."""
 
-from app.domains.execution.routers.execution import operations_router, router
+from app.domains.execution.routers.execution import (
+    approvals_router,
+    operations_router,
+    router,
+)
 
-__all__ = ["operations_router", "router"]
+__all__ = ["approvals_router", "operations_router", "router"]

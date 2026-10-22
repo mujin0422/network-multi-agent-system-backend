@@ -11,6 +11,10 @@ from app.agents.network import (
 from app.core.utils import IdPrefix, generate_id, generate_uuid
 from app.domains.execution.schemas import (
     AccessMode,
+    ActivityActorType,
+    ActivityEventStatus,
+    ActivityEventType,
+    ApprovalStatus,
     DependencyType,
     DeviceActionLog,
     DeviceActionPhase,
@@ -26,6 +30,7 @@ from app.domains.execution.schemas import (
     TaskStatus,
 )
 from app.domains.execution.services import ExecutionService
+from app.domains.execution.utils import build_approval_request_hash
 
 
 class ExecutionOrchestrator:
@@ -45,6 +50,11 @@ class ExecutionOrchestrator:
             update={"task_status": TaskStatus.RUNNING, "completed_at": None}
         )
         self._execution_service.update_task(running_task)
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.ORCHESTRATOR,
+            ActivityEventType.EXECUTION_STARTED,
+        )
         results: list[NetworkExecutionResult] = []
         statuses: dict[str, OperationStatus] = {}
 
@@ -52,6 +62,15 @@ class ExecutionOrchestrator:
             for operation in sorted(
                 task.operations, key=lambda item: item.display_order
             ):
+                if operation.operation_status in {
+                    OperationStatus.SUCCESS,
+                    OperationStatus.PARTIAL_SUCCESS,
+                    OperationStatus.FAILED,
+                    OperationStatus.REJECTED,
+                    OperationStatus.SKIPPED,
+                }:
+                    statuses[operation.id] = operation.operation_status
+                    continue
                 dependencies = self._execution_service.list_dependencies(operation.id)
                 if not self._dependencies_satisfied(dependencies, statuses):
                     self._skip_operation(operation)
@@ -61,7 +80,26 @@ class ExecutionOrchestrator:
                 results.extend(operation_results)
                 persisted = self._execution_service.get_operation(operation.id)
                 statuses[operation.id] = persisted.operation_status
-        except Exception:
+                if persisted.operation_status == OperationStatus.WAITING_APPROVAL:
+                    # Task tạm dừng tại đây. Không SKIP operation phía sau vì
+                    # dependency của chúng chưa thất bại; chỉ chưa được duyệt.
+                    self._execution_service.record_activity(
+                        task.id,
+                        ActivityActorType.ORCHESTRATOR,
+                        ActivityEventType.APPROVAL_REQUESTED,
+                        ActivityEventStatus.WAITING_APPROVAL,
+                        operation_id=operation.id,
+                    )
+                    self._execution_service.update_task(
+                        running_task.model_copy(
+                            update={
+                                "started_at": running_task.started_at or started_at,
+                                "completed_at": None,
+                            }
+                        )
+                    )
+                    return results
+        except Exception as exc:
             self._execution_service.update_task(
                 running_task.model_copy(
                     update={
@@ -71,18 +109,52 @@ class ExecutionOrchestrator:
                     }
                 )
             )
+            self._execution_service.record_activity(
+                task.id,
+                ActivityActorType.ORCHESTRATOR,
+                ActivityEventType.TASK_FAILED,
+                ActivityEventStatus.FAILED,
+                event_data={"error": str(exc)},
+            )
             raise
 
+        final_status = self._task_status(statuses.values())
         self._execution_service.update_task(
             running_task.model_copy(
                 update={
-                    "task_status": self._task_status(statuses.values()),
+                    "task_status": final_status,
                     "started_at": running_task.started_at or started_at,
                     "completed_at": datetime.now(UTC),
                 }
             )
         )
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.ORCHESTRATOR,
+            (
+                ActivityEventType.TASK_COMPLETED
+                if final_status in {TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS}
+                else ActivityEventType.TASK_FAILED
+            ),
+            (
+                ActivityEventStatus.SUCCESS
+                if final_status in {TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS}
+                else ActivityEventStatus.FAILED
+            ),
+            event_data={"task_status": final_status.value},
+        )
         return results
+
+    async def resume_after_approval(
+        self,
+        operation_device_id: str,
+    ) -> list[NetworkExecutionResult]:
+        """Đọc lại Task và tiếp tục DAG sau quyết định của người dùng."""
+
+        mapping = self._execution_service.get_operation_device(operation_device_id)
+        operation = self._execution_service.get_operation(mapping.operation_id)
+        task = self._execution_service.get_task(operation.task_id)
+        return await self.execute_task(task)
 
     async def execute_network_operation(
         self, operation_id: str
@@ -95,40 +167,137 @@ class ExecutionOrchestrator:
             self._skip_operation(operation)
             return []
 
-        operation_started_at = datetime.now(UTC)
-        self._execution_service.update_operation(
-            operation.model_copy(
-                update={
-                    "operation_status": OperationStatus.RUNNING,
-                    "started_at": operation_started_at,
-                    "completed_at": None,
-                }
+        operation_started_at = operation.started_at or datetime.now(UTC)
+        commands = self._network_agent.extract_commands(operation.operation_parameters)
+        executable_mappings = [
+            mapping
+            for mapping in mappings
+            if self._mapping_can_execute(mapping, commands)
+        ]
+
+        if executable_mappings:
+            self._execution_service.update_operation(
+                operation.model_copy(
+                    update={
+                        "operation_status": OperationStatus.RUNNING,
+                        "started_at": operation_started_at,
+                        "completed_at": None,
+                    }
+                )
             )
-        )
         results = [
             await self._execute_mapping(operation, mapping, step_order)
-            for step_order, mapping in enumerate(mappings, start=1)
+            for step_order, mapping in enumerate(executable_mappings, start=1)
         ]
-        success_count = sum(
-            result.status == NetworkExecutionStatus.SUCCESS for result in results
-        )
-        status = (
-            OperationStatus.SUCCESS
-            if success_count == len(results)
-            else OperationStatus.PARTIAL_SUCCESS
-            if success_count
-            else OperationStatus.FAILED
-        )
+        current_mappings = self._execution_service.list_operation_devices(operation_id)
+        status = self._operation_status(current_mappings)
         self._execution_service.update_operation(
             operation.model_copy(
                 update={
                     "operation_status": status,
                     "started_at": operation_started_at,
-                    "completed_at": datetime.now(UTC),
+                    "completed_at": (
+                        None
+                        if status == OperationStatus.WAITING_APPROVAL
+                        else datetime.now(UTC)
+                    ),
                 }
             )
         )
         return results
+
+    def _mapping_can_execute(
+        self,
+        mapping: TaskOperationDevice,
+        commands: list[str],
+    ) -> bool:
+        """Áp dụng approval gate trước khi Network Agent thấy lệnh WRITE."""
+
+        if mapping.operation_device_status in {
+            OperationDeviceStatus.SUCCESS,
+            OperationDeviceStatus.REJECTED,
+            OperationDeviceStatus.SKIPPED,
+        }:
+            return False
+        if mapping.access_mode == AccessMode.READ:
+            return True
+
+        approval = self._execution_service.get_operation_device_approval(mapping.id)
+        if approval is None:
+            self._wait_for_approval(mapping, "Chưa có yêu cầu phê duyệt")
+            return False
+
+        now = datetime.now(UTC)
+        if approval.approval_status == ApprovalStatus.PENDING:
+            if approval.expires_at is not None and approval.expires_at <= now:
+                self._execution_service.expire_operation_approval(approval.id)
+                self._reject_mapping(mapping, "Yêu cầu phê duyệt đã hết hạn")
+            else:
+                self._wait_for_approval(mapping, None)
+            return False
+        if approval.approval_status in {
+            ApprovalStatus.REJECTED,
+            ApprovalStatus.EXPIRED,
+        }:
+            self._reject_mapping(mapping, "Cấu hình không được phê duyệt")
+            return False
+
+        expected_hash = build_approval_request_hash(mapping.id, commands)
+        if (
+            approval.commands_snapshot != commands
+            or approval.request_hash != expected_hash
+        ):
+            self._fail_mapping(
+                mapping,
+                "Command hiện tại không khớp snapshot đã được phê duyệt",
+            )
+            return False
+        return True
+
+    def _wait_for_approval(
+        self,
+        mapping: TaskOperationDevice,
+        error_message: str | None,
+    ) -> None:
+        self._execution_service.update_operation_device(
+            mapping.model_copy(
+                update={
+                    "operation_device_status": OperationDeviceStatus.WAITING_APPROVAL,
+                    "error_message": error_message,
+                    "completed_at": None,
+                }
+            )
+        )
+
+    def _reject_mapping(
+        self,
+        mapping: TaskOperationDevice,
+        error_message: str,
+    ) -> None:
+        self._execution_service.update_operation_device(
+            mapping.model_copy(
+                update={
+                    "operation_device_status": OperationDeviceStatus.REJECTED,
+                    "error_message": error_message,
+                    "completed_at": datetime.now(UTC),
+                }
+            )
+        )
+
+    def _fail_mapping(
+        self,
+        mapping: TaskOperationDevice,
+        error_message: str,
+    ) -> None:
+        self._execution_service.update_operation_device(
+            mapping.model_copy(
+                update={
+                    "operation_device_status": OperationDeviceStatus.FAILED,
+                    "error_message": error_message,
+                    "completed_at": datetime.now(UTC),
+                }
+            )
+        )
 
     async def _execute_mapping(
         self,
@@ -199,6 +368,21 @@ class ExecutionOrchestrator:
             self._build_action_logs(
                 operation, mapping, completed_execution, commands, result, completed_at
             )
+        )
+        self._execution_service.record_activity(
+            operation.task_id,
+            ActivityActorType.NETWORK,
+            ActivityEventType.COMMAND_EXECUTED,
+            ActivityEventStatus.SUCCESS if succeeded else ActivityEventStatus.FAILED,
+            operation_id=operation.id,
+            execution_id=execution.id,
+            event_data={
+                "device_id": mapping.device_id,
+                "command_count": len(commands),
+                "error": result.error_message,
+            },
+            started_at=started_at,
+            completed_at=completed_at,
         )
         return result
 
@@ -303,4 +487,19 @@ class ExecutionOrchestrator:
             for value in values
         ):
             return TaskStatus.PARTIAL_SUCCESS
+        if values and all(value == OperationStatus.REJECTED for value in values):
+            return TaskStatus.REJECTED
         return TaskStatus.FAILED
+
+    @staticmethod
+    def _operation_status(mappings: list[TaskOperationDevice]) -> OperationStatus:
+        statuses = [mapping.operation_device_status for mapping in mappings]
+        if OperationDeviceStatus.WAITING_APPROVAL in statuses:
+            return OperationStatus.WAITING_APPROVAL
+        if statuses and all(status == OperationDeviceStatus.SUCCESS for status in statuses):
+            return OperationStatus.SUCCESS
+        if statuses and all(status == OperationDeviceStatus.REJECTED for status in statuses):
+            return OperationStatus.REJECTED
+        if OperationDeviceStatus.SUCCESS in statuses:
+            return OperationStatus.PARTIAL_SUCCESS
+        return OperationStatus.FAILED

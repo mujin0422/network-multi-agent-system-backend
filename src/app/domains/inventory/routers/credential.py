@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
+from app.domains.identity.routers.dependencies import require_permission
+from app.domains.identity.schemas import User
 from app.domains.inventory.routers.dependencies import get_credential_service
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
 from app.domains.inventory.services import CredentialService
@@ -22,8 +24,9 @@ router = APIRouter()
 async def create_credential(
     payload: CredentialCreate,
     service: Annotated[CredentialService, Depends(get_credential_service)],
+    user: Annotated[User, Depends(require_permission("Device Management", "Add"))],
 ) -> Credential:
-    return service.create_credential(payload)
+    return service.create_credential(payload, user.id)
 
 
 # READ — Lấy danh sách metadata Credential, không chứa password/secret.
@@ -34,6 +37,7 @@ async def create_credential(
 )
 async def list_credentials(
     service: Annotated[CredentialService, Depends(get_credential_service)],
+    _user: Annotated[User, Depends(require_permission("Device Management", "View"))],
 ) -> list[Credential]:
     return service.list_credentials()
 
@@ -47,6 +51,7 @@ async def list_credentials(
 async def get_credential(
     credential_id: str,
     service: Annotated[CredentialService, Depends(get_credential_service)],
+    _user: Annotated[User, Depends(require_permission("Device Management", "View"))],
 ) -> Credential:
     return service.get_credential(credential_id)
 
@@ -61,8 +66,9 @@ async def update_credential(
     credential_id: str,
     payload: CredentialUpdate,
     service: Annotated[CredentialService, Depends(get_credential_service)],
+    user: Annotated[User, Depends(require_permission("Device Management", "Edit"))],
 ) -> Credential:
-    return service.update_credential(credential_id, payload)
+    return service.update_credential(credential_id, payload, user.id)
 
 
 # DELETE chưa được triển khai vì Credential có thể đang được Device tham chiếu.

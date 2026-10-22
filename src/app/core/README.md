@@ -94,14 +94,14 @@ toàn bộ quy ước ID của database design:
 from app.core.utils import IdPrefix, generate_id, generate_uuid
 
 user_id = generate_id(IdPrefix.USER)
-# user-171026-a1b2c3d4
+# user-221026-a1b2c3d4
 
 audit_id = generate_uuid()
 ```
 
 - ID nghiệp vụ `VARCHAR(64)` dùng `prefix-DDMMYY-xxxxxxxx`.
 - Prefix phải lấy từ `IdPrefix`, không truyền chuỗi tự do.
-- Seed có thể dùng suffix số tuần tự như `user-171026-0001` để dễ đọc.
+- Seed dùng đủ tám ký tự suffix, ví dụ `user-221026-00000001`.
 - Runtime dùng tám ký tự hexadecimal ngẫu nhiên để tránh phụ thuộc bộ đếm.
 - `user_sessions`, audit log và evaluation dùng UUID theo database design.
 

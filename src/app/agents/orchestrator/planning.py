@@ -2,7 +2,12 @@
 
 from app.agents.planner import PlannerAgent
 from app.domains.conversation.schemas import Conversation, Message, MessageSender
-from app.domains.execution.schemas import TaskCreate, TaskDetail
+from app.domains.execution.schemas import (
+    ActivityActorType,
+    ActivityEventType,
+    TaskCreate,
+    TaskDetail,
+)
 from app.domains.execution.services import ExecutionService
 from app.domains.inventory.services import DeviceService
 
@@ -58,6 +63,17 @@ class PlanningOrchestrator:
                 input_message=message.message,
             )
         )
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.ORCHESTRATOR,
+            ActivityEventType.MESSAGE_RECEIVED,
+            event_data={"message_id": message.id},
+        )
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.ORCHESTRATOR,
+            ActivityEventType.TASK_CREATED,
+        )
 
         # Bước 3: Chỉ cung cấp cho Planner các thiết bị đang có trong Inventory.
         # Planner không tự truy vấn database và cũng không được tự bịa device ID.
@@ -66,6 +82,12 @@ class PlanningOrchestrator:
         # Bước 4: Planner dùng LLM để chuyển câu tiếng Việt thành PlannedTask,
         # gồm operations, dependencies và danh sách device của từng operation.
         plan = await self._planner.plan(message.message, devices)
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.PLANNER,
+            ActivityEventType.PLAN_GENERATED,
+            event_data={"operation_count": len(plan.operations)},
+        )
 
         # Bước 5: Không tin hoàn toàn output LLM. Tất cả device ID trong kế hoạch
         # phải thuộc inventory vừa cung cấp thì kế hoạch mới được phép lưu.
@@ -82,4 +104,27 @@ class PlanningOrchestrator:
 
         # Bước 6: ExecutionService chuyển PlannedTask thành các bản ghi trong
         # task_operations, operation_dependencies và task_operation_devices.
-        return self._execution_service.create_execution_plan(task.id, plan)
+        planned_task = self._execution_service.create_execution_plan(task.id, plan)
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.PLANNER,
+            ActivityEventType.OPERATIONS_CREATED,
+            event_data={"count": len(planned_task.operations)},
+        )
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.PLANNER,
+            ActivityEventType.DEPENDENCIES_CREATED,
+            event_data={
+                "count": sum(len(operation.dependencies) for operation in plan.operations)
+            },
+        )
+        self._execution_service.record_activity(
+            task.id,
+            ActivityActorType.PLANNER,
+            ActivityEventType.DEVICES_ASSIGNED,
+            event_data={
+                "count": sum(len(operation.devices) for operation in plan.operations)
+            },
+        )
+        return planned_task

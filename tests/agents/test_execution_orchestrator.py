@@ -7,17 +7,21 @@ from app.agents.network import NetworkExecutionResult, NetworkExecutionStatus
 from app.agents.orchestrator import ExecutionOrchestrator
 from app.domains.execution.schemas import (
     AccessMode,
+    ApprovalStatus,
     DependencyType,
     DeviceRole,
     Operation,
+    OperationDeviceApproval,
     OperationDependency,
     OperationDeviceStatus,
     OperationStatus,
+    RiskLevel,
     TaskDetail,
     TaskStatus,
     TaskType,
     TaskOperationDevice,
 )
+from app.domains.execution.utils import build_approval_request_hash
 
 
 class StubExecutionService:
@@ -42,12 +46,28 @@ class StubExecutionService:
         }
         self.executions = []
         self.logs = []
+        self.approvals: dict[str, OperationDeviceApproval] = {}
+        self.activities = []
+        self.task: TaskDetail | None = None
 
     def get_operation(self, operation_id: str) -> Operation:
         return self.operations[operation_id]
 
+    def get_task(self, task_id: str) -> TaskDetail:
+        assert self.task is not None and self.task.id == task_id
+        return self.task.model_copy(
+            update={"operations": list(self.operations.values())}
+        )
+
     def list_operation_devices(self, operation_id: str) -> list:
         return [self.mappings[operation_id]]
+
+    def get_operation_device(self, operation_device_id: str) -> TaskOperationDevice:
+        return next(
+            mapping
+            for mapping in self.mappings.values()
+            if mapping.id == operation_device_id
+        )
 
     def list_dependencies(self, operation_id: str) -> list[OperationDependency]:
         return [item for item in self.dependencies if item.operation_id == operation_id]
@@ -66,6 +86,31 @@ class StubExecutionService:
 
     def save_device_action_logs(self, logs) -> None:
         self.logs.extend(logs)
+
+    def record_activity(self, task_id, actor_type, event_type, event_status=None, **kwargs):
+        self.activities.append(
+            {
+                "task_id": task_id,
+                "actor_type": actor_type,
+                "event_type": event_type,
+                "event_status": event_status,
+                **kwargs,
+            }
+        )
+
+    def get_operation_device_approval(
+        self,
+        operation_device_id: str,
+    ) -> OperationDeviceApproval | None:
+        return self.approvals.get(operation_device_id)
+
+    def expire_operation_approval(self, approval_id: str) -> None:
+        for mapping_id, approval in self.approvals.items():
+            if approval.id == approval_id:
+                self.approvals[mapping_id] = approval.model_copy(
+                    update={"approval_status": ApprovalStatus.EXPIRED}
+                )
+                return
 
 
 class StubNetworkAgent:
@@ -174,3 +219,135 @@ def test_execute_task_stops_after_failed_operation() -> None:
         OperationDeviceStatus.SKIPPED
     )
     assert service.tasks[-1].task_status == TaskStatus.PARTIAL_SUCCESS
+
+
+def test_write_mapping_waits_without_approved_request() -> None:
+    task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
+    operation = task.operations[0]
+    service = StubExecutionService(task.operations)
+    service.mappings[operation.id] = service.mappings[operation.id].model_copy(
+        update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+    )
+    agent = StubNetworkAgent()
+
+    results = asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+    assert results == []
+    assert agent.calls == []
+    assert service.operations[operation.id].operation_status == (
+        OperationStatus.WAITING_APPROVAL
+    )
+    assert service.mappings[operation.id].operation_device_status == (
+        OperationDeviceStatus.WAITING_APPROVAL
+    )
+    assert service.tasks[-1].task_status == TaskStatus.RUNNING
+    assert service.tasks[-1].completed_at is None
+
+
+def test_write_mapping_runs_only_when_snapshot_and_hash_match() -> None:
+    task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
+    operation = task.operations[0]
+    service = StubExecutionService(task.operations)
+    mapping = service.mappings[operation.id].model_copy(
+        update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+    )
+    service.mappings[operation.id] = mapping
+    commands = [operation.operation_parameters["command"]]
+    now = datetime.now(UTC)
+    service.approvals[mapping.id] = OperationDeviceApproval(
+        id="aprv-1",
+        operation_device_id=mapping.id,
+        approval_status=ApprovalStatus.APPROVED,
+        risk_level=RiskLevel.HIGH,
+        requested_by="orchestrator",
+        reason="Thực hiện cấu hình",
+        commands_snapshot=commands,
+        request_hash=build_approval_request_hash(mapping.id, commands),
+        decided_by="user-approver",
+        requested_at=now,
+        decided_at=now,
+        created_at=now,
+    )
+    agent = StubNetworkAgent()
+
+    asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+    assert agent.calls == [operation.id]
+    assert service.mappings[operation.id].operation_device_status == (
+        OperationDeviceStatus.SUCCESS
+    )
+
+
+def test_resume_after_approval_continues_the_parent_task() -> None:
+    task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
+    operation = task.operations[0]
+    service = StubExecutionService(task.operations)
+    service.task = task
+    mapping = service.mappings[operation.id].model_copy(
+        update={
+            "device_role": DeviceRole.TARGET,
+            "access_mode": AccessMode.WRITE,
+            "operation_device_status": OperationDeviceStatus.WAITING_APPROVAL,
+        }
+    )
+    service.mappings[operation.id] = mapping
+    commands = [operation.operation_parameters["command"]]
+    now = datetime.now(UTC)
+    service.approvals[mapping.id] = OperationDeviceApproval(
+        id="aprv-resume",
+        operation_device_id=mapping.id,
+        approval_status=ApprovalStatus.APPROVED,
+        risk_level=RiskLevel.HIGH,
+        requested_by="orchestrator",
+        reason="Thực hiện cấu hình",
+        commands_snapshot=commands,
+        request_hash=build_approval_request_hash(mapping.id, commands),
+        decided_by="user-approver",
+        requested_at=now,
+        decided_at=now,
+        created_at=now,
+    )
+    agent = StubNetworkAgent()
+
+    results = asyncio.run(
+        ExecutionOrchestrator(service, agent).resume_after_approval(mapping.id)
+    )
+
+    assert len(results) == 1
+    assert agent.calls == [operation.id]
+    assert service.tasks[-1].task_status == TaskStatus.SUCCESS
+
+
+def test_write_mapping_rejects_changed_commands_after_approval() -> None:
+    task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
+    operation = task.operations[0]
+    service = StubExecutionService(task.operations)
+    mapping = service.mappings[operation.id].model_copy(
+        update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+    )
+    service.mappings[operation.id] = mapping
+    now = datetime.now(UTC)
+    approved_commands = ["configure terminal"]
+    service.approvals[mapping.id] = OperationDeviceApproval(
+        id="aprv-1",
+        operation_device_id=mapping.id,
+        approval_status=ApprovalStatus.APPROVED,
+        risk_level=RiskLevel.HIGH,
+        requested_by="orchestrator",
+        reason="Thực hiện cấu hình",
+        commands_snapshot=approved_commands,
+        request_hash=build_approval_request_hash(mapping.id, approved_commands),
+        decided_by="user-approver",
+        requested_at=now,
+        decided_at=now,
+        created_at=now,
+    )
+    agent = StubNetworkAgent()
+
+    asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+    assert agent.calls == []
+    assert service.mappings[operation.id].operation_device_status == (
+        OperationDeviceStatus.FAILED
+    )
+    assert "không khớp snapshot" in service.mappings[operation.id].error_message

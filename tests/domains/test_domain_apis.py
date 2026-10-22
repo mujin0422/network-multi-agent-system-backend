@@ -5,7 +5,10 @@ from uuid import uuid4
 
 import httpx
 
-from app.domains.conversation.routers.dependencies import get_conversation_service
+from app.domains.conversation.routers.dependencies import (
+    get_conversation_service,
+    get_conversation_title_generator,
+)
 from app.domains.conversation.schemas import Conversation, Message
 from app.domains.conversation.services import ConversationService
 from app.domains.execution.routers.dependencies import get_execution_service
@@ -20,6 +23,7 @@ from app.domains.identity.schemas import User, UserRecord, UserStatus
 from app.domains.identity.services import IdentityService
 from app.domains.identity.utils import hash_password
 from app.agents.dependencies import (
+    get_analysis_orchestrator,
     get_execution_orchestrator,
     get_gns3_provider,
     get_planning_orchestrator,
@@ -61,12 +65,12 @@ class StubIdentityRepository:
     def get_permissions(self, role_id):
         return {
             ("Chatbot", "View"),
-            ("Chatbot", "Execute"),
+            ("Chatbot", "Add"),
             ("Device Management", "Add"),
             ("Device Management", "View"),
             ("Device Management", "Edit"),
             ("Task Management", "View"),
-            ("Task Management", "Execute"),
+            ("Task Management", "Add"),
         }
 
     def save_session(self, session):
@@ -142,6 +146,18 @@ async def override_execution_orchestrator() -> StubExecutionOrchestrator:
 app.dependency_overrides[get_execution_orchestrator] = override_execution_orchestrator
 
 
+class StubAnalysisOrchestrator:
+    async def analyze_and_respond(self, task, results):
+        return None
+
+
+async def override_analysis_orchestrator() -> StubAnalysisOrchestrator:
+    return StubAnalysisOrchestrator()
+
+
+app.dependency_overrides[get_analysis_orchestrator] = override_analysis_orchestrator
+
+
 class StubGNS3Provider:
     def check_server_available(self):
         return {"version": "test"}
@@ -152,6 +168,20 @@ async def override_gns3_provider() -> StubGNS3Provider:
 
 
 app.dependency_overrides[get_gns3_provider] = override_gns3_provider
+
+
+class StubConversationTitleGenerator:
+    async def generate(self, first_message: str) -> str:
+        return f"Title: {first_message}"[:100]
+
+
+async def override_conversation_title_generator() -> StubConversationTitleGenerator:
+    return StubConversationTitleGenerator()
+
+
+app.dependency_overrides[get_conversation_title_generator] = (
+    override_conversation_title_generator
+)
 
 
 class StubDeviceRepository:
@@ -182,6 +212,14 @@ class StubConversationRepository:
 
     def save_conversation(self, conversation: Conversation) -> None:
         self._conversations[conversation.id] = conversation.model_copy(deep=True)
+
+    def create_with_first_message(
+        self,
+        conversation: Conversation,
+        message: Message,
+    ) -> None:
+        self.save_conversation(conversation)
+        self.save(message)
 
     def get_conversation(self, conversation_id: str) -> Conversation | None:
         return self._conversations.get(conversation_id)
@@ -259,20 +297,18 @@ def test_conversation_api_keeps_messages_in_the_parent_conversation() -> None:
         return service
 
     async def scenario() -> None:
-        created = await request(
+        started = await request(
             "POST",
-            "/api/v1/conversations/",
-            {"user_id": "user-test", "title": "Kiểm tra OSPF"},
+            "/api/v1/conversations/messages",
+            {"message": "Kiểm tra neighbor trên P1"},
         )
-        assert created.status_code == 201
-        conversation_id = created.json()["id"]
-
-        message = await request(
-            "POST",
-            f"/api/v1/conversations/{conversation_id}/messages",
-            {"sender_by": "USER", "message": "Kiểm tra neighbor trên P1"},
+        assert started.status_code == 201
+        conversation_id = started.json()["conversation"]["id"]
+        assert started.json()["conversation"]["user_id"] == "user-test"
+        assert started.json()["conversation"]["title"] == (
+            "Title: Kiểm tra neighbor trên P1"
         )
-        assert message.status_code == 201
+        assert started.json()["message"]["message_type"] == "USER_REQUEST"
 
         detail = await request("GET", f"/api/v1/conversations/{conversation_id}")
         messages = await request(

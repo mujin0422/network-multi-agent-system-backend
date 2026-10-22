@@ -5,8 +5,8 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
-from app.domains.conversation.models import ConversationModel
-from app.domains.conversation.schemas import Conversation
+from app.domains.conversation.models import ConversationModel, MessageModel
+from app.domains.conversation.schemas import Conversation, Message
 
 
 class ConversationRepositoryProtocol(Protocol):
@@ -14,13 +14,19 @@ class ConversationRepositoryProtocol(Protocol):
 
     def save_conversation(self, conversation: Conversation) -> None: ...
 
+    def create_with_first_message(
+        self,
+        conversation: Conversation,
+        message: Message,
+    ) -> None: ...
+
     def get_conversation(self, conversation_id: str) -> Conversation | None: ...
 
     def list_conversations(self, user_id: str | None = None) -> list[Conversation]: ...
 
 
 class ConversationRepository:
-    """Repository chỉ quản lý bảng conversations."""
+    """Persistence cho Conversation và transaction khởi tạo Message đầu tiên."""
 
     def __init__(self, database_url: str) -> None:
         # Session factory tạo session mới cho từng thao tác và không giữ kết nối database như state lâu dài bên trong repository.
@@ -41,6 +47,19 @@ class ConversationRepository:
             model.user_id = conversation.user_id
             model.title = conversation.title
             model.last_updated_at = conversation.last_updated_at
+
+    def create_with_first_message(
+        self,
+        conversation: Conversation,
+        message: Message,
+    ) -> None:
+        """Tạo Conversation và USER_REQUEST đầu tiên trong cùng transaction."""
+
+        if message.conversation_id != conversation.id:
+            raise ValueError("Message đầu tiên không thuộc Conversation cần tạo")
+        with self._sessions.begin() as session:
+            session.add(ConversationModel(**conversation.model_dump()))
+            session.add(MessageModel(**message.model_dump()))
 
 
     def get_conversation(self, conversation_id: str) -> Conversation | None:

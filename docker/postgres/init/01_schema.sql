@@ -9,6 +9,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- =============================================================================
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'DISABLED');
 CREATE TYPE message_sender AS ENUM ('USER', 'AGENT');
+CREATE TYPE message_type AS ENUM (
+    'GENERAL', 'USER_REQUEST', 'STATUS_UPDATE',
+    'APPROVAL_REQUEST', 'FINAL_RESPONSE'
+);
 CREATE TYPE task_status AS ENUM (
     'PENDING', 'PLANNING', 'RUNNING', 'SUCCESS',
     'PARTIAL_SUCCESS', 'FAILED', 'REJECTED'
@@ -37,6 +41,24 @@ CREATE TYPE device_action_phase AS ENUM (
 CREATE TYPE evaluation_status AS ENUM ('PENDING', 'COMPLETED', 'ERROR');
 CREATE TYPE evaluation_result AS ENUM ('PASS', 'FAIL', 'UNKNOWN', 'NOT_APPLICABLE');
 CREATE TYPE evaluator_type AS ENUM ('AUTOMATED', 'HUMAN');
+CREATE TYPE activity_actor_type AS ENUM (
+    'ORCHESTRATOR', 'PLANNER', 'NETWORK', 'ANALYST', 'TOOL'
+);
+CREATE TYPE activity_event_type AS ENUM (
+    'MESSAGE_RECEIVED', 'TASK_CREATED', 'PLAN_GENERATED',
+    'OPERATIONS_CREATED', 'DEPENDENCIES_CREATED', 'DEVICES_ASSIGNED',
+    'EXECUTION_STARTED', 'COMMAND_EXECUTED', 'APPROVAL_REQUESTED',
+    'APPROVAL_APPROVED', 'APPROVAL_REJECTED', 'ANALYSIS_STARTED',
+    'ANALYSIS_COMPLETED', 'FINAL_RESPONSE_CREATED', 'TASK_COMPLETED',
+    'TASK_FAILED'
+);
+CREATE TYPE activity_event_status AS ENUM (
+    'PENDING', 'RUNNING', 'WAITING_APPROVAL', 'SUCCESS', 'FAILED', 'SKIPPED'
+);
+CREATE TYPE approval_status AS ENUM (
+    'PENDING', 'APPROVED', 'REJECTED', 'EXPIRED'
+);
+CREATE TYPE risk_level AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
 
 -- PostgreSQL CHECK không nhận subquery trực tiếp. Helper immutable này dùng để
 -- bảo đảm danh sách driver JSONB chỉ chứa string duy nhất, không có phần tử rỗng.
@@ -224,7 +246,10 @@ FOR EACH ROW EXECUTE FUNCTION validate_device_driver();
 CREATE TABLE conversations (
     id VARCHAR(64) PRIMARY KEY,
     user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    title VARCHAR(255) NOT NULL CHECK (length(btrim(title)) > 0),
+    title VARCHAR(100) NOT NULL CHECK (
+        length(btrim(title)) BETWEEN 1 AND 100
+        AND title !~ E'[\\r\\n]'
+    ),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ck_conversations_updated_at CHECK (last_updated_at >= created_at)
@@ -234,10 +259,55 @@ CREATE TABLE messages (
     id VARCHAR(64) PRIMARY KEY,
     conversation_id VARCHAR(64) NOT NULL
         REFERENCES conversations(id) ON DELETE CASCADE,
+    reply_to_message_id VARCHAR(64) REFERENCES messages(id) ON DELETE RESTRICT,
     sender_by message_sender NOT NULL,
+    message_type message_type NOT NULL,
     message TEXT NOT NULL CHECK (length(btrim(message)) > 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_messages_user_request CHECK (
+        message_type <> 'USER_REQUEST'
+        OR (sender_by = 'USER' AND reply_to_message_id IS NULL)
+    ),
+    CONSTRAINT ck_messages_agent_workflow CHECK (
+        message_type NOT IN ('STATUS_UPDATE', 'APPROVAL_REQUEST', 'FINAL_RESPONSE')
+        OR (sender_by = 'AGENT' AND reply_to_message_id IS NOT NULL)
+    ),
+    CONSTRAINT ck_messages_not_self_reply CHECK (
+        reply_to_message_id IS NULL OR reply_to_message_id <> id
+    )
 );
+
+CREATE FUNCTION validate_message_reply()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    source_conversation_id VARCHAR(64);
+    source_sender message_sender;
+BEGIN
+    IF NEW.reply_to_message_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT conversation_id, sender_by
+      INTO source_conversation_id, source_sender
+      FROM messages
+     WHERE id = NEW.reply_to_message_id;
+
+    IF source_conversation_id IS DISTINCT FROM NEW.conversation_id THEN
+        RAISE EXCEPTION 'Reply message must belong to the same conversation';
+    END IF;
+    IF NEW.message_type IN ('STATUS_UPDATE', 'APPROVAL_REQUEST', 'FINAL_RESPONSE')
+       AND source_sender IS DISTINCT FROM 'USER' THEN
+        RAISE EXCEPTION 'Workflow response must reply to a USER message';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_message_reply
+BEFORE INSERT OR UPDATE OF conversation_id, reply_to_message_id, sender_by, message_type
+ON messages FOR EACH ROW EXECUTE FUNCTION validate_message_reply();
 
 CREATE FUNCTION touch_conversation_after_message()
 RETURNS TRIGGER
@@ -431,6 +501,64 @@ CREATE TABLE task_executions (
     )
 );
 
+CREATE TABLE task_activity_events (
+    id VARCHAR(64) PRIMARY KEY,
+    task_id VARCHAR(64) NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    operation_id VARCHAR(64) REFERENCES task_operations(id) ON DELETE SET NULL,
+    execution_id VARCHAR(64) REFERENCES task_executions(id) ON DELETE SET NULL,
+    actor_type activity_actor_type NOT NULL,
+    event_type activity_event_type NOT NULL,
+    event_status activity_event_status NOT NULL,
+    sequence_number INTEGER NOT NULL CHECK (sequence_number > 0),
+    event_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_task_activity_sequence UNIQUE (task_id, sequence_number),
+    CONSTRAINT ck_task_activity_event_data_object
+        CHECK (jsonb_typeof(event_data) = 'object'),
+    CONSTRAINT ck_task_activity_time CHECK (
+        completed_at IS NULL
+        OR (started_at IS NOT NULL AND completed_at >= started_at)
+    )
+);
+
+CREATE TABLE operation_device_approvals (
+    id VARCHAR(64) PRIMARY KEY,
+    operation_device_id VARCHAR(64) NOT NULL UNIQUE
+        REFERENCES task_operation_devices(id) ON DELETE RESTRICT,
+    approval_status approval_status NOT NULL DEFAULT 'PENDING',
+    risk_level risk_level NOT NULL,
+    requested_by VARCHAR(100) NOT NULL CHECK (length(btrim(requested_by)) > 0),
+    reason TEXT NOT NULL CHECK (length(btrim(reason)) > 0),
+    commands_snapshot JSONB NOT NULL,
+    request_hash VARCHAR(128) NOT NULL CHECK (length(btrim(request_hash)) > 0),
+    decided_by VARCHAR(64) REFERENCES users(id) ON DELETE RESTRICT,
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_operation_device_approval_commands CHECK (
+        is_unique_nonempty_jsonb_text_array(commands_snapshot)
+        AND jsonb_array_length(commands_snapshot) > 0
+    ),
+    CONSTRAINT ck_operation_device_approval_decided_at CHECK (
+        decided_at IS NULL OR decided_at >= requested_at
+    ),
+    CONSTRAINT ck_operation_device_approval_expires_at CHECK (
+        expires_at IS NULL OR expires_at > requested_at
+    ),
+    CONSTRAINT ck_operation_device_approval_created_at CHECK (
+        requested_at >= created_at
+    ),
+    CONSTRAINT ck_operation_device_approval_decision CHECK (
+        (approval_status = 'PENDING' AND decided_by IS NULL AND decided_at IS NULL)
+        OR (approval_status IN ('APPROVED', 'REJECTED')
+            AND decided_by IS NOT NULL AND decided_at IS NOT NULL)
+        OR (approval_status = 'EXPIRED' AND decided_by IS NULL)
+    )
+);
+
 CREATE TABLE device_action_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id VARCHAR(64) NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
@@ -577,6 +705,62 @@ CREATE TRIGGER trg_validate_task_execution_links
 BEFORE INSERT OR UPDATE OF task_id, operation_id, operation_device_id
 ON task_executions FOR EACH ROW EXECUTE FUNCTION validate_task_execution_links();
 
+CREATE FUNCTION validate_task_activity_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    linked_task_id VARCHAR(64);
+    execution_task_id VARCHAR(64);
+    execution_operation_id VARCHAR(64);
+BEGIN
+    IF NEW.operation_id IS NOT NULL THEN
+        SELECT task_id INTO linked_task_id
+          FROM task_operations WHERE id = NEW.operation_id;
+        IF linked_task_id IS DISTINCT FROM NEW.task_id THEN
+            RAISE EXCEPTION 'Activity operation does not belong to its task';
+        END IF;
+    END IF;
+
+    IF NEW.execution_id IS NOT NULL THEN
+        SELECT task_id, operation_id
+          INTO execution_task_id, execution_operation_id
+          FROM task_executions WHERE id = NEW.execution_id;
+        IF execution_task_id IS DISTINCT FROM NEW.task_id
+           OR (NEW.operation_id IS NOT NULL
+               AND execution_operation_id IS DISTINCT FROM NEW.operation_id) THEN
+            RAISE EXCEPTION 'Activity execution is inconsistent with task or operation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_task_activity_event
+BEFORE INSERT OR UPDATE OF task_id, operation_id, execution_id
+ON task_activity_events FOR EACH ROW EXECUTE FUNCTION validate_task_activity_event();
+
+CREATE FUNCTION validate_operation_device_approval()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    mapping_access_mode access_mode;
+BEGIN
+    SELECT access_mode INTO mapping_access_mode
+      FROM task_operation_devices WHERE id = NEW.operation_device_id;
+    IF mapping_access_mode IS DISTINCT FROM 'WRITE' THEN
+        RAISE EXCEPTION 'Approval is only valid for a WRITE operation-device mapping';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_operation_device_approval
+BEFORE INSERT OR UPDATE OF operation_device_id
+ON operation_device_approvals
+FOR EACH ROW EXECUTE FUNCTION validate_operation_device_approval();
+
 CREATE FUNCTION validate_device_action_log()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -654,6 +838,11 @@ CREATE INDEX idx_conversations_user_updated
     ON conversations(user_id, last_updated_at DESC);
 CREATE INDEX idx_messages_conversation_created
     ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_reply_to ON messages(reply_to_message_id);
+CREATE INDEX idx_messages_type ON messages(message_type);
+CREATE UNIQUE INDEX uq_messages_final_response
+    ON messages(reply_to_message_id)
+    WHERE message_type = 'FINAL_RESPONSE';
 CREATE INDEX idx_tasks_conversation_id ON tasks(conversation_id);
 CREATE INDEX idx_tasks_user_created ON tasks(user_id, created_at DESC);
 CREATE INDEX idx_tasks_status ON tasks(task_status);
@@ -674,6 +863,14 @@ CREATE INDEX idx_task_executions_operation_device
     ON task_executions(operation_device_id);
 CREATE INDEX idx_task_executions_agent_status
     ON task_executions(agent_name, execution_status);
+CREATE INDEX idx_task_activity_task_sequence
+    ON task_activity_events(task_id, sequence_number);
+CREATE INDEX idx_task_activity_operation ON task_activity_events(operation_id);
+CREATE INDEX idx_task_activity_execution ON task_activity_events(execution_id);
+CREATE INDEX idx_task_activity_task_status
+    ON task_activity_events(task_id, event_status);
+CREATE INDEX idx_operation_device_approvals_decided_by
+    ON operation_device_approvals(decided_by);
 CREATE INDEX idx_device_action_logs_device_time
     ON device_action_logs(device_id, executed_at DESC);
 CREATE INDEX idx_device_action_logs_task ON device_action_logs(task_id);

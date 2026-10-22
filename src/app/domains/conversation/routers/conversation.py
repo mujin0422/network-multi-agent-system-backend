@@ -5,21 +5,29 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.agents.dependencies import (
+    get_analysis_orchestrator,
     get_execution_orchestrator,
     get_gns3_provider,
     get_planning_orchestrator,
 )
-from app.agents.orchestrator import ExecutionOrchestrator, PlanningOrchestrator
+from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator, PlanningOrchestrator
 from app.domains.conversation.schemas import (
     Conversation,
-    ConversationCreate,
     ConversationDetail,
+    ConversationStart,
+    ConversationStarted,
     Message,
     MessageCreate,
     MessageSender,
 )
-from app.domains.conversation.routers.dependencies import get_conversation_service
-from app.domains.conversation.services import ConversationService
+from app.domains.conversation.routers.dependencies import (
+    get_conversation_service,
+    get_conversation_title_generator,
+)
+from app.domains.conversation.services import (
+    ConversationService,
+    ConversationTitleGeneratorProtocol,
+)
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 from app.domains.inventory.providers import GNS3Provider
@@ -28,14 +36,58 @@ from app.domains.inventory.providers import GNS3Provider
 router = APIRouter()
 
 
-# CREATE (Convesation) — Tạo conversation mới.
-@router.post("/", response_model=Conversation, status_code=status.HTTP_201_CREATED)
-async def create_conversation(
-    payload: ConversationCreate,
+# CREATE (Conversation + first Message) — Chỉ tạo conversation khi User gửi thật.
+@router.post(
+    "/messages",
+    response_model=ConversationStarted,
+    status_code=status.HTTP_201_CREATED,
+    summary="Bắt đầu conversation bằng USER_REQUEST đầu tiên",
+)
+async def start_conversation(
+    payload: ConversationStart,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
-    _user: Annotated[User, Depends(require_permission("Chatbot", "Execute"))],
-) -> Conversation:
-    return service.create(payload)
+    title_generator: Annotated[
+        ConversationTitleGeneratorProtocol,
+        Depends(get_conversation_title_generator),
+    ],
+    planning_orchestrator: Annotated[
+        PlanningOrchestrator,
+        Depends(get_planning_orchestrator),
+    ],
+    execution_orchestrator: Annotated[
+        ExecutionOrchestrator,
+        Depends(get_execution_orchestrator),
+    ],
+    analysis_orchestrator: Annotated[
+        AnalysisOrchestrator,
+        Depends(get_analysis_orchestrator),
+    ],
+    gns3_provider: Annotated[GNS3Provider, Depends(get_gns3_provider)],
+    user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
+) -> ConversationStarted:
+    """Tạo Conversation, lưu Message đầu tiên, sinh title và chạy AI workflow."""
+
+    # Bước 1: Transaction ngắn tạo Conversation và USER_REQUEST đầu tiên.
+    started = service.start(user.id, payload)
+
+    # Bước 2: Gọi LLM ngoài transaction. Generator tự fallback nếu thiếu cấu
+    # hình, timeout hoặc provider trả dữ liệu không hợp lệ.
+    title = await title_generator.generate(started.message.message)
+    conversation = service.update_title(started.conversation, title)
+
+    # Bước 3: Giữ nguyên pipeline hiện tại sau khi dữ liệu nguồn đã được lưu.
+    gns3_provider.check_server_available()
+    task = await planning_orchestrator.plan_user_message(
+        conversation,
+        started.message,
+    )
+    results = await execution_orchestrator.execute_task(task)
+    await analysis_orchestrator.analyze_and_respond(task, results)
+
+    return ConversationStarted(
+        conversation=conversation,
+        message=started.message,
+    )
 
 
 # READ (Conversation) — Lấy danh sách conversation, có thể lọc theo mã người dùng.
@@ -105,8 +157,12 @@ async def add_message(
         ExecutionOrchestrator,
         Depends(get_execution_orchestrator),
     ],
+    analysis_orchestrator: Annotated[
+        AnalysisOrchestrator,
+        Depends(get_analysis_orchestrator),
+    ],
     gns3_provider: Annotated[GNS3Provider, Depends(get_gns3_provider)],
-    _user: Annotated[User, Depends(require_permission("Chatbot", "Execute"))],
+    _user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
 ) -> Message:
     """Lưu message và kích hoạt planning nếu người gửi là USER.
 
@@ -131,7 +187,11 @@ async def add_message(
 
         # Bước 3.3: Thực thi tuần tự các operation vừa lưu. ExecutionOrchestrator
         # đọc lại Operation/TaskOperationDevice từ database rồi gọi NetworkAgent.
-        await execution_orchestrator.execute_task(task)
+        results = await execution_orchestrator.execute_task(task)
+
+        # Bước 3.4: Analyst biến output kỹ thuật thành câu trả lời tiếng Việt,
+        # lưu AGENT/FINAL_RESPONSE và hoàn thiện timeline cho Chat UI.
+        await analysis_orchestrator.analyze_and_respond(task, results)
 
     # Bước 4: API trả message sau khi planning và execution đã hoàn tất.
     return message

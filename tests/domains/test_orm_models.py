@@ -1,4 +1,4 @@
-"""Ensure ORM metadata covers the canonical 20-table database design."""
+"""Ensure ORM metadata covers the canonical 22-table database design."""
 
 from app.core.database import Base
 from app.domains.conversation.models import ConversationModel, MessageModel
@@ -6,7 +6,9 @@ from app.domains.evaluation.models import TaskEvaluationModel
 from app.domains.execution.models import (
     DeviceActionLogModel,
     OperationDependencyModel,
+    OperationDeviceApprovalModel,
     OperationModel,
+    TaskActivityEventModel,
     TaskExecutionModel,
     TaskModel,
     TaskOperationDeviceModel,
@@ -49,6 +51,8 @@ ORM_MODELS = [
     TaskOperationDeviceModel,
     TaskExecutionModel,
     DeviceActionLogModel,
+    TaskActivityEventModel,
+    OperationDeviceApprovalModel,
     TaskEvaluationModel,
 ]
 
@@ -74,6 +78,8 @@ def test_orm_covers_all_domain_tables() -> None:
         "task_operation_devices",
         "task_executions",
         "device_action_logs",
+        "task_activity_events",
+        "operation_device_approvals",
         "task_evaluations",
     }
 

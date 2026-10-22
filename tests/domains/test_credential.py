@@ -8,6 +8,11 @@ import httpx
 from app.domains.inventory.routers.dependencies import get_credential_service
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
 from app.domains.inventory.services import CredentialService
+from app.domains.identity.routers.dependencies import (
+    get_current_identity,
+    get_identity_service,
+)
+from app.domains.identity.schemas import User, UserStatus
 from app.main import app
 
 
@@ -62,17 +67,20 @@ def test_credential_service_crud_without_exposing_secrets() -> None:
             username="admin",
             password="password-value",
             secret="enable-secret",
-            created_by="user-admin",
-        )
+        ),
+        "user-admin",
     )
     updated = service.update_credential(
         created.id,
-        CredentialUpdate(username="netops", last_updated_by="user-admin"),
+        CredentialUpdate(username="netops"),
+        "user-editor",
     )
 
     assert service.get_credential(created.id).id == created.id
     assert service.list_credentials()[0].id == created.id
     assert updated.username == "netops"
+    assert created.created_by == "user-admin"
+    assert updated.last_updated_by == "user-editor"
     assert repository.password == "password-value"
     assert repository.secret == "enable-secret"
     assert "password" not in created.model_dump()
@@ -100,6 +108,26 @@ def test_credential_api_lists_gets_creates_and_updates() -> None:
     async def override_credential_service() -> CredentialService:
         return service
 
+    current_user = User(
+        id="user-authenticated",
+        role_id="role-admin",
+        email="admin@example.com",
+        full_name="Admin",
+        user_status=UserStatus.ACTIVE,
+        created_at=now,
+    )
+
+    async def override_current_identity() -> tuple[User, str]:
+        return current_user, "session-test"
+
+    class AllowAllIdentityService:
+        def require_permission(self, user, function, action) -> None:
+            assert user.id == current_user.id
+            assert function == "Device Management"
+
+    async def override_identity_service() -> AllowAllIdentityService:
+        return AllowAllIdentityService()
+
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -115,13 +143,12 @@ def test_credential_api_lists_gets_creates_and_updates() -> None:
                     "username": "netops",
                     "password": "private-password",
                     "secret": "private-secret",
-                    "created_by": "user-admin",
                 },
             )
             credential_id = created.json()["id"]
             updated = await client.patch(
                 f"/api/v1/credentials/{credential_id}",
-                json={"description": "Updated", "last_updated_by": "user-admin"},
+                json={"description": "Updated"},
             )
 
         assert listed.status_code == 200
@@ -131,9 +158,15 @@ def test_credential_api_lists_gets_creates_and_updates() -> None:
         assert updated.json()["description"] == "Updated"
         assert "password" not in created.json()
         assert "secret" not in created.json()
+        assert created.json()["created_by"] == current_user.id
+        assert updated.json()["last_updated_by"] == current_user.id
 
     app.dependency_overrides[get_credential_service] = override_credential_service
+    app.dependency_overrides[get_current_identity] = override_current_identity
+    app.dependency_overrides[get_identity_service] = override_identity_service
     try:
         asyncio.run(scenario())
     finally:
         app.dependency_overrides.pop(get_credential_service, None)
+        app.dependency_overrides.pop(get_current_identity, None)
+        app.dependency_overrides.pop(get_identity_service, None)

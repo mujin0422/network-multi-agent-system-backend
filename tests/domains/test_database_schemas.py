@@ -1,4 +1,4 @@
-"""Đối chiếu Pydantic schema với 20 bảng trong tài liệu database."""
+"""Đối chiếu Pydantic schema với 22 bảng trong tài liệu database."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -10,10 +10,12 @@ from app.domains.conversation.schemas import Conversation, Message
 from app.domains.evaluation.schemas import TaskEvaluation
 from app.domains.execution.schemas import (
     DeviceActionLog,
+    OperationDeviceApproval,
     Operation,
     OperationDependency,
     Task,
     TaskExecution,
+    TaskActivityEvent,
     TaskOperationDevice,
 )
 from app.domains.identity.schemas import (
@@ -115,7 +117,18 @@ SCHEMA_FIELDS: list[tuple[type[BaseModel], set[str]]] = [
         Conversation,
         {"id", "user_id", "title", "created_at", "last_updated_at"},
     ),
-    (Message, {"id", "conversation_id", "sender_by", "message", "created_at"}),
+    (
+        Message,
+        {
+            "id",
+            "conversation_id",
+            "reply_to_message_id",
+            "sender_by",
+            "message_type",
+            "message",
+            "created_at",
+        },
+    ),
     (
         Task,
         {
@@ -207,6 +220,41 @@ SCHEMA_FIELDS: list[tuple[type[BaseModel], set[str]]] = [
             "action_log_status",
             "error_message",
             "executed_at",
+        },
+    ),
+    (
+        TaskActivityEvent,
+        {
+            "id",
+            "task_id",
+            "operation_id",
+            "execution_id",
+            "actor_type",
+            "event_type",
+            "event_status",
+            "sequence_number",
+            "event_data",
+            "started_at",
+            "completed_at",
+            "created_at",
+        },
+    ),
+    (
+        OperationDeviceApproval,
+        {
+            "id",
+            "operation_device_id",
+            "approval_status",
+            "risk_level",
+            "requested_by",
+            "reason",
+            "commands_snapshot",
+            "request_hash",
+            "decided_by",
+            "requested_at",
+            "decided_at",
+            "expires_at",
+            "created_at",
         },
     ),
     (
