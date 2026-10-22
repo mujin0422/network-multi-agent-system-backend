@@ -3,10 +3,10 @@
 from scripts import migrate
 
 
-def test_initial_migration_is_the_only_project_baseline() -> None:
+def test_migrations_start_with_project_baseline() -> None:
     migrations = migrate.load_migrations()
 
-    assert [item.version for item in migrations] == ["0001"]
+    assert [item.version for item in migrations] == ["0001", "0002"]
     assert migrations[0].name == "initial_schema"
     assert migrations[0].sql.startswith(migrate.CANONICAL_SCHEMA_DIRECTIVE)
     assert all(len(item.checksum) == 64 for item in migrations)

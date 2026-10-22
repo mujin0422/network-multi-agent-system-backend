@@ -172,7 +172,7 @@ class ExecutionOrchestrator:
         executable_mappings = [
             mapping
             for mapping in mappings
-            if self._mapping_can_execute(mapping, commands)
+            if self._mapping_can_execute(operation, mapping, commands)
         ]
 
         if executable_mappings:
@@ -208,6 +208,7 @@ class ExecutionOrchestrator:
 
     def _mapping_can_execute(
         self,
+        operation: Operation,
         mapping: TaskOperationDevice,
         commands: list[str],
     ) -> bool:
@@ -224,7 +225,13 @@ class ExecutionOrchestrator:
 
         approval = self._execution_service.get_operation_device_approval(mapping.id)
         if approval is None:
-            self._wait_for_approval(mapping, "Chưa có yêu cầu phê duyệt")
+            self._execution_service.create_operation_device_approval(
+                operation,
+                mapping,
+                commands,
+                build_approval_request_hash(mapping.id, commands),
+            )
+            self._wait_for_approval(mapping, None)
             return False
 
         now = datetime.now(UTC)

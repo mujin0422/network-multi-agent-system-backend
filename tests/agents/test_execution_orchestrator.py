@@ -104,6 +104,29 @@ class StubExecutionService:
     ) -> OperationDeviceApproval | None:
         return self.approvals.get(operation_device_id)
 
+    def create_operation_device_approval(
+        self,
+        operation: Operation,
+        mapping: TaskOperationDevice,
+        commands: list[str],
+        request_hash: str,
+    ) -> OperationDeviceApproval:
+        now = datetime.now(UTC)
+        approval = OperationDeviceApproval(
+            id=f"aprv-{mapping.id}",
+            operation_device_id=mapping.id,
+            approval_status=ApprovalStatus.PENDING,
+            risk_level=RiskLevel.HIGH,
+            requested_by="execution-orchestrator",
+            reason=f"Phê duyệt {operation.operation_intent}",
+            commands_snapshot=commands,
+            request_hash=request_hash,
+            requested_at=now,
+            created_at=now,
+        )
+        self.approvals[mapping.id] = approval
+        return approval
+
     def expire_operation_approval(self, approval_id: str) -> None:
         for mapping_id, approval in self.approvals.items():
             if approval.id == approval_id:
@@ -239,6 +262,9 @@ def test_write_mapping_waits_without_approved_request() -> None:
     )
     assert service.mappings[operation.id].operation_device_status == (
         OperationDeviceStatus.WAITING_APPROVAL
+    )
+    assert service.approvals[service.mappings[operation.id].id].approval_status == (
+        ApprovalStatus.PENDING
     )
     assert service.tasks[-1].task_status == TaskStatus.RUNNING
     assert service.tasks[-1].completed_at is None

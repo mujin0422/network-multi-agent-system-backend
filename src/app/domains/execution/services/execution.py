@@ -24,6 +24,7 @@ from app.domains.execution.schemas import (
     OperationDeviceApprovalResponse,
     OperationDeviceStatus,
     OperationStatus,
+    RiskLevel,
     Task,
     TaskActivityEvent,
     TaskCreate,
@@ -164,6 +165,38 @@ class ExecutionService:
         """Lấy Approval nội bộ để Orchestrator kiểm tra trước khi WRITE."""
 
         return self._repository.get_operation_device_approval(operation_device_id)
+
+    def create_operation_device_approval(
+        self,
+        operation: Operation,
+        mapping: TaskOperationDevice,
+        commands: list[str],
+        request_hash: str,
+    ) -> OperationDeviceApproval:
+        """Tạo snapshot PENDING trước khi cho phép thực thi lệnh WRITE."""
+
+        existing = self._repository.get_operation_device_approval(mapping.id)
+        if existing is not None:
+            return existing
+
+        now = datetime.now(UTC)
+        approval = OperationDeviceApproval(
+            id=generate_id(IdPrefix.OPERATION_DEVICE_APPROVAL),
+            operation_device_id=mapping.id,
+            approval_status=ApprovalStatus.PENDING,
+            risk_level=RiskLevel.HIGH,
+            requested_by="execution-orchestrator",
+            reason=(
+                f"Operation {operation.operation_intent} sẽ thay đổi cấu hình "
+                f"trên thiết bị {mapping.device_id}."
+            ),
+            commands_snapshot=commands,
+            request_hash=request_hash,
+            requested_at=now,
+            created_at=now,
+        )
+        self._repository.save_operation_device_approval(approval)
+        return approval
 
     def expire_operation_approval(self, approval_id: str) -> None:
         """Đánh dấu Approval PENDING đã quá hạn."""

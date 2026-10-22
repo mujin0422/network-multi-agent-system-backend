@@ -1,12 +1,16 @@
 """Điều phối USER message thành Task và execution plan."""
 
+from datetime import UTC, datetime
+
 from app.agents.planner import PlannerAgent
 from app.domains.conversation.schemas import Conversation, Message, MessageSender
 from app.domains.execution.schemas import (
     ActivityActorType,
+    ActivityEventStatus,
     ActivityEventType,
     TaskCreate,
     TaskDetail,
+    TaskStatus,
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.inventory.services import DeviceService
@@ -81,7 +85,25 @@ class PlanningOrchestrator:
 
         # Bước 4: Planner dùng LLM để chuyển câu tiếng Việt thành PlannedTask,
         # gồm operations, dependencies và danh sách device của từng operation.
-        plan = await self._planner.plan(message.message, devices)
+        try:
+            plan = await self._planner.plan(message.message, devices)
+        except Exception as exc:
+            self._execution_service.update_task(
+                task.model_copy(
+                    update={
+                        "task_status": TaskStatus.FAILED,
+                        "completed_at": datetime.now(UTC),
+                    }
+                )
+            )
+            self._execution_service.record_activity(
+                task.id,
+                ActivityActorType.PLANNER,
+                ActivityEventType.TASK_FAILED,
+                ActivityEventStatus.FAILED,
+                event_data={"error": str(exc), "stage": "PLANNING"},
+            )
+            raise
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.PLANNER,
@@ -89,22 +111,39 @@ class PlanningOrchestrator:
             event_data={"operation_count": len(plan.operations)},
         )
 
-        # Bước 5: Không tin hoàn toàn output LLM. Tất cả device ID trong kế hoạch
-        # phải thuộc inventory vừa cung cấp thì kế hoạch mới được phép lưu.
-        available_device_ids = {device.id for device in devices}
-        planned_device_ids = {
-            device.device_id
-            for operation in plan.operations
-            for device in operation.devices
-        }
-        unknown_device_ids = planned_device_ids - available_device_ids
-        if unknown_device_ids:
-            unknown = ", ".join(sorted(unknown_device_ids))
-            raise ValueError(f"Planner trả về device không tồn tại: {unknown}")
+        try:
+            # Bước 5: Không tin hoàn toàn output LLM. Tất cả device ID trong kế
+            # hoạch phải thuộc inventory vừa cung cấp thì mới được phép lưu.
+            available_device_ids = {device.id for device in devices}
+            planned_device_ids = {
+                device.device_id
+                for operation in plan.operations
+                for device in operation.devices
+            }
+            unknown_device_ids = planned_device_ids - available_device_ids
+            if unknown_device_ids:
+                unknown = ", ".join(sorted(unknown_device_ids))
+                raise ValueError(f"Planner trả về device không tồn tại: {unknown}")
 
-        # Bước 6: ExecutionService chuyển PlannedTask thành các bản ghi trong
-        # task_operations, operation_dependencies và task_operation_devices.
-        planned_task = self._execution_service.create_execution_plan(task.id, plan)
+            # Bước 6: Chuyển plan thành operation, dependency và device mapping.
+            planned_task = self._execution_service.create_execution_plan(task.id, plan)
+        except Exception as exc:
+            self._execution_service.update_task(
+                task.model_copy(
+                    update={
+                        "task_status": TaskStatus.FAILED,
+                        "completed_at": datetime.now(UTC),
+                    }
+                )
+            )
+            self._execution_service.record_activity(
+                task.id,
+                ActivityActorType.PLANNER,
+                ActivityEventType.TASK_FAILED,
+                ActivityEventStatus.FAILED,
+                event_data={"error": str(exc), "stage": "PLAN_PERSISTENCE"},
+            )
+            raise
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.PLANNER,

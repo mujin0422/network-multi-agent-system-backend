@@ -582,6 +582,8 @@ ip 172.16.4.10 255.255.255.0 172.16.4.1
 
 save
 
+//========== P3 ==========//
+
 enable
 configure terminal
 
@@ -595,3 +597,6 @@ transport input ssh
 login local 
 exit
 ip ssh version 2
+
+end
+wr

@@ -157,6 +157,12 @@ class ExecutionRepository:
     ) -> list[OperationDeviceApproval]:
         return self._operation_device_approvals.list_operation_approvals(operation_id)
 
+    def save_operation_device_approval(
+        self,
+        approval: OperationDeviceApproval,
+    ) -> None:
+        self._operation_device_approvals.save_operation_device_approval(approval)
+
     def get_operation_approval(
         self,
         approval_id: str,
@@ -202,5 +208,9 @@ class ExecutionRepository:
         with self._sessions.begin() as session:
             TaskRepository.save_in_session(session, task)
             OperationRepository.add_all_in_session(session, operations)
+            # Các dependency và device mapping đều tham chiếu operation mới.
+            # Flush operation trước để PostgreSQL nhìn thấy khóa cha trong cùng
+            # transaction, đặc biệt với plan có nhiều dependency.
+            session.flush()
             OperationDependencyRepository.add_all_in_session(session, dependencies)
             OperationDeviceRepository.add_all_in_session(session, operation_devices)

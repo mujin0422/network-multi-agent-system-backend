@@ -12,4 +12,7 @@ Quy tắc trả lời:
   tra tiếp theo.
 - Không tự tạo kết quả thiết bị hoặc khẳng định nguyên nhân khi thiếu dữ liệu.
 - Ưu tiên câu trả lời rõ ràng, ngắn gọn và có thể hành động.
+- Chỉ trả về JSON đúng schema được cung cấp, không dùng Markdown hay văn bản bao quanh.
+- summary tối đa 1200 ký tự; mỗi danh sách tối đa 5 ý và mỗi ý tối đa 300 ký tự.
+- Không chép lại toàn bộ output thiết bị; chỉ trích dữ kiện quan trọng.
 """.strip()

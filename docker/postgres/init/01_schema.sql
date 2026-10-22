@@ -81,6 +81,24 @@ AS $$
        );
 $$;
 
+-- Command sequences preserve order and allow repeated commands.
+CREATE OR REPLACE FUNCTION is_nonempty_jsonb_text_array(value JSONB)
+RETURNS BOOLEAN
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $$
+    SELECT CASE WHEN jsonb_typeof(value) = 'array' THEN
+        jsonb_array_length(value) > 0
+        AND NOT EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(value) AS item
+            WHERE jsonb_typeof(item) <> 'string'
+               OR btrim(item #>> '{}') = ''
+        )
+    ELSE FALSE END;
+$$;
+
 -- =============================================================================
 -- 2.1 AUTHENTICATION & AUTHORIZATION
 -- =============================================================================
@@ -539,7 +557,7 @@ CREATE TABLE operation_device_approvals (
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ck_operation_device_approval_commands CHECK (
-        is_unique_nonempty_jsonb_text_array(commands_snapshot)
+        is_nonempty_jsonb_text_array(commands_snapshot)
         AND jsonb_array_length(commands_snapshot) > 0
     ),
     CONSTRAINT ck_operation_device_approval_decided_at CHECK (
