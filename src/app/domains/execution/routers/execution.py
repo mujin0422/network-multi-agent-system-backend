@@ -2,14 +2,16 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
-from app.agents.dependencies import get_execution_orchestrator
-from app.agents.orchestrator import ExecutionOrchestrator
+from fastapi import APIRouter, BackgroundTasks, Depends, status
+from app.agents.dependencies import get_analysis_orchestrator, get_execution_orchestrator
+from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 
 from app.domains.execution.schemas import (
     Operation,
+    ActivityActorType,
+    ActivityEventType,
     OperationCreate,
     OperationDeviceApprovalDecision,
     OperationDeviceApprovalResponse,
@@ -25,6 +27,21 @@ from app.domains.execution.routers.dependencies import get_execution_service
 router = APIRouter()
 operations_router = APIRouter()
 approvals_router = APIRouter()
+
+
+async def _resume_approved_workflow(
+    operation_device_id: str,
+    service: ExecutionService,
+    execution_orchestrator: ExecutionOrchestrator,
+    analysis_orchestrator: AnalysisOrchestrator,
+) -> None:
+    """Tiếp tục execution và analysis sau khi response phê duyệt đã trả."""
+
+    mapping = service.get_operation_device(operation_device_id)
+    operation = service.get_operation(mapping.operation_id)
+    task = service.get_task(operation.task_id)
+    results = await execution_orchestrator.resume_after_approval(operation_device_id)
+    await analysis_orchestrator.analyze_and_respond(task, results)
 
 
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
@@ -99,10 +116,15 @@ async def list_operation_approvals(
 async def decide_operation_device_approval(
     approval_id: str,
     payload: OperationDeviceApprovalDecision,
+    background_tasks: BackgroundTasks,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     execution_orchestrator: Annotated[
         ExecutionOrchestrator,
         Depends(get_execution_orchestrator),
+    ],
+    analysis_orchestrator: Annotated[
+        AnalysisOrchestrator,
+        Depends(get_analysis_orchestrator),
     ],
     user: Annotated[User, Depends(require_permission("Task Management", "Approve"))],
 ) -> OperationDeviceApprovalResponse:
@@ -113,5 +135,24 @@ async def decide_operation_device_approval(
         user.id,
         payload.decision,
     )
-    await execution_orchestrator.resume_after_approval(approval.operation_device_id)
+    mapping = service.get_operation_device(approval.operation_device_id)
+    operation = service.get_operation(mapping.operation_id)
+    service.record_activity(
+        operation.task_id,
+        ActivityActorType.ORCHESTRATOR,
+        (
+            ActivityEventType.APPROVAL_APPROVED
+            if payload.decision.value == "APPROVED"
+            else ActivityEventType.APPROVAL_REJECTED
+        ),
+        operation_id=operation.id,
+        event_data={"approval_id": approval.id, "decided_by": user.id},
+    )
+    background_tasks.add_task(
+        _resume_approved_workflow,
+        approval.operation_device_id,
+        service,
+        execution_orchestrator,
+        analysis_orchestrator,
+    )
     return approval

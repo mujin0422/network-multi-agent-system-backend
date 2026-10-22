@@ -1,5 +1,7 @@
 """Điều phối kết quả thực thi thành phản hồi cuối trong conversation."""
 
+from datetime import UTC, datetime
+
 from app.agents.analyst import AnalystAgent, AnalysisResult
 from app.agents.network import NetworkExecutionResult
 from app.domains.conversation.schemas import Message, MessageCreate, MessageSender, MessageType
@@ -36,10 +38,13 @@ class AnalysisOrchestrator:
         if current_task.task_status == TaskStatus.RUNNING:
             return self._save_waiting_response(current_task)
 
+        analysis_started_at = datetime.now(UTC)
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.ANALYST,
             ActivityEventType.ANALYSIS_STARTED,
+            ActivityEventStatus.RUNNING,
+            started_at=analysis_started_at,
         )
         try:
             analysis = await self._analyst.analyze(
@@ -52,6 +57,8 @@ class AnalysisOrchestrator:
                 ActivityEventType.ANALYSIS_COMPLETED,
                 ActivityEventStatus.FAILED,
                 event_data={"error": str(exc)},
+                started_at=analysis_started_at,
+                completed_at=datetime.now(UTC),
             )
             raise
 
@@ -60,6 +67,8 @@ class AnalysisOrchestrator:
             ActivityActorType.ANALYST,
             ActivityEventType.ANALYSIS_COMPLETED,
             event_data={"requires_more_data": analysis.requires_more_data},
+            started_at=analysis_started_at,
+            completed_at=datetime.now(UTC),
         )
         message = self._conversation_service.add_message(
             current_task.conversation_id,

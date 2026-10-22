@@ -38,12 +38,16 @@ class AnalystAgent:
             except ValueError as exc:
                 if retry_number == self.max_validation_retries:
                     raise
+                invalid_content = str(getattr(result, "content", result))
                 messages.append(
                     HumanMessage(
                         content=(
-                            "JSON trước không hợp lệ. Chỉ sửa và trả về JSON hoàn chỉnh.\n"
+                            "Kết quả trước không hợp lệ hoặc đã bị cắt. Hãy tạo lại "
+                            "một JSON MỚI, ngắn gọn và hoàn chỉnh; không tiếp tục đoạn cũ.\n"
                             f"Lỗi: {exc.__cause__ or exc}\n"
-                            f"Nội dung sai: {getattr(result, 'content', result)}"
+                            "Giới hạn: summary <= 1200 ký tự; mỗi danh sách <= 5 ý; "
+                            "mỗi ý <= 300 ký tự.\n"
+                            f"Phần đầu nội dung sai để đối chiếu: {invalid_content[:600]}"
                         )
                     )
                 )

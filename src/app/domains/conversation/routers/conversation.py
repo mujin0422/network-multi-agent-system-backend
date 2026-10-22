@@ -2,7 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.agents.dependencies import (
     get_analysis_orchestrator,
@@ -34,6 +36,69 @@ from app.domains.inventory.providers import GNS3Provider
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def _generate_conversation_title(
+    service: ConversationService,
+    title_generator: ConversationTitleGeneratorProtocol,
+    conversation: Conversation,
+    first_message: Message,
+) -> None:
+    """Sinh title nền để không chặn response của message đầu tiên."""
+
+    try:
+        title = await title_generator.generate(first_message.message)
+        service.update_title(conversation, title)
+    except Exception:
+        logger.exception("Không thể tạo title cho conversation %s", conversation.id)
+
+
+async def _run_ai_workflow(
+    conversation: Conversation,
+    message: Message,
+    planning_orchestrator: PlanningOrchestrator,
+    execution_orchestrator: ExecutionOrchestrator,
+    analysis_orchestrator: AnalysisOrchestrator,
+    gns3_provider: GNS3Provider,
+) -> None:
+    """Chạy workflow sau khi HTTP response đã trả để UI polling timeline."""
+
+    try:
+        gns3_provider.check_server_available()
+        task = await planning_orchestrator.plan_user_message(conversation, message)
+        results = await execution_orchestrator.execute_task(task)
+        await analysis_orchestrator.analyze_and_respond(task, results)
+    except Exception:
+        logger.exception("AI workflow thất bại cho message %s", message.id)
+
+
+async def _run_first_message_workflow(
+    service: ConversationService,
+    title_generator: ConversationTitleGeneratorProtocol,
+    conversation: Conversation,
+    message: Message,
+    planning_orchestrator: PlanningOrchestrator,
+    execution_orchestrator: ExecutionOrchestrator,
+    analysis_orchestrator: AnalysisOrchestrator,
+    gns3_provider: GNS3Provider,
+) -> None:
+    """Ưu tiên workflow; sinh title sau để không gọi hai LLM đồng thời."""
+
+    await _run_ai_workflow(
+        conversation,
+        message,
+        planning_orchestrator,
+        execution_orchestrator,
+        analysis_orchestrator,
+        gns3_provider,
+    )
+    await _generate_conversation_title(
+        service,
+        title_generator,
+        conversation,
+        message,
+    )
 
 
 # CREATE (Conversation + first Message) — Chỉ tạo conversation khi User gửi thật.
@@ -45,6 +110,7 @@ router = APIRouter()
 )
 async def start_conversation(
     payload: ConversationStart,
+    background_tasks: BackgroundTasks,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     title_generator: Annotated[
         ConversationTitleGeneratorProtocol,
@@ -70,22 +136,22 @@ async def start_conversation(
     # Bước 1: Transaction ngắn tạo Conversation và USER_REQUEST đầu tiên.
     started = service.start(user.id, payload)
 
-    # Bước 2: Gọi LLM ngoài transaction. Generator tự fallback nếu thiếu cấu
-    # hình, timeout hoặc provider trả dữ liệu không hợp lệ.
-    title = await title_generator.generate(started.message.message)
-    conversation = service.update_title(started.conversation, title)
-
-    # Bước 3: Giữ nguyên pipeline hiện tại sau khi dữ liệu nguồn đã được lưu.
-    gns3_provider.check_server_available()
-    task = await planning_orchestrator.plan_user_message(
-        conversation,
+    # Bước 2: Sinh title và chạy AI workflow đồng thời trong background.
+    # task_activity_events và hiển thị từng bước khi chúng vừa được lưu.
+    background_tasks.add_task(
+        _run_first_message_workflow,
+        service,
+        title_generator,
+        started.conversation,
         started.message,
+        planning_orchestrator,
+        execution_orchestrator,
+        analysis_orchestrator,
+        gns3_provider,
     )
-    results = await execution_orchestrator.execute_task(task)
-    await analysis_orchestrator.analyze_and_respond(task, results)
 
     return ConversationStarted(
-        conversation=conversation,
+        conversation=started.conversation,
         message=started.message,
     )
 
@@ -148,6 +214,7 @@ async def list_messages(
 async def add_message(
     conversation_id: str,
     payload: MessageCreate,
+    background_tasks: BackgroundTasks,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     planning_orchestrator: Annotated[
         PlanningOrchestrator,
@@ -177,21 +244,17 @@ async def add_message(
 
     # Bước 3: (CHECK) Chỉ USER message kích hoạt Planner. Message của ASSISTANT/SYSTEM được lưu như lịch sử nhưng không tạo task mới, tránh lặp vô hạn.
     if message.sender_by == MessageSender.USER:
-        # Bước 3.1: Chỉ kiểm tra GNS3 Server có đang bật hay không.
-        # Không tự mở project và không tự bật node.
-        gns3_provider.check_server_available()
+        # Workflow chạy sau khi API trả message. Frontend dùng source message ID
+        # để phát hiện Task mới và cập nhật timeline theo thời gian thực.
+        background_tasks.add_task(
+            _run_ai_workflow,
+            conversation,
+            message,
+            planning_orchestrator,
+            execution_orchestrator,
+            analysis_orchestrator,
+            gns3_provider,
+        )
 
-        # Bước 3.2: Planner tạo Task và lưu nguyên tử Operation, Dependency cùng
-        # Operation Device. Chỉ khi transaction này thành công mới có TaskDetail.
-        task = await planning_orchestrator.plan_user_message(conversation, message)
-
-        # Bước 3.3: Thực thi tuần tự các operation vừa lưu. ExecutionOrchestrator
-        # đọc lại Operation/TaskOperationDevice từ database rồi gọi NetworkAgent.
-        results = await execution_orchestrator.execute_task(task)
-
-        # Bước 3.4: Analyst biến output kỹ thuật thành câu trả lời tiếng Việt,
-        # lưu AGENT/FINAL_RESPONSE và hoàn thiện timeline cho Chat UI.
-        await analysis_orchestrator.analyze_and_respond(task, results)
-
-    # Bước 4: API trả message sau khi planning và execution đã hoàn tất.
+    # Bước 4: API trả ngay message đã lưu.
     return message

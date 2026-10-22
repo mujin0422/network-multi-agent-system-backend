@@ -1,5 +1,6 @@
 """Planner Agent chuyển yêu cầu người dùng thành execution plan có cấu trúc."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -14,6 +15,7 @@ from app.domains.inventory.schemas import Device
 class PlannerAgent:
     name = "planner-agent"
     max_validation_retries = 2
+    timeout_seconds = 90
 
     def __init__(self, chat_model: Any) -> None:
         # Gọi model theo chế độ chat thông thường. Không dùng
@@ -52,21 +54,27 @@ class PlannerAgent:
             SystemMessage(content=PLANNER_SYSTEM_PROMPT),
             HumanMessage(content=prompt),
         ]
-        for retry_number in range(self.max_validation_retries + 1):
-            result = await self._planner.ainvoke(messages)
-            try:
-                return self._parse_plan(result)
-            except ValueError as exc:
-                if retry_number == self.max_validation_retries:
-                    raise
+        try:
+            async with asyncio.timeout(self.timeout_seconds):
+                for retry_number in range(self.max_validation_retries + 1):
+                    result = await self._planner.ainvoke(messages)
+                    try:
+                        return self._parse_plan(result)
+                    except ValueError as exc:
+                        if retry_number == self.max_validation_retries:
+                            raise
 
-                # Đưa cả kết quả sai và lỗi validation về cho model để model chỉ
-                # sửa JSON, không phải lập kế hoạch lại mà thiếu ngữ cảnh.
-                messages.append(
-                    HumanMessage(
-                        content=self._build_correction_prompt(result, exc),
-                    )
-                )
+                        # Đưa cả kết quả sai và lỗi validation về cho model để
+                        # model sửa JSON mà không phải mất ngữ cảnh ban đầu.
+                        messages.append(
+                            HumanMessage(
+                                content=self._build_correction_prompt(result, exc),
+                            )
+                        )
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"Planner Agent không phản hồi trong {self.timeout_seconds} giây"
+            ) from exc
 
         raise RuntimeError("Planner Agent không thể tạo execution plan")
 

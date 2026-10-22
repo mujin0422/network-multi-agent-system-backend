@@ -19,6 +19,11 @@ from app.domains.execution.schemas import (
 
 
 class OperationDeviceApprovalRepositoryProtocol(Protocol):
+    def save_operation_device_approval(
+        self,
+        approval: OperationDeviceApproval,
+    ) -> None: ...
+
     def list_operation_approvals(
         self,
         operation_id: str,
@@ -48,6 +53,15 @@ class OperationDeviceApprovalRepositoryProtocol(Protocol):
 class OperationDeviceApprovalRepository:
     def __init__(self, database_url: str) -> None:
         self._sessions = create_session_factory(database_url)
+
+    def save_operation_device_approval(
+        self,
+        approval: OperationDeviceApproval,
+    ) -> None:
+        """Tạo approval duy nhất cho một operation-device WRITE."""
+
+        with self._sessions.begin() as session:
+            session.add(OperationDeviceApprovalModel(**approval.model_dump()))
 
     def list_operation_approvals(
         self,
