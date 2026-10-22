@@ -2,20 +2,24 @@
 
 from app.domains.conversation.schemas.conversation import (
     Conversation,
-    ConversationCreate,
     ConversationDetail,
+    ConversationStart,
+    ConversationStarted,
 )
 from app.domains.conversation.schemas.message import (
     Message,
     MessageCreate,
     MessageSender,
+    MessageType,
 )
 
 __all__ = [
     "Conversation",
-    "ConversationCreate",
     "ConversationDetail",
+    "ConversationStart",
+    "ConversationStarted",
     "Message",
     "MessageCreate",
     "MessageSender",
+    "MessageType",
 ]

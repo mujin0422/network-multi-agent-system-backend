@@ -18,9 +18,17 @@ from app.domains.execution.repositories.operation_device import (
     OperationDeviceRepository,
     OperationDeviceRepositoryProtocol,
 )
+from app.domains.execution.repositories.operation_device_approval import (
+    OperationDeviceApprovalRepository,
+    OperationDeviceApprovalRepositoryProtocol,
+)
 from app.domains.execution.repositories.task import (
     TaskRepository,
     TaskRepositoryProtocol,
+)
+from app.domains.execution.repositories.task_activity_event import (
+    TaskActivityEventRepository,
+    TaskActivityEventRepositoryProtocol,
 )
 from app.domains.execution.repositories.task_execution import TaskExecutionRepository
 
@@ -31,9 +39,13 @@ __all__ = [
     "OperationDependencyRepository",
     "OperationDeviceRepository",
     "OperationDeviceRepositoryProtocol",
+    "OperationDeviceApprovalRepository",
+    "OperationDeviceApprovalRepositoryProtocol",
     "OperationRepository",
     "OperationRepositoryProtocol",
     "TaskRepository",
     "TaskRepositoryProtocol",
+    "TaskActivityEventRepository",
+    "TaskActivityEventRepositoryProtocol",
     "TaskExecutionRepository",
 ]

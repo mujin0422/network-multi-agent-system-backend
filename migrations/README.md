@@ -10,6 +10,9 @@ persistence layer sử dụng `psycopg` trực tiếp, không dùng SQLAlchemy O
 `docker/postgres/init/01_schema.sql`. Nhờ đó Docker bootstrap và migration không
 duy trì hai bản SQL giống nhau dễ bị lệch.
 
+Baseline hiện tại gồm 22 bảng theo `docs/database-design.md`. Docker bootstrap
+chạy schema rồi chạy seed development riêng; migration runner vẫn chỉ quản lý schema.
+
 Nếu PostgreSQL đã được Docker init bằng `01_schema.sql`, runner kiểm tra các bảng
 và cột đặc trưng rồi ghi version `0001` mà không chạy lại `CREATE TABLE`.
 Database không trống nhưng không khớp initial schema sẽ bị từ chối.

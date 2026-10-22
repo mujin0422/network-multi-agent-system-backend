@@ -17,7 +17,6 @@ class CredentialCreate(BaseModel):
     password: str = Field(min_length=1, repr=False, json_schema_extra={"writeOnly": True})
     secret: str | None = Field(default=None, repr=False, json_schema_extra={"writeOnly": True})
     encryption_type: Literal["PGP_SYM_AES256"] = "PGP_SYM_AES256"
-    created_by: str = Field(min_length=1)
 
 
 class CredentialUpdate(BaseModel):
@@ -40,7 +39,6 @@ class CredentialUpdate(BaseModel):
         json_schema_extra={"writeOnly": True},
     )
     encryption_type: Literal["PGP_SYM_AES256"] | None = None
-    last_updated_by: str = Field(min_length=1)
 
 
 class Credential(BaseModel):

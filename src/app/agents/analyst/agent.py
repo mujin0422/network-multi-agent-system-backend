@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import ValidationError
 
 from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
@@ -11,18 +12,59 @@ from app.agents.analyst.schemas import AnalysisResult
 
 class AnalystAgent:
     name = "analyst-agent"
+    max_validation_retries = 2
 
     def __init__(self, chat_model: Any) -> None:
-        self._analyst = chat_model.with_structured_output(AnalysisResult)
+        # Dùng JSON thường vì NVIDIA NIM có model không hỗ trợ guided_json.
+        self._analyst = chat_model
 
     # Phân tích output từ execution agent, trả về kết quả phân tích có cấu trúc.
     async def analyze(self, execution_outputs: list[dict[str, Any]]) -> AnalysisResult:
-        result = await self._analyst.ainvoke(
-            [
-                SystemMessage(content=ANALYST_SYSTEM_PROMPT),
-                HumanMessage(
-                    content=json.dumps(execution_outputs, ensure_ascii=False)
-                ),
-            ]
+        prompt = (
+            "EXECUTION OUTPUTS:\n"
+            f"{json.dumps(execution_outputs, ensure_ascii=False)}\n\n"
+            "RESPONSE JSON SCHEMA:\n"
+            f"{json.dumps(AnalysisResult.model_json_schema(), ensure_ascii=False)}\n\n"
+            "Chỉ trả về một JSON object hợp lệ, không dùng Markdown."
         )
-        return AnalysisResult.model_validate(result)
+        messages = [
+            SystemMessage(content=ANALYST_SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+        for retry_number in range(self.max_validation_retries + 1):
+            result = await self._analyst.ainvoke(messages)
+            try:
+                return self._parse_result(result)
+            except ValueError as exc:
+                if retry_number == self.max_validation_retries:
+                    raise
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "JSON trước không hợp lệ. Chỉ sửa và trả về JSON hoàn chỉnh.\n"
+                            f"Lỗi: {exc.__cause__ or exc}\n"
+                            f"Nội dung sai: {getattr(result, 'content', result)}"
+                        )
+                    )
+                )
+        raise RuntimeError("Analyst Agent không thể tạo kết quả phân tích")
+
+    @staticmethod
+    def _parse_result(result: Any) -> AnalysisResult:
+        try:
+            content = getattr(result, "content", result)
+            # Một số NVIDIA model vẫn trả JSON trong reasoning_content dù đã
+            # yêu cầu tắt thinking. Chỉ dùng giá trị này khi content thật sự rỗng.
+            if not content:
+                additional_kwargs = getattr(result, "additional_kwargs", {})
+                content = additional_kwargs.get("reasoning_content", "")
+            if isinstance(content, dict):
+                return AnalysisResult.model_validate(content)
+            if not isinstance(content, str):
+                raise ValueError("Analyst Agent không trả JSON dạng text")
+            raw_json = content.strip()
+            if raw_json.startswith("```") and raw_json.endswith("```"):
+                raw_json = "\n".join(raw_json.splitlines()[1:-1]).strip()
+            return AnalysisResult.model_validate_json(raw_json)
+        except (ValidationError, ValueError) as exc:
+            raise ValueError("Analyst Agent trả JSON không đúng AnalysisResult") from exc

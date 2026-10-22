@@ -134,6 +134,8 @@ def is_initial_schema(connection: psycopg.Connection) -> bool:
         "messages",
         "tasks",
         "task_operations",
+        "task_activity_events",
+        "operation_device_approvals",
         "task_evaluations",
     }
     tables = user_tables(connection)
@@ -143,6 +145,13 @@ def is_initial_schema(connection: psycopg.Connection) -> bool:
             column_exists(connection, "tasks", "task_status"),
             column_exists(connection, "tasks", "task_type"),
             column_exists(connection, "task_operations", "operation_intent"),
+            column_exists(connection, "messages", "message_type"),
+            column_exists(connection, "messages", "reply_to_message_id"),
+            column_exists(
+                connection,
+                "operation_device_approvals",
+                "operation_device_id",
+            ),
             column_exists(
                 connection,
                 "task_executions",

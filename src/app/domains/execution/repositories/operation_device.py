@@ -16,6 +16,10 @@ class OperationDeviceRepositoryProtocol(Protocol):
         self,
         operation_id: str,
     ) -> list[TaskOperationDevice]: ...
+    def get_operation_device(
+        self,
+        operation_device_id: str,
+    ) -> TaskOperationDevice | None: ...
     def save_operation_device(self, mapping: TaskOperationDevice) -> None: ...
 
 
@@ -52,6 +56,20 @@ class OperationDeviceRepository:
             model.error_message = mapping.error_message
             model.started_at = mapping.started_at
             model.completed_at = mapping.completed_at
+
+    def get_operation_device(
+        self,
+        operation_device_id: str,
+    ) -> TaskOperationDevice | None:
+        """Lấy một mapping để tiếp tục Task sau quyết định Approval."""
+
+        with self._sessions() as session:
+            model = session.get(TaskOperationDeviceModel, operation_device_id)
+            return (
+                TaskOperationDevice.model_validate(model, from_attributes=True)
+                if model
+                else None
+            )
 
     @staticmethod
     def add_all_in_session(

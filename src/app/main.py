@@ -1,11 +1,13 @@
 """FastAPI application entry point and top-level router composition."""
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.exceptions.handlers import register_error_handlers
 from app.domains.conversation.routers import router as conversation_router
 from app.domains.execution.routers import (
+    approvals_router,
     operations_router,
     router as execution_router,
 )
@@ -25,6 +27,14 @@ app = FastAPI(
     debug=settings.app_debug,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 register_error_handlers(app)
 
 API_V1_PREFIX = "/api/v1"
@@ -40,6 +50,11 @@ v1_router.include_router(conversation_router, prefix="/conversations", tags=["Co
 v1_router.include_router(inventory_router, prefix="/devices", tags=["Devices"])
 v1_router.include_router(execution_router, prefix="/tasks", tags=["Tasks"])
 v1_router.include_router(operations_router, prefix="/operations", tags=["Operations"])
+v1_router.include_router(
+    approvals_router,
+    prefix="/operation-device-approvals",
+    tags=["Operation Device Approvals"],
+)
 app.include_router(v1_router)
 
 

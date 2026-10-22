@@ -17,6 +17,14 @@ from app.domains.execution.schemas.operation import (
     OperationCreate,
     OperationStatus,
 )
+from app.domains.execution.schemas.operation_device_approval import (
+    ApprovalDecision,
+    ApprovalStatus,
+    OperationDeviceApproval,
+    OperationDeviceApprovalDecision,
+    OperationDeviceApprovalResponse,
+    RiskLevel,
+)
 from app.domains.execution.schemas.operation_dependency import (
     DependencyType,
     OperationDependency,
@@ -35,9 +43,20 @@ from app.domains.execution.schemas.task import (
     TaskType,
 )
 from app.domains.execution.schemas.task_execution import ExecutionStatus, TaskExecution
+from app.domains.execution.schemas.task_activity_event import (
+    ActivityActorType,
+    ActivityEventStatus,
+    ActivityEventType,
+    TaskActivityEvent,
+)
 
 __all__ = [
     "AccessMode",
+    "ActivityActorType",
+    "ActivityEventStatus",
+    "ActivityEventType",
+    "ApprovalDecision",
+    "ApprovalStatus",
     "DependencyType",
     "DeviceActionLog",
     "DeviceActionPhase",
@@ -50,15 +69,20 @@ __all__ = [
     "OperationCreate",
     "OperationDependency",
     "OperationDeviceStatus",
+    "OperationDeviceApproval",
+    "OperationDeviceApprovalDecision",
+    "OperationDeviceApprovalResponse",
     "OperationStatus",
     "PlannedDependency",
     "PlannedDevice",
     "PlannedOperation",
+    "RiskLevel",
     "Task",
     "TaskCreate",
     "TaskDetail",
     "TaskStatus",
     "TaskExecution",
+    "TaskActivityEvent",
     "TaskOperationDevice",
     "TaskType",
 ]
