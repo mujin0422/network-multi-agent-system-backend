@@ -40,7 +40,13 @@ identity/
 ├── README.md
 ├── __init__.py
 ├── models/
-│   └── identity.py
+│   ├── action.py
+│   ├── management_function.py
+│   ├── permission.py
+│   ├── role.py
+│   ├── role_permission.py
+│   ├── user.py
+│   └── user_session.py
 ├── schemas/
 │   ├── action.py
 │   ├── auth.py
@@ -50,11 +56,13 @@ identity/
 │   ├── user.py
 │   └── user_session.py
 ├── repositories/
-│   └── identity.py
-├── services/
 │   ├── identity.py
 │   ├── role.py
-│   └── user.py
+│   ├── role_permission.py
+│   ├── user.py
+│   └── user_session.py
+├── services/
+│   └── identity.py
 ├── utils/
 │   └── security.py
 └── routers/
@@ -72,6 +80,9 @@ identity/
 dữ liệu được lưu trong PostgreSQL; không chứa authentication, authorization hoặc
 HTTP logic.
 
+Mỗi bảng được định nghĩa trong một file riêng. Các khóa ngoại tham chiếu bằng
+tên bảng; import model qua `identity.models` để đăng ký đầy đủ metadata.
+
 ### `schemas/`
 
 Định nghĩa request, response, internal record và enum của Identity:
@@ -87,8 +98,19 @@ một file `status.py` riêng.
 
 ### `repositories/`
 
-`IdentityRepository` định nghĩa persistence contract mà các service sử dụng.
-`IdentityRepository` triển khai `IdentityRepositoryProtocol` bằng SQLAlchemy ORM.
+`IdentityRepositoryProtocol` tổng hợp contract của các repository con.
+`IdentityRepository` là facade chuyển tiếp, giữ nguyên giao diện các service
+đang sử dụng; không chứa query ORM.
+
+- `user.py`: query/lưu user và cập nhật lần đăng nhập gần nhất.
+- `role.py`: query/lưu role.
+- `role_permission.py`: join role-permission với permission, management function
+  và action để lấy tập quyền của role.
+- `user_session.py`: lưu, tra cứu, thu hồi và rotate phiên đăng nhập. Thu hồi phiên
+  cũ và thêm phiên mới nằm trong cùng một transaction.
+
+Chưa thêm repository CRUD riêng cho action, management function và permission
+vì các bảng này hiện chỉ được đọc qua query lấy quyền của role.
 
 Repository chịu trách nhiệm:
 
@@ -102,6 +124,10 @@ Repository chịu trách nhiệm:
 Chỉ repository được dùng ORM model và database session.
 
 ### `services/`
+
+Các service được đặt chung trong `services/identity.py`, phân tách bằng chú thích
+theo ba phần: xác thực và phân quyền, User, Role. Giữ riêng ba lớp bên dưới để
+router chỉ nhận service có trách nhiệm phù hợp qua dependency injection.
 
 - `IdentityService`: login, refresh, logout, xác thực access token và kiểm tra
   quyền.

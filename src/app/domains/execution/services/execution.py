@@ -40,6 +40,10 @@ class ExecutionService:
     def __init__(self, repository: ExecutionRepositoryProtocol) -> None:
         self._repository = repository
 
+    # =============================================================================
+    # Task — tạo và lấy yêu cầu xử lý
+    # =============================================================================
+
     def create_task(self, payload: TaskCreate) -> Task:
         # source_message_id là UNIQUE: một message người dùng chỉ sinh một Task.
         if self._repository.find_task_by_source_message(payload.source_message_id):
@@ -65,6 +69,10 @@ class ExecutionService:
             **task.model_dump(),
             operations=self._repository.list_operations(task_id),
         )
+
+    # =============================================================================
+    # Operation, Device và Dependency — đọc kế hoạch thực thi
+    # =============================================================================
 
     def get_operation(self, operation_id: str) -> Operation:
         """Lấy operation cho application-layer executor."""
@@ -96,6 +104,10 @@ class ExecutionService:
     def list_dependencies(self, operation_id: str) -> list[OperationDependency]:
         self._require_operation(operation_id)
         return self._repository.list_dependencies(operation_id)
+
+    # =============================================================================
+    # Task Activity Event — lấy và ghi timeline của các agent
+    # =============================================================================
 
     def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]:
         """Lấy timeline của Task sau khi xác nhận Task tồn tại."""
@@ -145,6 +157,10 @@ class ExecutionService:
         )
         self._repository.save_task_activity_event(event)
         return event
+
+    # =============================================================================
+    # Operation Device Approval — yêu cầu và quyết định phê duyệt
+    # =============================================================================
 
     def list_operation_approvals(
         self,
@@ -241,6 +257,10 @@ class ExecutionService:
             raise ResourceConflictError(f"Approval '{approval_id}' đã được xử lý")
         return self._to_approval_response(decided)
 
+    # =============================================================================
+    # Task, Operation và Device — cập nhật trạng thái thực thi
+    # =============================================================================
+
     def update_task(self, task: Task) -> None:
         self._repository.save_task(task)
 
@@ -250,11 +270,19 @@ class ExecutionService:
     def update_operation_device(self, mapping: TaskOperationDevice) -> None:
         self._repository.save_operation_device(mapping)
 
+    # =============================================================================
+    # Task Execution và Device Action Log — lưu kết quả và nhật ký lệnh
+    # =============================================================================
+
     def save_task_execution(self, execution: TaskExecution) -> None:
         self._repository.save_task_execution(execution)
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
         self._repository.save_device_action_logs(logs)
+
+    # =============================================================================
+    # Execution Plan — tạo operation và lưu kế hoạch nguyên tử
+    # =============================================================================
 
     def add_operation(self, task_id: str, payload: OperationCreate) -> Operation:
         task = self._require_task(task_id)
@@ -353,6 +381,10 @@ class ExecutionService:
             operation_devices,
         )
         return TaskDetail(**planned_task.model_dump(), operations=operations)
+
+    # =============================================================================
+    # Xác minh tài nguyên và chuyển đổi response
+    # =============================================================================
 
     def _require_task(self, task_id: str) -> Task:
         task = self._repository.get_task(task_id)

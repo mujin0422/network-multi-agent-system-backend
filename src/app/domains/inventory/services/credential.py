@@ -14,6 +14,10 @@ class CredentialService:
     def __init__(self, repository: CredentialRepositoryProtocol) -> None:
         self._repository = repository
 
+    # =============================================================================
+    # Credential — tạo, lấy và cập nhật thông tin đăng nhập
+    # =============================================================================
+
     def create_credential(
         self,
         payload: CredentialCreate,
@@ -83,6 +87,10 @@ class CredentialService:
             update_secret="secret" in fields_set,
         )
         return candidate
+
+    # =============================================================================
+    # Xác minh tên Credential
+    # =============================================================================
 
     def _ensure_unique_name(
         self,

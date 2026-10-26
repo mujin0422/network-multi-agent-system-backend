@@ -12,6 +12,10 @@ class BrandService:
     def __init__(self, repository: BrandRepositoryProtocol) -> None:
         self._repository = repository
 
+    # =============================================================================
+    # Brand — tạo, lấy và cập nhật hãng thiết bị
+    # =============================================================================
+
     def create_brand(self, payload: BrandCreate) -> Brand:
         """Kiểm tra tên duy nhất, sinh ID và lưu Brand mới."""
 
@@ -43,6 +47,10 @@ class BrandService:
         self._ensure_unique_name(candidate.name, exclude_brand_id=brand_id)
         self._repository.save(candidate)
         return candidate
+
+    # =============================================================================
+    # Xác minh tên Brand
+    # =============================================================================
 
     def _ensure_unique_name(
         self,
