@@ -32,6 +32,10 @@ class ConversationService:
         self._conversation_repository = conversation_repository
         self._message_repository = message_repository
 
+    # =============================================================================
+    # Conversation — tạo, cập nhật và lấy hội thoại
+    # =============================================================================
+
     def start(
         self,
         user_id: str,
@@ -86,6 +90,10 @@ class ConversationService:
             messages=self._message_repository.list_by_conversation(conversation_id),
         )
 
+    # =============================================================================
+    # Message — lấy và lưu tin nhắn trong hội thoại
+    # =============================================================================
+
     # READ (Message) — Lấy danh sách message của một conversation đã tồn tại.
     def list_messages(self, conversation_id: str) -> list[Message]:
         self._require_conversation(conversation_id)
@@ -111,6 +119,10 @@ class ConversationService:
         )
         self._message_repository.save(message)
         return message
+
+    # =============================================================================
+    # Xác minh hội thoại
+    # =============================================================================
 
     # READ (Conversation) — Xác nhận conversation tồn tại, nếu không ném lỗi ResourceNotFoundError.
     def _require_conversation(self, conversation_id: str) -> Conversation:

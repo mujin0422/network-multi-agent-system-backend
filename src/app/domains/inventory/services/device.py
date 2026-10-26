@@ -15,6 +15,10 @@ class DeviceService:
     def __init__(self, repository: DeviceRepositoryProtocol) -> None:
         self._repository = repository
 
+    # =============================================================================
+    # Device — tạo, lấy và cập nhật thiết bị
+    # =============================================================================
+
     def create_device(self, payload: DeviceCreate) -> Device:
         """Kiểm tra uniqueness, sinh ID/timestamp rồi lưu thiết bị mới."""
         self._ensure_unique_device(payload.hostname, payload.host, payload.port)
@@ -92,6 +96,10 @@ class DeviceService:
         )
         self._repository.save(updated)
         return updated
+
+    # =============================================================================
+    # Xác minh tính duy nhất của Device
+    # =============================================================================
 
     def _ensure_unique_device(
         self,

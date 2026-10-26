@@ -12,6 +12,10 @@ class NetworkService:
     def __init__(self, provider: DeviceConnectionProvider) -> None:
         self._provider = provider
 
+    # =============================================================================
+    # Network — tra cứu, chuẩn bị và kết nối thiết bị
+    # =============================================================================
+
     def get_device(self, device_identifier: str) -> DeviceConfig | None:
         return self._provider.get_device_config(device_identifier)
 

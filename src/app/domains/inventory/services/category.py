@@ -10,6 +10,10 @@ class CategoryService:
     def __init__(self, repository: CategoryRepositoryProtocol) -> None:
         self._repository = repository
 
+    # =============================================================================
+    # Category — lấy danh mục loại thiết bị
+    # =============================================================================
+
     def list_categories(self) -> list[Category]:
         """Lấy danh sách Category có thể dùng khi khai báo Device."""
 

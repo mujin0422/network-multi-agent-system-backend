@@ -9,8 +9,18 @@ from app.domains.conversation.utils import fallback_conversation_title
 from app.domains.conversation.utils import normalize_conversation_title
 
 
+# =============================================================================
+# Title — contract sinh tiêu đề hội thoại
+# =============================================================================
+
+
 class ConversationTitleGeneratorProtocol(Protocol):
     async def generate(self, first_message: str) -> str: ...
+
+
+# =============================================================================
+# Title — sinh tiêu đề bằng LLM và dùng tiêu đề dự phòng khi cần
+# =============================================================================
 
 
 class ConversationTitleGenerator:
