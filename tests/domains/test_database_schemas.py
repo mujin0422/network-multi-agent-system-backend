@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import BaseModel
 
+from app.domains.audit.schemas import AuditLog
 from app.domains.conversation.schemas import Conversation, Message
 from app.domains.evaluation.schemas import TaskEvaluation
 from app.domains.execution.schemas import (
@@ -278,6 +279,25 @@ SCHEMA_FIELDS: list[tuple[type[BaseModel], set[str]]] = [
             "evaluator_version",
             "created_at",
             "evaluated_at",
+        },
+    ),
+    (
+        AuditLog,
+        {
+            "id",
+            "actor_user_id",
+            "actor_display_name",
+            "actor_type",
+            "action",
+            "resource_type",
+            "resource_id",
+            "event_status",
+            "summary",
+            "event_data",
+            "request_id",
+            "source_ip",
+            "user_agent",
+            "occurred_at",
         },
     ),
 ]

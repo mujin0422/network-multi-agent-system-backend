@@ -10,6 +10,7 @@
 - Theo dõi yêu cầu của người dùng gửi tới AI Agent.
 - Theo dõi quá trình Agent thực thi.
 - Lưu lịch sử thao tác trên thiết bị.
+- Lưu nhật ký audit cho các hành động quản trị và nghiệp vụ quan trọng.
 - Lưu lịch sử hội thoại Chat UI.
 
 **_Nguyên tắc:_**
@@ -2620,4 +2621,90 @@ Không lưu Password, Secret, Token hoặc Credential đã giải mã vào expec
 
 Không ghi đè Evaluation đã hoàn tất chỉ để thay đổi điểm benchmark.
 Nếu cần chấm lại nhiều lần hoặc lưu nhiều phiên bản Evaluator, phải mở rộng ràng buộc UNIQUE(task_id) hoặc tạo Evaluation Run riêng.
+```
+
+## 2.6 GROUP 6: SYSTEM AUDIT
+
+Nhóm này lưu vết các hành động quản trị và sự kiện nghiệp vụ quan trọng xảy ra
+trong hệ thống. `Audit_Logs` độc lập với `Device_Action_Logs`:
+
+- `Audit_Logs` trả lời ai hoặc thành phần nào đã làm gì với tài nguyên hệ thống.
+- `Device_Action_Logs` là bằng chứng kỹ thuật của command thực sự được gửi xuống
+  thiết bị mạng.
+
+### 2.6.1 Audit_Logs (Nhật ký kiểm toán hệ thống)
+
+**_[1] Ý nghĩa bảng (Description)_**
+
+Lưu nhật ký bất biến của các hành động có ý nghĩa bảo mật hoặc quản trị như đăng
+nhập, thay đổi người dùng, cập nhật quyền, phê duyệt cấu hình và thay đổi tài
+nguyên. Bảng hỗ trợ truy vết actor, tài nguyên bị tác động, kết quả và request
+liên quan mà không lưu password, token, secret hoặc credential đã giải mã.
+
+**_[2] Trường dữ liệu (Fields)_**
+
+| Field              | Type       | Nullable | Meaning |
+| ------------------ | ---------- | -------- | ------- |
+| id                 | UUID PK    | No       | Mã định danh duy nhất của audit log. |
+| actor_user_id      | varchar FK | Yes      | User thực hiện hành động; NULL với SYSTEM hoặc AGENT. |
+| actor_display_name | varchar    | Yes      | Tên actor tại thời điểm ghi log để bảo toàn lịch sử hiển thị. |
+| actor_type         | enum       | No       | Loại actor: USER, SYSTEM hoặc AGENT. |
+| action             | varchar    | No       | Mã hành động ổn định, ví dụ `ROLE_UPDATED`. |
+| resource_type      | varchar    | No       | Loại tài nguyên bị tác động, ví dụ `ROLE`, `USER`, `APPROVAL`. |
+| resource_id        | varchar    | Yes      | ID tài nguyên cụ thể; NULL với sự kiện không gắn một tài nguyên. |
+| event_status       | enum       | No       | Kết quả hành động: SUCCESS, FAILED hoặc DENIED. |
+| summary            | text       | Yes      | Mô tả ngắn, không chứa dữ liệu nhạy cảm. |
+| event_data         | JSONB      | No       | Metadata có cấu trúc đã được loại bỏ password, token và secret. |
+| request_id         | UUID       | Yes      | Correlation ID dùng truy vết request xuyên suốt hệ thống. |
+| source_ip          | varchar    | Yes      | Địa chỉ IP nguồn; hỗ trợ cả IPv4 và IPv6. |
+| user_agent         | text       | Yes      | User-Agent của client nếu sự kiện phát sinh từ HTTP request. |
+| occurred_at        | timestamp  | No       | Thời điểm sự kiện xảy ra theo UTC. |
+
+**_[3] Ràng buộc (Constraints)_**
+
+| Type      | Applicable to                         | Description |
+| --------- | ------------------------------------- | ----------- |
+| **PK**    | `id`                                  | UUID duy nhất, sinh bởi Backend. |
+| **FK**    | `actor_user_id`                       | Tham chiếu `Users(id)`, `ON DELETE SET NULL`. |
+| **CHECK** | `actor_type`, `actor_user_id`         | USER phải có `actor_user_id`; SYSTEM và AGENT không bắt buộc. |
+| **CHECK** | `action`, `resource_type`             | Không được rỗng sau khi loại khoảng trắng. |
+| **CHECK** | `event_data`                          | Phải là JSON object. |
+| **INDEX** | (`occurred_at`)                       | Truy vấn log mới nhất trước. |
+| **INDEX** | (`actor_user_id`, `occurred_at`)      | Tra cứu hoạt động của một user. |
+| **INDEX** | (`resource_type`, `resource_id`, `occurred_at`) | Truy vết lịch sử của tài nguyên. |
+| **INDEX** | (`action`, `event_status`, `occurred_at`) | Lọc theo hành động và kết quả. |
+| **INDEX** | `request_id`                          | Correlate audit log với request hoặc log ứng dụng. |
+
+**_[4] Quy tắc nghiệp vụ (Business Rules)_**
+
+[4.1] Tính bất biến
+
+```
+Audit_Log chỉ được INSERT trong luồng nghiệp vụ thông thường.
+Không cung cấp API UPDATE hoặc DELETE cho audit log.
+Việc lưu trữ, archive hoặc xóa theo retention policy phải là quy trình quản trị riêng.
+```
+
+[4.2] Danh tính actor
+
+```
+actor_user_id phải được lấy từ identity đã xác thực, không nhận tùy ý từ request body.
+actor_display_name là snapshot phục vụ hiển thị và không thay thế foreign key actor_user_id.
+Sự kiện nội bộ dùng actor_type SYSTEM hoặc AGENT và có thể không có actor_user_id.
+```
+
+[4.3] Bảo vệ dữ liệu nhạy cảm
+
+```
+Không ghi password, password_hash, access token, refresh token, secret,
+credential đã giải mã hoặc toàn bộ Authorization header vào summary hay event_data.
+Chỉ ghi ID, loại tài nguyên và metadata tối thiểu cần thiết để điều tra sự kiện.
+```
+
+[4.4] Phạm vi API
+
+```
+API Audit Log chỉ hỗ trợ tra cứu danh sách và chi tiết theo ID.
+Mọi endpoint phải yêu cầu quyền Audit Log + View.
+Việc tạo audit log được thực hiện nội bộ bởi service của các use case nghiệp vụ.
 ```

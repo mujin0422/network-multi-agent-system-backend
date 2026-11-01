@@ -27,6 +27,8 @@ class PlanningOrchestrator:
         device_service: DeviceService,
         gns3_provider: GNS3Provider | None = None,
     ) -> None:
+        """Khởi tạo các agent và domain service phục vụ giai đoạn lập kế hoạch."""
+
         # Planner chỉ lập kế hoạch bằng LLM. Hai domain service chịu trách nhiệm
         # đọc/ghi dữ liệu nghiệp vụ; Orchestrator không truy cập repository trực tiếp.
         self._planner = planner

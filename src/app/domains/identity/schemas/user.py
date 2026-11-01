@@ -6,6 +6,19 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+MAX_BCRYPT_PASSWORD_BYTES = 72
+
+
+def validate_bcrypt_password(value: str | None) -> str | None:
+    """Reject values bcrypt cannot process without silently truncating them."""
+
+    if value is not None and len(value.encode("utf-8")) > MAX_BCRYPT_PASSWORD_BYTES:
+        raise ValueError(
+            f"Mật khẩu không được vượt quá {MAX_BCRYPT_PASSWORD_BYTES} byte UTF-8"
+        )
+    return value
+
+
 class UserStatus(StrEnum):
     """Trạng thái hoạt động của tài khoản người dùng."""
 
@@ -39,6 +52,8 @@ class UserCreate(BaseModel):
     def normalize_email(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
+    _validate_password = field_validator("password")(validate_bcrypt_password)
+
 
 class UserUpdate(BaseModel):
     """Các trường được phép sửa của tài khoản."""
@@ -65,6 +80,8 @@ class UserUpdate(BaseModel):
     @classmethod
     def normalize_email(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    _validate_password = field_validator("password")(validate_bcrypt_password)
 
 
 class User(BaseModel):

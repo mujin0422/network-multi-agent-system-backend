@@ -47,6 +47,7 @@ def test_seed_contains_one_admin_and_no_runtime_group_data() -> None:
         "task_activity_events",
         "operation_device_approvals",
         "task_evaluations",
+        "audit_logs",
     )
     for table in runtime_tables:
         assert not re.search(rf"INSERT\s+INTO\s+{table}\b", seed, re.IGNORECASE)

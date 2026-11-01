@@ -27,6 +27,8 @@ class AnalysisOrchestrator:
         conversation_service: ConversationService,
         device_service: DeviceService,
     ) -> None:
+        """Khởi tạo Analyst Agent và các service lưu kết quả phân tích."""
+
         self._analyst = analyst
         self._execution_service = execution_service
         self._conversation_service = conversation_service
@@ -37,6 +39,8 @@ class AnalysisOrchestrator:
         task: TaskDetail,
         execution_results: list[NetworkExecutionResult],
     ) -> Message | None:
+        """Phân tích kết quả thực thi, lưu timeline và tạo phản hồi cuối."""
+
         current_task = self._execution_service.get_task(task.id)
         if current_task.task_status == TaskStatus.RUNNING:
             return self._save_waiting_response(current_task)
@@ -93,7 +97,7 @@ class AnalysisOrchestrator:
         self,
         execution_results: list[NetworkExecutionResult],
     ) -> list[dict]:
-        """Expose readable hostnames to the LLM instead of internal IDs."""
+        """Chuyển kết quả sang dữ liệu có hostname dễ đọc trước khi gọi LLM."""
 
         hostnames = {
             device.id: device.hostname
@@ -114,6 +118,8 @@ class AnalysisOrchestrator:
 
     @staticmethod
     def _build_fallback_analysis(analysis_inputs: list[dict]) -> AnalysisResult:
+        """Tạo phân tích an toàn khi Analyst Agent trả dữ liệu không hợp lệ."""
+
         findings: list[str] = []
         for item in analysis_inputs[:4]:
             device = str(item.get("device") or "Thiết bị không xác định")
@@ -146,6 +152,8 @@ class AnalysisOrchestrator:
         )
 
     def _save_waiting_response(self, task: TaskDetail) -> Message:
+        """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
+
         return self._conversation_service.add_message(
             task.conversation_id,
             MessageCreate(
@@ -158,6 +166,8 @@ class AnalysisOrchestrator:
 
     @staticmethod
     def _format_analysis(analysis: AnalysisResult) -> str:
+        """Định dạng AnalysisResult thành nội dung tiếng Việt dễ đọc."""
+
         sections = [f"Tóm tắt\n{analysis.summary.strip()}"]
         for title, values in (
             ("Phát hiện chính", analysis.findings),
