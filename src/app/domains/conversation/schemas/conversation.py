@@ -16,6 +16,10 @@ class ConversationStart(BaseModel):
         min_length=1,
         description="Nội dung USER_REQUEST đầu tiên của conversation mới.",
     )
+    benchmark_run_id: str | None = Field(
+        default=None,
+        description="Benchmark run file-based cần gắn với message đầu tiên.",
+    )
 
 
 class Conversation(BaseModel):
