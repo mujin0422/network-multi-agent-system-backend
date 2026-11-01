@@ -17,8 +17,10 @@ from app.core.utils import IdPrefix, generate_id, generate_uuid
 from app.domains.identity.repositories import IdentityRepositoryProtocol
 from app.domains.identity.schemas import (
     AccessTokenPayload,
+    PermissionCatalog,
     Role,
     RoleCreate,
+    RolePermission,
     RoleUpdate,
     TokenResponse,
     User,
@@ -295,3 +297,42 @@ class RoleService:
         existing = self._repository.get_role_by_name(name)
         if existing is not None and existing.id != exclude_role_id:
             raise ResourceConflictError(f"Tên role '{name}' đã được sử dụng")
+
+
+class AccessControlService:
+    """Đọc catalog và thay thế ma trận quyền của từng role."""
+
+    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
+        self._repository = repository
+
+    def get_catalog(self) -> PermissionCatalog:
+        return PermissionCatalog(
+            functions=self._repository.list_management_functions(),
+            actions=self._repository.list_actions(),
+            permissions=self._repository.list_permission_catalog(),
+        )
+
+    def list_role_permissions(self, role_id: str) -> list[RolePermission]:
+        self._require_role(role_id, require_mutable=False)
+        return self._repository.list_role_permissions(role_id)
+
+    def replace_role_permissions(
+        self, role_id: str, permission_ids: list[str]
+    ) -> list[RolePermission]:
+        self._require_role(role_id, require_mutable=True)
+        requested = set(permission_ids)
+        valid = {item.id for item in self._repository.list_permission_catalog()}
+        unknown = sorted(requested - valid)
+        if unknown:
+            raise ResourceNotFoundError(
+                f"Không tìm thấy permission: {', '.join(unknown)}"
+            )
+        return self._repository.replace_role_permissions(role_id, requested)
+
+    def _require_role(self, role_id: str, *, require_mutable: bool) -> Role:
+        role = self._repository.get_role(role_id)
+        if role is None:
+            raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
+        if require_mutable and role.name.casefold() == "super admin":
+            raise ResourceConflictError("Không thể sửa quyền của Super Admin")
+        return role

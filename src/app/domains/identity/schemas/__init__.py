@@ -8,7 +8,12 @@ from app.domains.identity.schemas.auth import (
     TokenResponse,
 )
 from app.domains.identity.schemas.management_function import ManagementFunction
-from app.domains.identity.schemas.permission import Permission, RolePermission
+from app.domains.identity.schemas.permission import (
+    Permission,
+    PermissionCatalog,
+    RolePermission,
+    RolePermissionsUpdate,
+)
 from app.domains.identity.schemas.role import Role, RoleCreate, RoleUpdate
 from app.domains.identity.schemas.user import (
     User,
@@ -27,9 +32,11 @@ __all__ = [
     "TokenResponse",
     "ManagementFunction",
     "Permission",
+    "PermissionCatalog",
     "Role",
     "RoleCreate",
     "RolePermission",
+    "RolePermissionsUpdate",
     "RoleUpdate",
     "User",
     "UserCreate",
