@@ -304,7 +304,7 @@ def test_write_mapping_runs_only_when_snapshot_and_hash_match() -> None:
     )
 
 
-def test_resume_after_approval_continues_the_parent_task() -> None:
+def test_load_task_after_approval_restores_the_parent_task() -> None:
     task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
     operation = task.operations[0]
     service = StubExecutionService(task.operations)
@@ -335,10 +335,11 @@ def test_resume_after_approval_continues_the_parent_task() -> None:
     )
     agent = StubNetworkAgent()
 
-    results = asyncio.run(
-        ExecutionOrchestrator(service, agent).resume_after_approval(mapping.id)
-    )
+    orchestrator = ExecutionOrchestrator(service, agent)
+    restored_task = orchestrator.load_task_for_operation_device(mapping.id)
+    results = asyncio.run(orchestrator.execute_task(restored_task))
 
+    assert restored_task.id == task.id
     assert len(results) == 1
     assert agent.calls == [operation.id]
     assert service.tasks[-1].task_status == TaskStatus.SUCCESS

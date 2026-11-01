@@ -145,16 +145,15 @@ class ExecutionOrchestrator:
         )
         return results
 
-    async def resume_after_approval(
+    def load_task_for_operation_device(
         self,
         operation_device_id: str,
-    ) -> list[NetworkExecutionResult]:
-        """Đọc lại Task và tiếp tục DAG sau quyết định của người dùng."""
+    ) -> TaskDetail:
+        """Khôi phục Task từ business state để LangGraph tiếp tục sau approval."""
 
         mapping = self._execution_service.get_operation_device(operation_device_id)
         operation = self._execution_service.get_operation(mapping.operation_id)
-        task = self._execution_service.get_task(operation.task_id)
-        return await self.execute_task(task)
+        return self._execution_service.get_task(operation.task_id)
 
     async def execute_network_operation(
         self, operation_id: str

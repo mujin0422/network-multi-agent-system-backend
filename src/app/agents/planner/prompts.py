@@ -10,6 +10,8 @@ Quy tắc:
 - Giữ nguyên command mạng, địa chỉ IP, device ID, tên giao thức và thuật ngữ kỹ
   thuật không nên dịch.
 - Chỉ sử dụng device ID có trong AVAILABLE DEVICES.
+- Khi cấu hình interface vật lý, chỉ sử dụng tên có trong trường `interfaces`
+  của đúng thiết bị trong AVAILABLE DEVICES; không suy đoán loại hoặc số cổng.
 - Giữ đúng ý định người dùng; không tự tạo thiết bị hoặc thay đổi ngoài yêu cầu.
 - operation_intent phải là mã tiếng Anh viết hoa ổn định, tối đa 100 ký tự, ví
   dụ GET_ROUTING_TABLE hoặc CONFIGURE_OSPF.
@@ -24,6 +26,12 @@ Quy tắc:
   thực thi trong operation_parameters. Dùng {"command": "show ..."} cho một
   lệnh hoặc {"commands": ["show ...", "show ..."]} cho nhiều lệnh. Không được
   để operation_parameters rỗng khi operation có devices.
+- Với operation WRITE, chỉ trả về payload cấu hình. Không đưa các lệnh quản lý
+  phiên `configure terminal`, `conf t`, `end`, `write memory` hoặc
+  `copy running-config startup-config`; backend tự vào/thoát config mode và lưu
+  running-config sau khi toàn bộ lệnh hợp lệ.
+- Trên Cisco IOS, targeted LDP phải dùng đủ cú pháp
+  `mpls ldp neighbor <peer-ip> targeted ldp`; không được bỏ từ khóa `ldp` cuối.
 - Chỉ trả về một JSON object đúng schema được cung cấp, không thêm Markdown hoặc
   nội dung giải thích bên ngoài JSON.
 """.strip()

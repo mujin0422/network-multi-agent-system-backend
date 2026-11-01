@@ -8,6 +8,7 @@ from app.agents.analyst import AnalystAgent
 from app.agents.network import NetworkAgent
 from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator, PlanningOrchestrator
 from app.agents.planner import PlannerAgent
+from app.agents.workflow import NetworkAutomationWorkflow
 from app.core.config import get_settings
 from app.domains.execution.repositories import ExecutionRepository
 from app.domains.execution.services import ExecutionService
@@ -90,31 +91,6 @@ def _build_analyst_agent() -> AnalystAgent:
 
 
 @lru_cache
-def _build_planning_orchestrator() -> PlanningOrchestrator:
-    """Lắp toàn bộ dependency cho luồng USER message -> execution plan."""
-
-    # Bước 1: Lấy cấu hình database dùng để lắp các domain service.
-    settings = get_settings()
-
-    # Bước 2: Domain service được lắp với PostgreSQL adapter tương ứng.
-    execution_service = ExecutionService(ExecutionRepository(settings.database_url))
-    device_service = DeviceService(DeviceRepository(settings.database_url))
-
-    # Bước 3: Dùng lại Planner Agent đã được cache. Orchestrator nhận tất cả thành phần qua constructor để có thể thay bằng stub trong unit test.
-    return PlanningOrchestrator(
-        _build_planner_agent(),
-        execution_service,
-        device_service,
-    )
-
-
-async def get_planning_orchestrator() -> PlanningOrchestrator:
-    """FastAPI dependency cung cấp PlanningOrchestrator đã được cache."""
-
-    return _build_planning_orchestrator()
-
-
-@lru_cache
 def _build_network_agent() -> NetworkAgent:
     """Lắp Network Agent với backend Netmiko hoặc Nornir theo cấu hình."""
 
@@ -131,9 +107,18 @@ def _build_network_agent() -> NetworkAgent:
     # Bước 3: Cả hai backend cùng tuân theo NetworkTool contract. Vì vậy NetworkAgent không cần biết đang chạy trực tiếp bằng Netmiko hay qua Nornir.
     tool: NetworkTool
     if settings.network_backend == "nornir":
-        tool = NornirNetworkTool(network_service, settings.nornir_num_workers)
+        tool = NornirNetworkTool(
+            network_service,
+            settings.nornir_num_workers,
+            settings.netmiko_read_timeout,
+            settings.netmiko_cmd_verify,
+        )
     else:
-        tool = NetmikoNetworkTool(network_service)
+        tool = NetmikoNetworkTool(
+            network_service,
+            settings.netmiko_read_timeout,
+            settings.netmiko_cmd_verify,
+        )
     # Bước 4: Inject backend đã chọn vào execution-only Network Agent.
     return NetworkAgent(tool)
 
@@ -145,38 +130,38 @@ async def get_network_agent() -> NetworkAgent:
 
 
 @lru_cache
-def _build_execution_orchestrator() -> ExecutionOrchestrator:
-    """Lắp luồng Operation -> NetworkAgent -> thiết bị mạng."""
+def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
+    """Compose and compile the single LangGraph-owned AI workflow."""
 
-    # Execution Orchestrator dùng domain service để đọc kế hoạch và dùng lại
-    # singleton NetworkAgent đã được cấu hình backend ở trên.
     settings = get_settings()
     execution_service = ExecutionService(ExecutionRepository(settings.database_url))
-    return ExecutionOrchestrator(execution_service, _build_network_agent())
-
-
-async def get_execution_orchestrator() -> ExecutionOrchestrator:
-    """FastAPI dependency cung cấp ExecutionOrchestrator đã được cache."""
-
-    return _build_execution_orchestrator()
-
-
-@lru_cache
-def _build_analysis_orchestrator() -> AnalysisOrchestrator:
-    """Lắp Analyst với Execution và Conversation domain services."""
-
-    settings = get_settings()
-    return AnalysisOrchestrator(
+    conversation_service = ConversationService(
+        ConversationRepository(settings.database_url),
+        MessageRepository(settings.database_url),
+    )
+    device_service = DeviceService(DeviceRepository(settings.database_url))
+    planning = PlanningOrchestrator(
+        _build_planner_agent(),
+        execution_service,
+        device_service,
+        _build_gns3_provider(),
+    )
+    execution = ExecutionOrchestrator(execution_service, _build_network_agent())
+    analysis = AnalysisOrchestrator(
         _build_analyst_agent(),
-        ExecutionService(ExecutionRepository(settings.database_url)),
-        ConversationService(
-            ConversationRepository(settings.database_url),
-            MessageRepository(settings.database_url),
-        ),
+        execution_service,
+        conversation_service,
+        device_service,
+    )
+    return NetworkAutomationWorkflow(
+        _build_gns3_provider(),
+        planning,
+        execution,
+        analysis,
     )
 
 
-async def get_analysis_orchestrator() -> AnalysisOrchestrator:
-    """FastAPI dependency cung cấp AnalysisOrchestrator đã được cache."""
+async def get_network_automation_workflow() -> NetworkAutomationWorkflow:
+    """FastAPI dependency exposing the compiled LangGraph workflow."""
 
-    return _build_analysis_orchestrator()
+    return _build_network_automation_workflow()

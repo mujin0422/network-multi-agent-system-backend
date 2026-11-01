@@ -14,6 +14,7 @@ from app.domains.execution.schemas import (
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.inventory.services import DeviceService
+from app.domains.inventory.providers import GNS3Provider
 
 
 class PlanningOrchestrator:
@@ -24,12 +25,14 @@ class PlanningOrchestrator:
         planner: PlannerAgent,
         execution_service: ExecutionService,
         device_service: DeviceService,
+        gns3_provider: GNS3Provider | None = None,
     ) -> None:
         # Planner chỉ lập kế hoạch bằng LLM. Hai domain service chịu trách nhiệm
         # đọc/ghi dữ liệu nghiệp vụ; Orchestrator không truy cập repository trực tiếp.
         self._planner = planner
         self._execution_service = execution_service
         self._device_service = device_service
+        self._gns3_provider = gns3_provider
 
     async def plan_user_message(
         self,
@@ -86,7 +89,16 @@ class PlanningOrchestrator:
         # Bước 4: Planner dùng LLM để chuyển câu tiếng Việt thành PlannedTask,
         # gồm operations, dependencies và danh sách device của từng operation.
         try:
-            plan = await self._planner.plan(message.message, devices)
+            node_interfaces = (
+                self._gns3_provider.list_node_interfaces()
+                if self._gns3_provider is not None
+                else {}
+            )
+            plan = await self._planner.plan(
+                message.message,
+                devices,
+                node_interfaces=node_interfaces,
+            )
         except Exception as exc:
             self._execution_service.update_task(
                 task.model_copy(

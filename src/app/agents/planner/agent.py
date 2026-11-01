@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from app.agents.planner.prompts import PLANNER_SYSTEM_PROMPT
 from app.domains.execution.schemas import ExecutionPlanCreate
 from app.domains.inventory.schemas import Device
+from app.tools.network.commands import normalize_config_commands
 
 
 class PlannerAgent:
@@ -27,9 +29,11 @@ class PlannerAgent:
         self,
         user_message: str,
         devices: list[Device],
+        node_interfaces: dict[str, list[str]] | None = None,
     ) -> ExecutionPlanCreate:
         """Tạo DAG operation chỉ với những device có trong inventory."""
 
+        node_interfaces = node_interfaces or {}
         inventory = [
             {
                 "id": device.id,
@@ -38,6 +42,7 @@ class PlannerAgent:
                 "category_id": device.category_id,
                 "device_type": device.device_type,
                 "location": device.location,
+                "interfaces": node_interfaces.get(device.hostname, []),
             }
             for device in devices
         ]
@@ -59,7 +64,15 @@ class PlannerAgent:
                 for retry_number in range(self.max_validation_retries + 1):
                     result = await self._planner.ainvoke(messages)
                     try:
-                        return self._parse_plan(result)
+                        plan = self._parse_plan(result)
+                        self._validate_interface_commands(
+                            plan,
+                            {
+                                device.id: node_interfaces.get(device.hostname, [])
+                                for device in devices
+                            },
+                        )
+                        return plan
                     except ValueError as exc:
                         if retry_number == self.max_validation_retries:
                             raise
@@ -100,7 +113,8 @@ class PlannerAgent:
         try:
             content = getattr(result, "content", result)
             if isinstance(content, dict):
-                return ExecutionPlanCreate.model_validate(content)
+                plan = ExecutionPlanCreate.model_validate(content)
+                return PlannerAgent._normalize_write_commands(plan)
             if not isinstance(content, str):
                 raise ValueError("Planner Agent không trả về nội dung JSON dạng text")
 
@@ -109,8 +123,62 @@ class PlannerAgent:
                 lines = raw_json.splitlines()
                 raw_json = "\n".join(lines[1:-1]).strip()
 
-            return ExecutionPlanCreate.model_validate_json(raw_json)
+            plan = ExecutionPlanCreate.model_validate_json(raw_json)
+            return PlannerAgent._normalize_write_commands(plan)
         except (ValidationError, ValueError) as exc:
             raise ValueError(
                 "Planner Agent trả về JSON không đúng ExecutionPlanCreate"
             ) from exc
+
+    @staticmethod
+    def _normalize_write_commands(plan: ExecutionPlanCreate) -> ExecutionPlanCreate:
+        """Lưu đúng payload sẽ được Netmiko thực thi vào approval snapshot."""
+
+        normalized_operations = []
+        for operation in plan.operations:
+            if not any(device.access_mode.value == "WRITE" for device in operation.devices):
+                normalized_operations.append(operation)
+                continue
+
+            parameters = dict(operation.operation_parameters)
+            raw_commands = parameters.pop("commands", parameters.pop("command", None))
+            commands = [raw_commands] if isinstance(raw_commands, str) else raw_commands
+            if not isinstance(commands, list):
+                raise ValueError("Operation WRITE không chứa danh sách command hợp lệ")
+            parameters["commands"] = normalize_config_commands(commands)
+            normalized_operations.append(
+                operation.model_copy(update={"operation_parameters": parameters})
+            )
+        return plan.model_copy(update={"operations": normalized_operations})
+
+    @staticmethod
+    def _validate_interface_commands(
+        plan: ExecutionPlanCreate,
+        interfaces_by_device_id: dict[str, list[str]],
+    ) -> None:
+        """Không cho phép WRITE dùng tên interface vật lý không có trong GNS3."""
+
+        physical_interface = re.compile(
+            r"^interface\s+((?:Fast|Gigabit|TenGigabit|TwentyFiveGigabit|FortyGigabit|HundredGigabit)?Ethernet\S+)$",
+            flags=re.IGNORECASE,
+        )
+        for operation in plan.operations:
+            write_devices = [
+                device for device in operation.devices if device.access_mode.value == "WRITE"
+            ]
+            if not write_devices:
+                continue
+            commands = operation.operation_parameters.get("commands", [])
+            for command in commands:
+                match = physical_interface.fullmatch(command.strip())
+                if match is None:
+                    continue
+                interface_name = match.group(1).split(".", maxsplit=1)[0]
+                for device in write_devices:
+                    available = interfaces_by_device_id.get(device.device_id, [])
+                    if available and interface_name not in available:
+                        raise ValueError(
+                            f"Interface '{interface_name}' không tồn tại trên "
+                            f"device '{device.device_id}'. Interface hợp lệ: "
+                            f"{', '.join(available)}"
+                        )
