@@ -17,16 +17,16 @@ credential của **thiết bị mạng**, độc lập với tài khoản đăng
 
 ## Thành phần tham gia
 
-| Thành phần | Trách nhiệm |
-| --- | --- |
-| `ExecutionOrchestrator` | Đọc Operation/mapping, quản lý trạng thái và ghi audit |
-| `NetworkAgent` | Kiểm tra input và gọi `NetworkTool` |
-| `NetmikoNetworkTool` | Kết nối trực tiếp, gửi command và đóng kết nối |
-| `NornirNetworkTool` | Tạo inventory tạm trong memory và chạy `nornir-netmiko` |
-| `NetworkService` | Public service che giấu provider kết nối khỏi Agent/Tool |
-| `DeviceConnectionProvider` | Chuẩn bị tham số và mở kết nối Netmiko |
-| `DeviceConfigRepository` | Đọc Device, join Credential và giải mã bằng pgcrypto |
-| PostgreSQL | Lưu metadata Device và ciphertext Credential |
+| Thành phần                 | Trách nhiệm                                              |
+| -------------------------- | -------------------------------------------------------- |
+| `ExecutionOrchestrator`    | Đọc Operation/mapping, quản lý trạng thái và ghi audit   |
+| `NetworkAgent`             | Kiểm tra input và gọi `NetworkTool`                      |
+| `NetmikoNetworkTool`       | Kết nối trực tiếp, gửi command và đóng kết nối           |
+| `NornirNetworkTool`        | Tạo inventory tạm trong memory và chạy `nornir-netmiko`  |
+| `NetworkService`           | Public service che giấu provider kết nối khỏi Agent/Tool |
+| `DeviceConnectionProvider` | Chuẩn bị tham số và mở kết nối Netmiko                   |
+| `DeviceConfigRepository`   | Đọc Device, join Credential và giải mã bằng pgcrypto     |
+| PostgreSQL                 | Lưu metadata Device và ciphertext Credential             |
 
 ## Luồng lưu credential
 
@@ -192,7 +192,7 @@ Ngoài kiểm tra trạng thái, Orchestrator đối chiếu `request_hash` và
 dùng đã phê duyệt. Hash là SHA-256 của UTF-8 canonical JSON sau:
 
 ```json
-{"commands":["command 1","command 2"],"operation_device_id":"opdv-..."}
+{ "commands": ["command 1", "command 2"], "operation_device_id": "opdv-..." }
 ```
 
 Canonical JSON sắp xếp key, không có whitespace thừa và giữ nguyên thứ tự
@@ -222,4 +222,3 @@ snapshot hoặc hash không khớp, mapping chuyển `FAILED` với lỗi an to�
 - `src/app/domains/execution/utils/approval.py`: canonical hash cho Approval.
 - `src/app/tools/network/backends/netmiko.py`: backend Netmiko.
 - `src/app/tools/network/backends/nornir.py`: backend Nornir.
-
