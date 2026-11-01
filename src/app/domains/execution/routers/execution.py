@@ -9,6 +9,7 @@ from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 
 from app.domains.execution.schemas import (
+    DeviceActionLog,
     Operation,
     ActivityActorType,
     ActivityEventType,
@@ -27,6 +28,18 @@ from app.domains.execution.routers.dependencies import get_execution_service
 router = APIRouter()
 operations_router = APIRouter()
 approvals_router = APIRouter()
+audit_logs_router = APIRouter()
+
+
+@audit_logs_router.get("/", response_model=list[DeviceActionLog])
+async def list_device_action_logs(
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> list[DeviceActionLog]:
+    """Trả nhật ký command bất biến, mới nhất trước."""
+
+    return service.list_device_action_logs(limit)
 
 
 async def _resume_approved_workflow(
