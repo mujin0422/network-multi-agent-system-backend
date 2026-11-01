@@ -60,11 +60,21 @@ class ExecutionRepositoryProtocol(
         operations: list[Operation],
         dependencies: list[OperationDependency],
         operation_devices: list[TaskOperationDevice],
-    ) -> None: ...
-    def list_dependencies(self, operation_id: str) -> list[OperationDependency]: ...
-    def save_task_execution(self, execution: TaskExecution) -> None: ...
-    def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None: ...
-    def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]: ...
+    ) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_execution_plan."""
+        ...
+    def get_dependencies_by_operation_id(self, operation_id: str) -> list[OperationDependency]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_dependencies_by_operation_id."""
+        ...
+    def save_task_execution(self, execution: TaskExecution) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_execution."""
+        ...
+    def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_device_action_logs."""
+        ...
+    def get_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_device_action_logs."""
+        ...
 
 
 class ExecutionRepository:
@@ -73,6 +83,7 @@ class ExecutionRepository:
     def __init__(self, database_url: str) -> None:
         # Các repository con sở hữu query của đúng bảng. Facade chỉ chuyển tiếp
         # thao tác đơn bảng và mở transaction cho use case ghi nhiều bảng.
+        """Khởi tạo ExecutionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._tasks = TaskRepository(database_url)
         self._operations = OperationRepository(database_url)
@@ -90,98 +101,111 @@ class ExecutionRepository:
 
         self._tasks.save_task(task)
 
-    def get_task(self, task_id: str) -> Task | None:
+    def get_task_by_id(self, task_id: str) -> Task | None:
         """Chuyển truy vấn Task tới TaskRepository."""
 
-        return self._tasks.get_task(task_id)
+        return self._tasks.get_by_id(task_id)
 
-    def list_tasks(self) -> list[Task]:
+    def get_all_tasks(self) -> list[Task]:
         """Chuyển truy vấn danh sách Task tới TaskRepository."""
 
-        return self._tasks.list_tasks()
+        return self._tasks.get_all()
 
-    def find_task_by_source_message(self, message_id: str) -> Task | None:
+    def get_task_by_source_message_id(self, message_id: str) -> Task | None:
         """Chuyển truy vấn source message tới TaskRepository."""
 
-        return self._tasks.find_task_by_source_message(message_id)
+        return self._tasks.get_by_source_message_id(message_id)
 
     def save_operation(self, operation: Operation) -> None:
         """Chuyển thao tác bảng task_operations tới OperationRepository."""
 
         self._operations.save_operation(operation)
 
-    def get_operation(self, operation_id: str) -> Operation | None:
+    def get_operation_by_id(self, operation_id: str) -> Operation | None:
         """Chuyển truy vấn operation tới OperationRepository."""
 
-        return self._operations.get_operation(operation_id)
+        return self._operations.get_by_id(operation_id)
 
-    def list_operations(self, task_id: str) -> list[Operation]:
+    def get_operations_by_task_id(self, task_id: str) -> list[Operation]:
         """Chuyển truy vấn operations của Task tới OperationRepository."""
 
-        return self._operations.list_operations(task_id)
+        return self._operations.get_all_by_task_id(task_id)
 
-    def list_operation_devices(
+    def get_operation_devices_by_operation_id(
         self,
         operation_id: str,
     ) -> list[TaskOperationDevice]:
         """Chuyển truy vấn mapping tới OperationDeviceRepository."""
 
-        return self._operation_devices.list_operation_devices(operation_id)
+        return self._operation_devices.get_all_by_operation_id(operation_id)
 
-    def get_operation_device(
+    def get_operation_device_by_id(
         self,
         operation_device_id: str,
     ) -> TaskOperationDevice | None:
-        return self._operation_devices.get_operation_device(operation_device_id)
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_operation_device_by_id."""
+        return self._operation_devices.get_by_id(operation_device_id)
 
     def save_operation_device(self, mapping: TaskOperationDevice) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device."""
         self._operation_devices.save_operation_device(mapping)
 
-    def list_dependencies(self, operation_id: str) -> list[OperationDependency]:
-        return self._operation_dependencies.list_dependencies(operation_id)
+    def get_dependencies_by_operation_id(self, operation_id: str) -> list[OperationDependency]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_dependencies_by_operation_id."""
+        return self._operation_dependencies.get_all_by_operation_id(operation_id)
 
     def save_task_execution(self, execution: TaskExecution) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_execution."""
         self._task_executions.save(execution)
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_device_action_logs."""
         self._device_action_logs.add_all(logs)
 
-    def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
-        return self._device_action_logs.list_recent(limit)
+    def get_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_device_action_logs."""
+        return self._device_action_logs.get_recent(limit)
 
-    def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]:
-        return self._task_activity_events.list_task_activity_events(task_id)
+    def get_task_activity_events_by_task_id(self, task_id: str) -> list[TaskActivityEvent]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_task_activity_events_by_task_id."""
+        return self._task_activity_events.get_all_by_task_id(task_id)
 
     def save_task_activity_event(self, event: TaskActivityEvent) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_activity_event."""
         self._task_activity_events.save_task_activity_event(event)
 
-    def list_operation_approvals(
+    def get_operation_approvals_by_operation_id(
         self,
         operation_id: str,
     ) -> list[OperationDeviceApproval]:
-        return self._operation_device_approvals.list_operation_approvals(operation_id)
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_operation_approvals_by_operation_id."""
+        return self._operation_device_approvals.get_all_by_operation_id(operation_id)
 
     def save_operation_device_approval(
         self,
         approval: OperationDeviceApproval,
     ) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device_approval."""
         self._operation_device_approvals.save_operation_device_approval(approval)
 
-    def get_operation_approval(
+    def get_operation_approval_by_id(
         self,
         approval_id: str,
     ) -> OperationDeviceApproval | None:
-        return self._operation_device_approvals.get_operation_approval(approval_id)
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_operation_approval_by_id."""
+        return self._operation_device_approvals.get_by_id(approval_id)
 
-    def get_operation_device_approval(
+    def get_approval_by_operation_device_id(
         self,
         operation_device_id: str,
     ) -> OperationDeviceApproval | None:
-        return self._operation_device_approvals.get_operation_device_approval(
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_approval_by_operation_device_id."""
+        return self._operation_device_approvals.get_by_operation_device_id(
             operation_device_id
         )
 
     def expire_operation_approval(self, approval_id: str) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức expire_operation_approval."""
         self._operation_device_approvals.expire_operation_approval(approval_id)
 
     def decide_operation_approval(
@@ -191,6 +215,7 @@ class ExecutionRepository:
         decision: ApprovalDecision,
         decided_at: datetime,
     ) -> OperationDeviceApproval | None:
+        """Xử lý trạng thái nghiệp vụ trong phương thức decide_operation_approval."""
         return self._operation_device_approvals.decide_operation_approval(
             approval_id,
             user_id,

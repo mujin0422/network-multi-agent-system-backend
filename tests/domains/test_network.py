@@ -6,7 +6,7 @@ from app.domains.inventory.schemas import DeviceConfig
 
 
 class StubDeviceConfigRepository:
-    def get(self, device_identifier: str) -> DeviceConfig | None:
+    def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
         if device_identifier != "R1":
             return None
         return DeviceConfig(

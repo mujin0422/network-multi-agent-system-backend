@@ -46,6 +46,7 @@ class IdentityRepository:
     """Chỉ chuyển tiếp; query và transaction thuộc repository từng bảng."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo IdentityRepository cùng các phụ thuộc cần thiết."""
         self._users = UserRepository(database_url)
         self._roles = RoleRepository(database_url)
         self._role_permissions = RolePermissionRepository(database_url)
@@ -56,61 +57,77 @@ class IdentityRepository:
     # =============================================================================
 
     def get_user_by_email(self, email: str) -> UserRecord | None:
-        return self._users.get_user_by_email(email)
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_user_by_email."""
+        return self._users.get_by_email(email)
 
-    def get_user(self, user_id: str) -> User | None:
-        return self._users.get_user(user_id)
+    def get_user_by_id(self, user_id: str) -> User | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_user_by_id."""
+        return self._users.get_by_id(user_id)
 
-    def list_users(self) -> list[User]:
-        return self._users.list_users()
+    def get_all_users(self) -> list[User]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_users."""
+        return self._users.get_all()
 
-    def get_user_with_password(self, user_id: str) -> UserRecord | None:
-        return self._users.get_user_with_password(user_id)
+    def get_user_record_by_id(self, user_id: str) -> UserRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_user_record_by_id."""
+        return self._users.get_record_by_id(user_id)
 
     def save_user(self, user: UserRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         self._users.save_user(user)
 
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
         self._users.update_login(user_id, logged_in_at)
 
     # =============================================================================
     # Role — bảng roles
     # =============================================================================
 
-    def get_role(self, role_id: str) -> Role | None:
-        return self._roles.get_role(role_id)
+    def get_role_by_id(self, role_id: str) -> Role | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_role_by_id."""
+        return self._roles.get_by_id(role_id)
 
-    def list_roles(self) -> list[Role]:
-        return self._roles.list_roles()
+    def get_all_roles(self) -> list[Role]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_roles."""
+        return self._roles.get_all()
 
     def get_role_by_name(self, name: str) -> Role | None:
-        return self._roles.get_role_by_name(name)
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_role_by_name."""
+        return self._roles.get_by_name(name)
 
     def save_role(self, role: Role) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
         self._roles.save_role(role)
 
     # =============================================================================
     # Role Permission — tra cứu quyền được gán cho role
     # =============================================================================
 
-    def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
-        return self._role_permissions.get_permissions(role_id)
+    def get_permissions_by_role_id(self, role_id: str) -> set[tuple[str, str]]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_permissions_by_role_id."""
+        return self._role_permissions.get_by_role_id(role_id)
 
-    def list_actions(self) -> list[Action]:
-        return self._role_permissions.list_actions()
+    def get_all_actions(self) -> list[Action]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_actions."""
+        return self._role_permissions.get_all_actions()
 
-    def list_management_functions(self) -> list[ManagementFunction]:
-        return self._role_permissions.list_management_functions()
+    def get_all_management_functions(self) -> list[ManagementFunction]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_management_functions."""
+        return self._role_permissions.get_all_management_functions()
 
-    def list_permission_catalog(self) -> list[Permission]:
-        return self._role_permissions.list_permission_catalog()
+    def get_all_permissions(self) -> list[Permission]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_permissions."""
+        return self._role_permissions.get_all_permissions()
 
-    def list_role_permissions(self, role_id: str) -> list[RolePermission]:
-        return self._role_permissions.list_role_permissions(role_id)
+    def get_role_permissions_by_role_id(self, role_id: str) -> list[RolePermission]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_role_permissions_by_role_id."""
+        return self._role_permissions.get_all_by_role_id(role_id)
 
     def replace_role_permissions(
         self, role_id: str, permission_ids: set[str]
     ) -> list[RolePermission]:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         return self._role_permissions.replace_role_permissions(role_id, permission_ids)
 
     # =============================================================================
@@ -118,21 +135,27 @@ class IdentityRepository:
     # =============================================================================
 
     def save_session(self, session: UserSessionRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_session."""
         self._user_sessions.save_session(session)
 
-    def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None:
-        return self._user_sessions.get_session_by_hash(token_hash)
+    def get_session_by_token_hash(self, token_hash: str) -> UserSessionRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_session_by_token_hash."""
+        return self._user_sessions.get_by_token_hash(token_hash)
 
     def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức revoke_session."""
         self._user_sessions.revoke_session(session_id, revoked_at)
 
-    def is_session_active(self, session_id: UUID) -> bool:
-        return self._user_sessions.is_session_active(session_id)
+    def get_session_is_active_by_id(self, session_id: UUID) -> bool:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_session_is_active_by_id."""
+        return self._user_sessions.get_is_active_by_id(session_id)
 
-    def get_active_session(self, session_id: UUID) -> UserSessionRecord | None:
-        return self._user_sessions.get_active_session(session_id)
+    def get_active_session_by_id(self, session_id: UUID) -> UserSessionRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_active_session_by_id."""
+        return self._user_sessions.get_active_by_id(session_id)
 
     def rotate_session(
         self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord
     ) -> bool:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức rotate_session."""
         return self._user_sessions.rotate_session(session_id, revoked_at, replacement)

@@ -12,15 +12,22 @@ from app.domains.execution.schemas import Operation
 class OperationRepositoryProtocol(Protocol):
     """Contract persistence của bảng task_operations."""
 
-    def save_operation(self, operation: Operation) -> None: ...
-    def get_operation(self, operation_id: str) -> Operation | None: ...
-    def list_operations(self, task_id: str) -> list[Operation]: ...
+    def save_operation(self, operation: Operation) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation."""
+        ...
+    def get_by_id(self, operation_id: str) -> Operation | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
+    def get_all_by_task_id(self, task_id: str) -> list[Operation]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_task_id."""
+        ...
 
 
 class OperationRepository:
     """Quản lý các operation logic do Planner tạo."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_operation(self, operation: Operation) -> None:
@@ -39,14 +46,14 @@ class OperationRepository:
             model.started_at = operation.started_at
             model.completed_at = operation.completed_at
 
-    def get_operation(self, operation_id: str) -> Operation | None:
+    def get_by_id(self, operation_id: str) -> Operation | None:
         """Lấy operation theo primary key để execution worker sử dụng."""
 
         with self._sessions() as session:
             model = session.get(OperationModel, operation_id)
             return Operation.model_validate(model, from_attributes=True) if model else None
 
-    def list_operations(self, task_id: str) -> list[Operation]:
+    def get_all_by_task_id(self, task_id: str) -> list[Operation]:
         """Lấy operations thuộc Task theo đúng display_order của Planner."""
 
         statement = (

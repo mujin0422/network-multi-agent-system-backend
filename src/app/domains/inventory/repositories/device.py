@@ -14,21 +14,31 @@ from app.domains.inventory.schemas import Device
 class DeviceRepositoryProtocol(Protocol):
     """Cổng persistence tối thiểu mà ``DeviceService`` yêu cầu."""
 
-    def save(self, device: Device) -> None: ...
+    def save(self, device: Device) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
+        ...
 
-    def get(self, device_id: str) -> Device | None: ...
+    def get_by_id(self, device_id: str) -> Device | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
 
-    def get_by_hostname(self, hostname: str) -> Device | None: ...
+    def get_by_hostname(self, hostname: str) -> Device | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_hostname."""
+        ...
 
-    def list(self) -> list[Device]: ...
+    def get_all(self) -> list[Device]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
 
-    def list_page(
+    def get_page(
         self,
         brand_id: str | None,
         category_id: str | None,
         offset: int,
         limit: int,
-    ) -> tuple[list[Device], int]: ...
+    ) -> tuple[list[Device], int]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_page."""
+        ...
 
 
 class DeviceRepository:
@@ -39,6 +49,7 @@ class DeviceRepository:
     """
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo DeviceRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save(self, device: Device) -> None:
@@ -58,7 +69,7 @@ class DeviceRepository:
                 if field not in {"id", "created_at", "created_by"}:
                     setattr(model, field, value)
 
-    def get(self, device_id: str) -> Device | None:
+    def get_by_id(self, device_id: str) -> Device | None:
         """Đọc một thiết bị bằng primary key và validate thành schema Device."""
         with self._sessions() as session:
             model = session.get(DeviceModel, device_id)
@@ -74,7 +85,7 @@ class DeviceRepository:
             model = session.scalar(statement)
             return Device.model_validate(model, from_attributes=True) if model else None
 
-    def list(self) -> list[Device]:
+    def get_all(self) -> list[Device]:
         """Đọc toàn bộ thiết bị từ database."""
 
         statement = select(DeviceModel)
@@ -82,7 +93,7 @@ class DeviceRepository:
             models = session.scalars(statement).all()
             return [Device.model_validate(item, from_attributes=True) for item in models]
 
-    def list_page(
+    def get_page(
         self,
         brand_id: str | None,
         category_id: str | None,

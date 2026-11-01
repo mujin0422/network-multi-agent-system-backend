@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.exceptions.handlers import register_error_handlers
 from app.domains.audit.routers import router as audit_logs_router
+from app.domains.benchmark import router as benchmark_router
 from app.domains.conversation.routers import router as conversation_router
 from app.domains.execution.routers import (
     approvals_router,
@@ -52,6 +53,7 @@ v1_router.include_router(conversation_router, prefix="/conversations", tags=["Co
 v1_router.include_router(inventory_router, prefix="/devices", tags=["Devices"])
 v1_router.include_router(execution_router, prefix="/tasks", tags=["Tasks"])
 v1_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit Logs"])
+v1_router.include_router(benchmark_router, prefix="/benchmarks", tags=["Benchmarks"])
 v1_router.include_router(
     device_action_logs_router,
     prefix="/device-action-logs",

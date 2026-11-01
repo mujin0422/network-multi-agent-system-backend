@@ -22,24 +22,34 @@ class OperationDeviceApprovalRepositoryProtocol(Protocol):
     def save_operation_device_approval(
         self,
         approval: OperationDeviceApproval,
-    ) -> None: ...
+    ) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device_approval."""
+        ...
 
-    def list_operation_approvals(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
-    ) -> list[OperationDeviceApproval]: ...
+    ) -> list[OperationDeviceApproval]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_operation_id."""
+        ...
 
-    def get_operation_approval(
+    def get_by_id(
         self,
         approval_id: str,
-    ) -> OperationDeviceApproval | None: ...
+    ) -> OperationDeviceApproval | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
 
-    def get_operation_device_approval(
+    def get_by_operation_device_id(
         self,
         operation_device_id: str,
-    ) -> OperationDeviceApproval | None: ...
+    ) -> OperationDeviceApproval | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_operation_device_id."""
+        ...
 
-    def expire_operation_approval(self, approval_id: str) -> None: ...
+    def expire_operation_approval(self, approval_id: str) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức expire_operation_approval."""
+        ...
 
     def decide_operation_approval(
         self,
@@ -47,11 +57,14 @@ class OperationDeviceApprovalRepositoryProtocol(Protocol):
         user_id: str,
         decision: ApprovalDecision,
         decided_at: datetime,
-    ) -> OperationDeviceApproval | None: ...
+    ) -> OperationDeviceApproval | None:
+        """Xử lý trạng thái nghiệp vụ trong phương thức decide_operation_approval."""
+        ...
 
 
 class OperationDeviceApprovalRepository:
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationDeviceApprovalRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_operation_device_approval(
@@ -63,7 +76,7 @@ class OperationDeviceApprovalRepository:
         with self._sessions.begin() as session:
             session.add(OperationDeviceApprovalModel(**approval.model_dump()))
 
-    def list_operation_approvals(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
     ) -> list[OperationDeviceApproval]:
@@ -88,10 +101,11 @@ class OperationDeviceApprovalRepository:
                 for model in session.scalars(statement).all()
             ]
 
-    def get_operation_approval(
+    def get_by_id(
         self,
         approval_id: str,
     ) -> OperationDeviceApproval | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(OperationDeviceApprovalModel, approval_id)
             return (
@@ -100,7 +114,7 @@ class OperationDeviceApprovalRepository:
                 else None
             )
 
-    def get_operation_device_approval(
+    def get_by_operation_device_id(
         self,
         operation_device_id: str,
     ) -> OperationDeviceApproval | None:

@@ -12,15 +12,20 @@ from app.domains.conversation.schemas import Message
 class MessageRepositoryProtocol(Protocol):
     """Contract persistence của bảng messages dành cho service."""
 
-    def save(self, message: Message) -> None: ...
+    def save(self, message: Message) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
+        ...
 
-    def list_by_conversation(self, conversation_id: str) -> list[Message]: ...
+    def get_all_by_conversation_id(self, conversation_id: str) -> list[Message]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_conversation_id."""
+        ...
 
 
 class MessageRepository:
     """Đọc và ghi duy nhất bảng messages."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo MessageRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
 
@@ -31,7 +36,7 @@ class MessageRepository:
             session.add(MessageModel(**message.model_dump()))
 
 
-    def list_by_conversation(self, conversation_id: str) -> list[Message]:
+    def get_all_by_conversation_id(self, conversation_id: str) -> list[Message]:
         """Lấy lịch sử message của một conversation theo thứ tự thời gian."""
 
         statement = (

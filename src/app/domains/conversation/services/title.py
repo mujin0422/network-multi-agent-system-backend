@@ -15,7 +15,9 @@ from app.domains.conversation.utils import normalize_conversation_title
 
 
 class ConversationTitleGeneratorProtocol(Protocol):
-    async def generate(self, first_message: str) -> str: ...
+    async def generate(self, first_message: str) -> str:
+        """Sinh dữ liệu theo nghiệp vụ của phương thức generate."""
+        ...
 
 
 # =============================================================================
@@ -27,10 +29,12 @@ class ConversationTitleGenerator:
     """Gọi LLM khi đã cấu hình và luôn có deterministic fallback."""
 
     def __init__(self, chat_model: Any | None, timeout_seconds: float = 10.0) -> None:
+        """Khởi tạo ConversationTitleGenerator cùng các phụ thuộc cần thiết."""
         self._chat_model = chat_model
         self._timeout_seconds = timeout_seconds
 
     async def generate(self, first_message: str) -> str:
+        """Sinh dữ liệu theo nghiệp vụ của phương thức generate."""
         fallback = fallback_conversation_title(first_message)
         if self._chat_model is None:
             return fallback

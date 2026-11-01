@@ -1,4 +1,4 @@
-"""Đối chiếu Pydantic schema với 22 bảng trong tài liệu database."""
+"""Đối chiếu Pydantic record schema với các bảng trong tài liệu database."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.domains.audit.schemas import AuditLog
 from app.domains.conversation.schemas import Conversation, Message
-from app.domains.evaluation.schemas import TaskEvaluation
+from app.domains.evaluation.schemas import TaskEvaluation, TaskEvaluationMetric
 from app.domains.execution.schemas import (
     DeviceActionLog,
     OperationDeviceApproval,
@@ -264,21 +264,25 @@ SCHEMA_FIELDS: list[tuple[type[BaseModel], set[str]]] = [
             "id",
             "task_id",
             "evaluation_status",
-            "expected_outcome",
-            "actual_outcome",
-            "goal_result",
-            "expected_root_cause",
-            "predicted_root_cause",
-            "rca_result",
-            "remediation_required",
-            "remediation_attempted",
-            "remediation_result",
-            "safety_result",
-            "evaluation_evidence",
             "evaluator_type",
             "evaluator_version",
             "created_at",
             "evaluated_at",
+        },
+    ),
+    (
+        TaskEvaluationMetric,
+        {
+            "id",
+            "evaluation_id",
+            "metric_type",
+            "result",
+            "is_required",
+            "was_attempted",
+            "expected_value",
+            "actual_value",
+            "evidence",
+            "created_at",
         },
     ),
     (

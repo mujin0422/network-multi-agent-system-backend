@@ -23,13 +23,13 @@ class StubBrandRepository:
                 return
         self._brands.append(brand.model_copy(deep=True))
 
-    def get(self, brand_id: str) -> Brand | None:
+    def get_by_id(self, brand_id: str) -> Brand | None:
         for brand in self._brands:
             if brand.id == brand_id:
                 return brand.model_copy(deep=True)
         return None
 
-    def list(self) -> list[Brand]:
+    def get_all(self) -> list[Brand]:
         return [brand.model_copy(deep=True) for brand in self._brands]
 
 

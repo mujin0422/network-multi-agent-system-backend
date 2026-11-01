@@ -49,11 +49,11 @@ class StubCredentialRepository:
         if update_secret:
             self.secret = secret
 
-    def get(self, credential_id: str) -> Credential | None:
+    def get_by_id(self, credential_id: str) -> Credential | None:
         credential = self._credentials.get(credential_id)
         return credential.model_copy(deep=True) if credential else None
 
-    def list(self) -> list[Credential]:
+    def get_all(self) -> list[Credential]:
         return [item.model_copy(deep=True) for item in self._credentials.values()]
 
 

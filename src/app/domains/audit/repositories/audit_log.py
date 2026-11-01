@@ -12,11 +12,15 @@ from app.domains.audit.schemas import AuditEventStatus, AuditLog
 
 
 class AuditLogRepositoryProtocol(Protocol):
-    def add(self, audit_log: AuditLog) -> None: ...
+    def add(self, audit_log: AuditLog) -> None:
+        """Tạo mới dữ liệu theo nghiệp vụ của phương thức add."""
+        ...
 
-    def get(self, audit_log_id: UUID) -> AuditLog | None: ...
+    def get_by_id(self, audit_log_id: UUID) -> AuditLog | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
 
-    def list_logs(
+    def get_all(
         self,
         *,
         actor_user_id: str | None = None,
@@ -27,17 +31,21 @@ class AuditLogRepositoryProtocol(Protocol):
         occurred_to: datetime | None = None,
         offset: int = 0,
         limit: int = 100,
-    ) -> list[AuditLog]: ...
+    ) -> list[AuditLog]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
 
 
 class AuditLogRepository:
     """Đọc và ghi append-only đối với bảng audit_logs."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo AuditLogRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     @staticmethod
     def _to_schema(model: AuditLogModel | None) -> AuditLog | None:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _to_schema."""
         return (
             AuditLog.model_validate(model, from_attributes=True)
             if model is not None
@@ -50,13 +58,13 @@ class AuditLogRepository:
         with self._sessions.begin() as session:
             session.add(AuditLogModel(**audit_log.model_dump()))
 
-    def get(self, audit_log_id: UUID) -> AuditLog | None:
+    def get_by_id(self, audit_log_id: UUID) -> AuditLog | None:
         """Lấy một audit log theo UUID."""
 
         with self._sessions() as session:
             return self._to_schema(session.get(AuditLogModel, audit_log_id))
 
-    def list_logs(
+    def get_all(
         self,
         *,
         actor_user_id: str | None = None,

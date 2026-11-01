@@ -1,0 +1,86 @@
+"""Persistence cho kết quả đánh giá Task."""
+
+from typing import Protocol
+from uuid import UUID
+
+from app.core.database import create_session_factory
+from sqlalchemy import select
+
+from app.domains.evaluation.models import (
+    TaskEvaluationMetricModel,
+    TaskEvaluationModel,
+)
+from app.domains.evaluation.schemas import TaskEvaluationDetail, TaskEvaluationMetric
+
+
+class TaskEvaluationRepositoryProtocol(Protocol):
+    def save(self, evaluation: TaskEvaluationDetail) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
+        ...
+    def get_by_id(self, evaluation_id: UUID) -> TaskEvaluationDetail | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
+    def get_by_task_id(self, task_id: str) -> TaskEvaluationDetail | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_task_id."""
+        ...
+
+
+class TaskEvaluationRepository:
+    def __init__(self, database_url: str) -> None:
+        """Khởi tạo TaskEvaluationRepository cùng các phụ thuộc cần thiết."""
+        self._sessions = create_session_factory(database_url)
+
+    def save(self, evaluation: TaskEvaluationDetail) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
+        with self._sessions.begin() as session:
+            session.add(
+                TaskEvaluationModel(**evaluation.model_dump(exclude={"metrics"}))
+            )
+            session.add_all(
+                TaskEvaluationMetricModel(**metric.model_dump())
+                for metric in evaluation.metrics
+            )
+
+    def get_by_id(self, evaluation_id: UUID) -> TaskEvaluationDetail | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        with self._sessions() as session:
+            model = session.get(TaskEvaluationModel, evaluation_id)
+            return self._to_schema(session, model)
+
+    def get_by_task_id(self, task_id: str) -> TaskEvaluationDetail | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_task_id."""
+        with self._sessions() as session:
+            model = session.scalar(
+                select(TaskEvaluationModel).where(
+                    TaskEvaluationModel.task_id == task_id
+                )
+            )
+            return self._to_schema(session, model)
+
+    @staticmethod
+    def _to_schema(
+        session, model: TaskEvaluationModel | None
+    ) -> TaskEvaluationDetail | None:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _to_schema."""
+        if model is None:
+            return None
+        metrics = session.scalars(
+            select(TaskEvaluationMetricModel)
+            .where(TaskEvaluationMetricModel.evaluation_id == model.id)
+            .order_by(TaskEvaluationMetricModel.metric_type)
+        ).all()
+        return TaskEvaluationDetail.model_validate(
+            {
+                "id": model.id,
+                "task_id": model.task_id,
+                "evaluation_status": model.evaluation_status,
+                "evaluator_type": model.evaluator_type,
+                "evaluator_version": model.evaluator_version,
+                "created_at": model.created_at,
+                "evaluated_at": model.evaluated_at,
+                "metrics": [
+                    TaskEvaluationMetric.model_validate(item, from_attributes=True)
+                    for item in metrics
+                ],
+            }
+        )

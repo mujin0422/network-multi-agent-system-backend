@@ -12,24 +12,31 @@ from app.domains.execution.schemas import TaskOperationDevice
 class OperationDeviceRepositoryProtocol(Protocol):
     """Contract đọc mapping trong bảng task_operation_devices."""
 
-    def list_operation_devices(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
-    ) -> list[TaskOperationDevice]: ...
-    def get_operation_device(
+    ) -> list[TaskOperationDevice]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_operation_id."""
+        ...
+    def get_by_id(
         self,
         operation_device_id: str,
-    ) -> TaskOperationDevice | None: ...
-    def save_operation_device(self, mapping: TaskOperationDevice) -> None: ...
+    ) -> TaskOperationDevice | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
+    def save_operation_device(self, mapping: TaskOperationDevice) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device."""
+        ...
 
 
 class OperationDeviceRepository:
     """Quản lý thiết bị, role và access mode được gán cho operation."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationDeviceRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def list_operation_devices(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
     ) -> list[TaskOperationDevice]:
@@ -57,7 +64,7 @@ class OperationDeviceRepository:
             model.started_at = mapping.started_at
             model.completed_at = mapping.completed_at
 
-    def get_operation_device(
+    def get_by_id(
         self,
         operation_device_id: str,
     ) -> TaskOperationDevice | None:

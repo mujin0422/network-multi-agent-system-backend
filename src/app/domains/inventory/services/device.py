@@ -3,16 +3,18 @@
 from datetime import UTC, datetime
 from math import ceil
 
-from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import DeviceRepositoryProtocol
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
+from app.domains.inventory.utils import ensure_unique_device
 
 
 class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
     def __init__(self, repository: DeviceRepositoryProtocol) -> None:
+        """Khởi tạo DeviceService cùng các phụ thuộc cần thiết."""
         self._repository = repository
 
     # =============================================================================
@@ -21,7 +23,12 @@ class DeviceService:
 
     def create_device(self, payload: DeviceCreate) -> Device:
         """Kiểm tra uniqueness, sinh ID/timestamp rồi lưu thiết bị mới."""
-        self._ensure_unique_device(payload.hostname, payload.host, payload.port)
+        ensure_unique_device(
+            self._repository.get_all(),
+            payload.hostname,
+            payload.host,
+            payload.port,
+        )
         # Dùng UTC để timestamp nhất quán giữa local, Docker và production.
         now = datetime.now(UTC)
         device = Device(
@@ -43,7 +50,7 @@ class DeviceService:
     ) -> DevicePage:
         """Lọc và lấy một trang thiết bị từ repository."""
 
-        items, total = self._repository.list_page(
+        items, total = self._repository.get_page(
             brand_id=brand_id,
             category_id=category_id,
             offset=(page - 1) * page_size,
@@ -60,11 +67,11 @@ class DeviceService:
     def list_available_devices(self) -> list[Device]:
         """Cung cấp inventory công khai cho application-layer orchestrator."""
 
-        return self._repository.list()
+        return self._repository.get_all()
 
     def get_device(self, device_id: str) -> Device:
         """Lấy một thiết bị hoặc phát sinh lỗi nghiệp vụ ánh xạ thành HTTP 404."""
-        device = self._repository.get(device_id)
+        device = self._repository.get_by_id(device_id)
         if device is None:
             raise ResourceNotFoundError(f"Không tìm thấy device '{device_id}'")
         return device
@@ -85,7 +92,8 @@ class DeviceService:
         # exclude_unset phân biệt trường không gửi với trường chủ động gửi null.
         changes = payload.model_dump(exclude_unset=True)
         candidate = current.model_copy(update=changes)
-        self._ensure_unique_device(
+        ensure_unique_device(
+            self._repository.get_all(),
             candidate.hostname,
             candidate.host,
             candidate.port,
@@ -96,33 +104,3 @@ class DeviceService:
         )
         self._repository.save(updated)
         return updated
-
-    # =============================================================================
-    # Xác minh tính duy nhất của Device
-    # =============================================================================
-
-    def _ensure_unique_device(
-        self,
-        hostname: str,
-        host: str,
-        port: int,
-        exclude_device_id: str | None = None,
-    ) -> None:
-        """Bảo vệ hai unique constraint trước khi repository ghi database.
-
-        Kiểm tra ở service tạo thông báo lỗi dễ hiểu cho frontend. PostgreSQL vẫn
-        giữ UNIQUE constraint như lớp bảo vệ cuối cùng khi có request đồng thời.
-        """
-        # Hai constraint này phản ánh trực tiếp thiết kế DB: hostname là duy nhất,
-        # đồng thời một host/port không được ánh xạ cho hai thiết bị.
-        for device in self._repository.list():
-            if device.id == exclude_device_id:
-                continue
-            if device.hostname.casefold() == hostname.casefold():
-                raise ResourceConflictError(
-                    f"Hostname '{hostname}' đã được sử dụng"
-                )
-            if (device.host, device.port) == (host, port):
-                raise ResourceConflictError(
-                    f"Địa chỉ '{host}:{port}' đã được sử dụng"
-                )

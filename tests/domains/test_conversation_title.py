@@ -39,12 +39,12 @@ class StubConversationRepository:
     def save_conversation(self, conversation: Conversation) -> None:
         self.conversation = conversation
 
-    def get_conversation(self, conversation_id: str) -> Conversation | None:
+    def get_by_id(self, conversation_id: str) -> Conversation | None:
         if self.conversation and self.conversation.id == conversation_id:
             return self.conversation
         return None
 
-    def list_conversations(self, user_id: str | None = None) -> list[Conversation]:
+    def get_all(self, user_id: str | None = None) -> list[Conversation]:
         if self.conversation is None:
             return []
         if user_id is not None and self.conversation.user_id != user_id:
@@ -56,7 +56,7 @@ class StubMessageRepository:
     def save(self, message: Message) -> None:
         raise AssertionError("start() phải dùng transaction repository")
 
-    def list_by_conversation(self, _conversation_id: str) -> list[Message]:
+    def get_all_by_conversation_id(self, _conversation_id: str) -> list[Message]:
         return []
 
 

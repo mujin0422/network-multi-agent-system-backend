@@ -647,7 +647,7 @@ supported_drivers chỉ xác định danh sách Driver hợp lệ. Driver thực
 Việc thay đổi supported_drivers không được tự động thay đổi device_type của các Device đã tồn tại.
 ```
 
-## 2.3. GROUP 3: AI EXECUTION MANAGEMENT
+## 2.3 GROUP 3: AI EXECUTION MANAGEMENT
 
 Nhóm bảng này chịu trách nhiệm quản lý toàn bộ vòng đời xử lý một yêu cầu của người dùng, từ thời điểm yêu cầu được gửi vào hệ thống cho đến khi các Agent hoàn tất quá trình phân tích, điều phối, thực thi và ghi nhận kết quả.
 
@@ -2240,7 +2240,7 @@ Khi tạo các Approval Request cho một Operation, hệ thống tạo một Me
 Message chứa nội dung giải thích dành cho người dùng. Chi tiết có cấu trúc của thẻ phê duyệt được lấy bằng cách truy vấn các Operation_Device_Approvals thuộc cùng một Operation thông qua Task_Operation_Devices.operation_id.
 ```
 
-## 2.4. GROUP 4: CONVERSATION MANAGEMENT
+## 2.4 GROUP 4: CONVERSATION MANAGEMENT
 
 Nhóm Conversation Management chịu trách nhiệm lưu trữ lịch sử trao đổi giữa người dùng và hệ thống AI thông qua giao diện Chat UI.
 
@@ -2446,9 +2446,9 @@ Quan hệ được truy vết theo chiều:
 Tasks.source_message_id có ràng buộc UNIQUE, do đó một USER Message chỉ tạo tối đa một Task.
 ```
 
-## 2.5 GROUP 5: AI EVALUATION & BENCHMARKING
+## 2.5 GROUP 5: AI EVALUATION
 
-Nhóm AI Evaluation & Benchmarking chịu trách nhiệm lưu trữ kết quả đánh giá hiệu quả hoạt động của hệ thống Multi-Agent AI Network Automation.
+Nhóm AI Evaluation chịu trách nhiệm lưu trữ kết quả đánh giá hiệu quả hoạt động của hệ thống Multi-Agent AI Network Automation.
 
 Việc đánh giá được thực hiện dựa trên mục tiêu mong đợi, Ground Truth và bằng chứng thực tế, thay vì chỉ dựa vào trạng thái thực thi của Agent hoặc Tool.
 
@@ -2465,7 +2465,9 @@ Ngoài ra, nhóm có thể mở rộng để đánh giá Safety và các chỉ s
 
 **_[1] Ý nghĩa bảng (Description)_**
 
-Lưu kết quả đánh giá Task dựa trên mục tiêu mong đợi, Ground Truth và bằng chứng kiểm tra thực tế sau khi Task kết thúc.
+Lưu vòng đời của một lần đánh giá Task và thông tin về evaluator thực hiện đánh
+giá. Kết quả chi tiết của từng tiêu chí được chuẩn hóa tại
+`Task_Evaluation_Metrics`.
 
 Phân biệt:
 
@@ -2481,23 +2483,10 @@ Mỗi Task có tối đa một Evaluation trong phiên bản hiện tại. Đán
 | id                    | UUID      | No       | Mã định danh duy nhất của Evaluation.                               |
 | task_id               | varchar   | No       | Task được đánh giá.                                                 |
 | evaluation_status     | enum      | No       | Trạng thái tiến trình đánh giá: `PENDING` / `COMPLETED` / `ERROR`.  |
-| expected_outcome      | JSONB     | Yes      | Điều kiện hoặc trạng thái mong đợi của Task.                        |
-| actual_outcome        | JSONB     | Yes      | Kết quả thực tế được kiểm tra sau khi thực thi.                     |
-| goal_result           | enum      | No       | Kết quả kiểm tra mục tiêu cuối Task.                                |
-| expected_root_cause   | JSONB     | Yes      | Root Cause Ground Truth từ benchmark hoặc chuyên gia.               |
-| predicted_root_cause  | JSONB     | Yes      | Root Cause do Agent đưa ra.                                         |
-| rca_result            | enum      | No       | Kết quả đối chiếu Root Cause.                                       |
-| remediation_required  | boolean   | No       | Task có yêu cầu khắc phục sự cố hay không.                          |
-| remediation_attempted | boolean   | No       | Có hành động khắc phục sự cố thực tế hay không.                     |
-| remediation_result    | enum      | No       | Kết quả khắc phục sự cố sau khi kiểm tra.                           |
-| safety_result         | enum      | No       | Kết quả kiểm tra an toàn nếu có thực hiện Safety Evaluation.        |
-| evaluation_evidence   | JSONB     | Yes      | Bằng chứng từ test case, Execution, command hoặc trạng thái Device. |
 | evaluator_type        | enum      | No       | Nguồn đánh giá: `AUTOMATED` / `HUMAN`.                              |
 | evaluator_version     | varchar   | Yes      | Phiên bản bộ quy tắc hoặc chương trình đánh giá.                    |
 | created_at            | timestamp | No       | Thời điểm tạo Evaluation.                                           |
 | evaluated_at          | timestamp | Yes      | Thời điểm Evaluation kết thúc.                                      |
-
-Các trường `goal_result`, `rca_result`, `remediation_result` và `safety_result` cùng sử dụng tập giá trị: `PASS` / `FAIL` / `UNKNOWN` / `NOT_APPLICABLE`.
 
 **_[3] Ràng buộc (constraint):_**
 
@@ -2507,7 +2496,6 @@ Các trường `goal_result`, `rca_result`, `remediation_result` và `safety_res
 | **FK**     | `task_id`            | Tham chiếu đến `Tasks(id)`.                                         |
 | **UNIQUE** | `task_id`            | Một Task có tối đa một bản ghi Evaluation trong phiên bản hiện tại. |
 | **CHECK**  | `evaluation_status`  | Chỉ nhận `PENDING`, `COMPLETED`, `ERROR`.                           |
-| **CHECK**  | Các trường kết quả   | Chỉ nhận `PASS`, `FAIL`, `UNKNOWN`, `NOT_APPLICABLE`.               |
 | **CHECK**  | `evaluator_type`     | Chỉ nhận `AUTOMATED` hoặc `HUMAN`.                                  |
 | **CHECK**  | `evaluated_at`       | NULL khi `PENDING`; NOT NULL khi `COMPLETED` hoặc `ERROR`.          |
 | **CHECK**  | Các trường thời gian | `evaluated_at >= created_at` khi `evaluated_at` khác NULL.          |
@@ -2536,27 +2524,27 @@ Task thất bại vẫn phải được chấm FAIL khi Evaluator hoạt động
 [4.2] Task Goal Evaluation
 
 ```
-So sánh actual_outcome với expected_outcome bằng tiêu chí kiểm tra được xác định trước cho từng Task.
+So sánh `actual_value` với `expected_value` của metric `GOAL` bằng tiêu chí kiểm tra được xác định trước cho từng Task.
 
 Chỉ PASS khi toàn bộ điều kiện mục tiêu bắt buộc được thỏa mãn.
 
 Không dựa riêng vào Tasks.task_status = SUCCESS, Task_Executions.execution_status = SUCCESS hoặc Device_Action_Logs.action_log_status = SUCCESS để kết luận.
 
-Nếu không có đủ dữ liệu đánh giá: goal_result = UNKNOWN.
+Nếu không có đủ dữ liệu đánh giá: `result = UNKNOWN`.
 ```
 
 [4.3] Root Cause Evaluation
 
 ```
 Với Task yêu cầu RCA và có Ground Truth hợp lệ:
-    - expected_root_cause chứa nguyên nhân thực tế.
-    - predicted_root_cause chứa kết luận của Agent.
-    - rca_result = PASS khi đối chiếu đúng theo tiêu chí RCA.
-    - rca_result = FAIL khi Agent đưa ra kết quả sai hoặc không đưa ra nguyên nhân khi được yêu cầu.
+    - expected_value chứa nguyên nhân thực tế.
+    - actual_value chứa kết luận của Agent.
+    - result = PASS khi đối chiếu đúng theo tiêu chí RCA.
+    - result = FAIL khi Agent đưa ra kết quả sai hoặc không đưa ra nguyên nhân khi được yêu cầu.
 
-Task không yêu cầu RCA: rca_result = NOT_APPLICABLE.
+Task không yêu cầu RCA: is_required = FALSE và result = NOT_APPLICABLE.
 
-Task yêu cầu RCA nhưng chưa có Ground Truth hợp lệ: rca_result = UNKNOWN, không tự động tính là FAIL.
+Task yêu cầu RCA nhưng chưa có Ground Truth hợp lệ: result = UNKNOWN, không tự động tính là FAIL.
 
 Ground Truth không được cung cấp cho Agent khi xử lý benchmark.
 ```
@@ -2564,18 +2552,18 @@ Ground Truth không được cung cấp cho Agent khi xử lý benchmark.
 [4.4] Remediation Evaluation
 
 ```
-remediation_required được xác định từ mục tiêu Task.
-remediation_attempted chỉ TRUE khi Agent thực hiện hành động sửa lỗi thực tế.
+is_required được xác định từ mục tiêu Task.
+was_attempted chỉ TRUE khi Agent thực hiện hành động sửa lỗi thực tế.
 
-Nếu remediation_required = FALSE:
-    remediation_attempted = FALSE;
-    remediation_result = NOT_APPLICABLE.
+Nếu is_required = FALSE:
+    was_attempted = FALSE;
+    result = NOT_APPLICABLE.
 
-Nếu remediation_required = TRUE nhưng không có hành động sửa lỗi:
-    remediation_result = FAIL khi Evaluation hoàn tất bình thường.
+Nếu is_required = TRUE nhưng không có hành động sửa lỗi:
+    result = FAIL khi Evaluation hoàn tất bình thường.
 
 Nếu đã sửa lỗi:
-    remediation_result = PASS chỉ khi trạng thái sau sửa lỗi
+    result = PASS chỉ khi trạng thái sau sửa lỗi
     đáp ứng toàn bộ điều kiện kiểm tra bắt buộc.
 
 Command được Device chấp nhận chưa đồng nghĩa với Remediation thành công.
@@ -2586,10 +2574,10 @@ Command được Device chấp nhận chưa đồng nghĩa với Remediation th�
 ```
 Safety được đánh giá dựa trên các Safety Constraints được xác định trước.
 
-Có vi phạm Safety Constraint: safety_result = FAIL.
-Kiểm tra đầy đủ, không có vi phạm: safety_result = PASS.
-Chưa triển khai kiểm tra Safety cho Task: safety_result = NOT_APPLICABLE.
-Đã kiểm tra nhưng thiếu dữ liệu kết luận: safety_result = UNKNOWN.
+Có vi phạm Safety Constraint: result = FAIL.
+Kiểm tra đầy đủ, không có vi phạm: result = PASS.
+Chưa triển khai kiểm tra Safety cho Task: is_required = FALSE và result = NOT_APPLICABLE.
+Đã kiểm tra nhưng thiếu dữ liệu kết luận: result = UNKNOWN.
 
 Chỉ có dữ liệu Human Approval không đủ để kết luận Network Safety.
 ```
@@ -2597,11 +2585,11 @@ Chỉ có dữ liệu Human Approval không đủ để kết luận Network Saf
 [4.6] Sử dụng kết quả tính các chỉ số
 
 ```
-Task Success Rate: Số Task có goal_result = PASS / Số Task đủ điều kiện đánh giá Task Goal.
+Task Success Rate: số metric GOAL có result = PASS / số metric GOAL hợp lệ.
 
-Root Cause Accuracy: Số Task có rca_result = PASS / Số Task có RCA Ground Truth hợp lệ.
+Root Cause Accuracy: số metric RCA có result = PASS / số metric RCA có Ground Truth hợp lệ.
 
-Remediation Success Rate: Số Task remediation_result = PASS / Số Task remediation_required = TRUE.
+Remediation Success Rate: số metric REMEDIATION có result = PASS / số metric REMEDIATION có is_required = TRUE.
 
 Latency end-to-end của Task: Tasks.completed_at - Tasks.created_at.
 
@@ -2617,13 +2605,115 @@ Quy tắc xử lý UNKNOWN và Evaluation ERROR phải được thống nhất t
 
 ```
 Kết quả Evaluation phải dựa trên bằng chứng có thể truy vết.
-Không lưu Password, Secret, Token hoặc Credential đã giải mã vào expected_outcome, actual_outcome hay evaluation_evidence.
+Không lưu Password, Secret, Token hoặc Credential đã giải mã vào expected_value, actual_value hay evidence.
 
 Không ghi đè Evaluation đã hoàn tất chỉ để thay đổi điểm benchmark.
 Nếu cần chấm lại nhiều lần hoặc lưu nhiều phiên bản Evaluator, phải mở rộng ràng buộc UNIQUE(task_id) hoặc tạo Evaluation Run riêng.
 ```
 
-## 2.6 GROUP 6: SYSTEM AUDIT
+### 2.5.2 Task_Evaluation_Metrics (Kết quả theo tiêu chí)
+
+**_[1] Ý nghĩa bảng (Description)_**
+
+Lưu kết quả độc lập của từng tiêu chí thuộc một Task Evaluation. Thiết kế dạng
+hàng cho phép bổ sung metric mới mà không phải tiếp tục mở rộng cột của
+`Task_Evaluations`.
+
+**_[2] Trường dữ liệu (Fields)_**
+
+| Field | Type | Nullable | Meaning |
+| ----- | ---- | -------- | ------- |
+| id | UUID | No | Mã định danh duy nhất của metric result. |
+| evaluation_id | UUID FK | No | Evaluation sở hữu metric. |
+| metric_type | enum | No | `GOAL`, `RCA`, `REMEDIATION` hoặc `SAFETY`. |
+| result | enum | No | `PASS`, `FAIL`, `UNKNOWN` hoặc `NOT_APPLICABLE`. |
+| is_required | boolean | No | Metric có bắt buộc đối với Task hay không. |
+| was_attempted | boolean | Yes | Trạng thái đã thử thực hiện, chỉ dùng cho remediation. |
+| expected_value | JSONB | Yes | Điều kiện, Ground Truth hoặc kết quả mong đợi. |
+| actual_value | JSONB | Yes | Trạng thái quan sát hoặc kết quả Agent dự đoán. |
+| evidence | JSONB | Yes | Bằng chứng có cấu trúc hỗ trợ kết luận. |
+| created_at | timestamp | No | Thời điểm tạo metric theo UTC. |
+
+**_[3] Ràng buộc và quy tắc nghiệp vụ_**
+
+- Mỗi Evaluation có tối đa một bản ghi cho từng `metric_type`.
+- `evaluation_id` tham chiếu `Task_Evaluations(id)` và xóa cascade.
+- `was_attempted` phải NULL với metric không phải `REMEDIATION`.
+- Metric không áp dụng phải có `is_required = FALSE` và
+  `result = NOT_APPLICABLE`.
+- Ground Truth và evidence không được đưa vào prompt của Agent và không chứa dữ
+  liệu xác thực hoặc secret.
+
+## 2.6 GROUP 6: BENCHMARK MANAGEMENT
+
+Nhóm Benchmark Management quản lý định nghĩa kịch bản kiểm thử và toàn bộ vòng
+đời các lần chạy benchmark trên môi trường GNS3. Domain này chịu trách nhiệm
+chuẩn bị trạng thái ban đầu, tiêm lỗi, xác minh lỗi, liên kết phiên Chat/Task,
+lưu snapshot kịch bản và khôi phục môi trường sau kiểm thử.
+
+Kết quả chuyên môn của Task vẫn được lưu tại `Task_Evaluations` thuộc Evaluation
+domain. Benchmark chỉ tham chiếu Evaluation đã được tạo và không sở hữu logic
+đánh giá dùng chung của hệ thống.
+
+### 2.6.1 Benchmark_Scenarios (Kịch bản benchmark)
+
+**_[1] Ý nghĩa bảng (Description)_**
+
+Quản lý định nghĩa kịch bản tiêm lỗi, điều kiện trước khi chạy, Ground Truth, tiêu
+chí chấm điểm và thao tác Cleanup. Ground Truth chỉ được dùng bởi Evaluator và
+không được trả về Agent hoặc giao diện người dùng.
+
+**_[2] Trường dữ liệu (Fields)_**
+
+| Field | Type | Nullable | Meaning |
+| ----- | ---- | -------- | ------- |
+| id | varchar PK | No | Mã kỹ thuật tự sinh dạng `benc-DDMMYY-xxxxxxxx`. |
+| scenario_key | varchar UNIQUE | No | Khóa nghiệp vụ ổn định dạng slug, ví dụ `p3-interface-link-down`. |
+| version | varchar | No | Phiên bản định nghĩa scenario. |
+| name | varchar | No | Tên hiển thị. |
+| description | text | No | Mô tả mục tiêu kiểm thử. |
+| topology | varchar | No | Topology/lab áp dụng. |
+| initial_message | text | No | Yêu cầu được đưa vào Chat sau khi tiêm lỗi. |
+| definition | JSONB | No | Preconditions, injection, verification, Ground Truth, tiêu chí đánh giá và cleanup. |
+| is_active | boolean | No | Cho phép tạo run mới từ scenario. |
+| created_by / last_updated_by | varchar FK | Yes | User tạo và cập nhật gần nhất. |
+| created_at / last_updated_at | timestamp | No | Thời điểm tạo và cập nhật theo UTC. |
+
+`definition` phải là JSON object và có đủ sáu nhóm dữ liệu bắt buộc. Việc vô
+hiệu hóa scenario không làm mất lịch sử. Scenario đã phát sinh run không được
+xóa vật lý trong luồng nghiệp vụ thông thường.
+
+### 2.6.2 Benchmark_Runs (Lịch sử chạy benchmark)
+
+**_[1] Ý nghĩa bảng (Description)_**
+
+Lưu toàn bộ vòng đời một lần chạy benchmark, liên kết đến Chat, Task và
+Task_Evaluation tương ứng. Mỗi run giữ `scenario_snapshot` riêng để bảo đảm khả
+năng tái lập và không bị ảnh hưởng khi scenario gốc được chỉnh sửa.
+
+**_[2] Trường dữ liệu (Fields)_**
+
+| Field | Type | Nullable | Meaning |
+| ----- | ---- | -------- | ------- |
+| id | varchar PK | No | Mã run tự sinh dạng `benr-DDMMYY-xxxxxxxx`. |
+| scenario_id | varchar FK | No | Scenario nguồn. |
+| scenario_version / scenario_name | varchar | No | Snapshot thông tin hiển thị. |
+| scenario_snapshot | JSONB | No | Toàn bộ định nghĩa scenario tại thời điểm bắt đầu. |
+| status | varchar | No | PREPARING, READY, RUNNING, COMPLETED, FAILED hoặc CLEANED. |
+| started_by | varchar FK | No | User khởi chạy benchmark. |
+| conversation_id / source_message_id | varchar FK | Yes | Conversation và Message khởi tạo chẩn đoán. |
+| task_id | varchar FK | Yes | Task do Agent xử lý. |
+| evaluation_id | UUID FK | Yes | Task_Evaluation được sinh tự động. |
+| evaluation_result | varchar | Yes | Kết quả chấm điểm tổng hợp. |
+| cleanup_required | boolean | No | Môi trường còn cần khôi phục hay không. |
+| error_message | text | Yes | Lỗi chuẩn bị, thực thi hoặc Cleanup. |
+| started_at / completed_at / cleaned_at | timestamp | Mixed | Các mốc vòng đời theo UTC. |
+
+`scenario_snapshot` và Ground Truth không được trả qua public run API. Cleanup
+phải sử dụng snapshot của chính run thay vì definition hiện tại của scenario.
+Chỉ chuyển `cleanup_required` về FALSE sau khi các thao tác khôi phục hoàn tất.
+
+## 2.7 GROUP 7: SYSTEM AUDIT
 
 Nhóm này lưu vết các hành động quản trị và sự kiện nghiệp vụ quan trọng xảy ra
 trong hệ thống. `Audit_Logs` độc lập với `Device_Action_Logs`:
@@ -2632,7 +2722,7 @@ trong hệ thống. `Audit_Logs` độc lập với `Device_Action_Logs`:
 - `Device_Action_Logs` là bằng chứng kỹ thuật của command thực sự được gửi xuống
   thiết bị mạng.
 
-### 2.6.1 Audit_Logs (Nhật ký kiểm toán hệ thống)
+### 2.7.1 Audit_Logs (Nhật ký kiểm toán hệ thống)
 
 **_[1] Ý nghĩa bảng (Description)_**
 

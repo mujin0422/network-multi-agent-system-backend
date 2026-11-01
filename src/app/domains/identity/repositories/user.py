@@ -15,30 +15,45 @@ from app.domains.identity.schemas import User, UserRecord
 
 
 class UserRepositoryProtocol(Protocol):
-    def get_user_by_email(self, email: str) -> UserRecord | None: ...
+    def get_by_email(self, email: str) -> UserRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_email."""
+        ...
 
-    def get_user(self, user_id: str) -> User | None: ...
+    def get_by_id(self, user_id: str) -> User | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
 
-    def list_users(self) -> list[User]: ...
+    def get_all(self) -> list[User]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
 
-    def get_user_with_password(self, user_id: str) -> UserRecord | None: ...
+    def get_record_by_id(self, user_id: str) -> UserRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_record_by_id."""
+        ...
 
-    def save_user(self, user: UserRecord) -> None: ...
+    def save_user(self, user: UserRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
+        ...
 
-    def update_login(self, user_id: str, logged_in_at: datetime) -> None: ...
+    def update_login(self, user_id: str, logged_in_at: datetime) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
+        ...
 
 
 class UserRepository:
     """Sở hữu query và transaction cho User — bảng users."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo UserRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     @staticmethod
     def _user_record(model: UserModel | None) -> UserRecord | None:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _user_record."""
         return UserRecord.model_validate(model, from_attributes=True) if model else None
 
-    def get_user_by_email(self, email: str) -> UserRecord | None:
+    def get_by_email(self, email: str) -> UserRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_email."""
         with self._sessions() as session:
             return self._user_record(
                 session.scalar(
@@ -46,23 +61,27 @@ class UserRepository:
                 )
             )
 
-    def get_user(self, user_id: str) -> User | None:
+    def get_by_id(self, user_id: str) -> User | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(UserModel, user_id)
             return User.model_validate(model, from_attributes=True) if model else None
 
-    def list_users(self) -> list[User]:
+    def get_all(self) -> list[User]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
         with self._sessions() as session:
             models = session.scalars(select(UserModel)).all()
             return [
                 User.model_validate(model, from_attributes=True) for model in models
             ]
 
-    def get_user_with_password(self, user_id: str) -> UserRecord | None:
+    def get_record_by_id(self, user_id: str) -> UserRecord | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_record_by_id."""
         with self._sessions() as session:
             return self._user_record(session.get(UserModel, user_id))
 
     def save_user(self, record: UserRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         with self._sessions.begin() as session:
             model = session.get(UserModel, record.id)
             if model is None:
@@ -89,6 +108,7 @@ class UserRepository:
             model.last_login_at = record.last_login_at
 
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
         statement = (
             update(UserModel)
             .where(UserModel.id == user_id)

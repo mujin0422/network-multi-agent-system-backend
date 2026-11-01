@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -32,40 +31,21 @@ class EvaluatorType(StrEnum):
     HUMAN = "HUMAN"
 
 
+class EvaluationMetricType(StrEnum):
+    """Loại tiêu chí được chấm trong một evaluation."""
+
+    GOAL = "GOAL"
+    RCA = "RCA"
+    REMEDIATION = "REMEDIATION"
+    SAFETY = "SAFETY"
+
+
 class TaskEvaluation(BaseModel):
-    """Kết quả goal, RCA, remediation và safety của một Task kết thúc."""
+    """Vòng đời và thông tin evaluator của một Task."""
 
     id: UUID = Field(description="UUID của evaluation.")
     task_id: str = Field(description="ID Task duy nhất được đánh giá.")
     evaluation_status: EvaluationStatus = Field(description="Trạng thái workflow.")
-    expected_outcome: Any | None = Field(
-        default=None,
-        description="JSONB mô tả kết quả mong đợi.",
-    )
-    actual_outcome: Any | None = Field(
-        default=None,
-        description="JSONB mô tả kết quả quan sát thực tế.",
-    )
-    goal_result: EvaluationResult = Field(description="Kết quả đạt mục tiêu.")
-    expected_root_cause: Any | None = Field(
-        default=None,
-        description="JSONB root cause kỳ vọng của benchmark.",
-    )
-    predicted_root_cause: Any | None = Field(
-        default=None,
-        description="JSONB root cause do hệ thống dự đoán.",
-    )
-    rca_result: EvaluationResult = Field(description="Kết quả đánh giá RCA.")
-    remediation_required: bool = Field(description="Task có cần remediation không.")
-    remediation_attempted: bool = Field(description="Đã thử remediation hay chưa.")
-    remediation_result: EvaluationResult = Field(
-        description="Kết quả remediation hoặc NOT_APPLICABLE.",
-    )
-    safety_result: EvaluationResult = Field(description="Kết quả đánh giá an toàn.")
-    evaluation_evidence: Any | None = Field(
-        default=None,
-        description="JSONB evidence hỗ trợ kết luận evaluation.",
-    )
     evaluator_type: EvaluatorType = Field(description="AUTOMATED hoặc HUMAN.")
     evaluator_version: str | None = Field(
         default=None,
@@ -76,4 +56,38 @@ class TaskEvaluation(BaseModel):
     evaluated_at: datetime | None = Field(
         default=None,
         description="Thời điểm evaluation hoàn tất hoặc lỗi.",
+    )
+class TaskEvaluationMetric(BaseModel):
+    """Một tiêu chí đánh giá độc lập thuộc Task Evaluation."""
+
+    id: UUID = Field(description="UUID của metric result.")
+    evaluation_id: UUID = Field(description="Evaluation sở hữu metric.")
+    metric_type: EvaluationMetricType = Field(description="Loại metric.")
+    result: EvaluationResult = Field(description="Kết quả chấm metric.")
+    is_required: bool = Field(description="Metric có bắt buộc cho Task hay không.")
+    was_attempted: bool | None = Field(
+        default=None,
+        description="Đã thử thực hiện hay chưa; chủ yếu dùng cho remediation.",
+    )
+    expected_value: object | None = Field(
+        default=None,
+        description="Giá trị hoặc điều kiện mong đợi dạng JSONB.",
+    )
+    actual_value: object | None = Field(
+        default=None,
+        description="Giá trị quan sát hoặc dự đoán thực tế dạng JSONB.",
+    )
+    evidence: object | None = Field(
+        default=None,
+        description="Bằng chứng có cấu trúc hỗ trợ kết luận.",
+    )
+    created_at: datetime = Field(description="Thời điểm tạo metric theo UTC.")
+
+
+class TaskEvaluationDetail(TaskEvaluation):
+    """Evaluation kèm các metric dùng tại service/repository boundary."""
+
+    metrics: list[TaskEvaluationMetric] = Field(
+        default_factory=list,
+        description="Các kết quả GOAL, RCA, REMEDIATION và SAFETY.",
     )
