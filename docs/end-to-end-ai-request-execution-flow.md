@@ -16,13 +16,13 @@ Conversation Router
   ├── tạo title nếu là message đầu tiên
   └── kiểm tra GNS3 Server
        ↓
-PlanningOrchestrator
+LangGraph `plan` node
   ├── tạo Task
   ├── đọc Device Inventory
   ├── gọi Planner Agent
   └── lưu Operation + Dependency + Operation Device
        ↓
-ExecutionOrchestrator
+LangGraph `execute` node
   ├── kiểm tra DAG dependency
   ├── READ  → thực thi ngay
   └── WRITE → kiểm tra Approval
@@ -36,7 +36,7 @@ NetmikoNetworkTool hoặc NornirNetworkTool
   ↓ giải mã credential theo nhu cầu
 Thiết bị mạng
   ↓ command output
-ExecutionOrchestrator
+LangGraph `execute` node
   └── cập nhật Task/Operation/Execution/Action Log
 ```
 
@@ -94,10 +94,9 @@ sequenceDiagram
     participant ID as Identity/RBAC
     participant CS as ConversationService
     participant G as GNS3Provider
-    participant PO as PlanningOrchestrator
+    participant LG as LangGraph Workflow
     participant PA as PlannerAgent
     participant ES as ExecutionService
-    participant EO as ExecutionOrchestrator
     participant NA as NetworkAgent
     participant NT as NetworkTool
     participant IR as Inventory/Credential
@@ -112,24 +111,23 @@ sequenceDiagram
     end
     API->>G: GET /v2/version
     G-->>API: GNS3 Server khả dụng
-    API->>PO: plan_user_message(conversation, message)
-    PO->>ES: tạo Task PENDING
-    PO->>IR: lấy Device Inventory
-    PO->>PA: plan(message, devices)
-    PA-->>PO: ExecutionPlanCreate
-    PO->>PO: kiểm tra tất cả device_id
-    PO->>ES: lưu Task + Operations + Dependencies + Mappings
-    API->>EO: execute_task(task)
+    API->>LG: run_message(conversation, message)
+    LG->>ES: node plan tạo Task PENDING
+    LG->>IR: lấy Device Inventory
+    LG->>PA: plan(message, devices)
+    PA-->>LG: ExecutionPlanCreate
+    LG->>LG: kiểm tra tất cả device_id
+    LG->>ES: lưu Task + Operations + Dependencies + Mappings
     loop Operation theo display_order
         EO->>ES: kiểm tra dependency và lấy mappings
         alt READ
-            EO->>NA: execute(operation, mapping)
+            LG->>NA: execute(operation, mapping)
         else WRITE chưa được duyệt
-            EO->>ES: cập nhật WAITING_APPROVAL
-            EO-->>API: tạm dừng Task ở RUNNING
+            LG->>ES: cập nhật WAITING_APPROVAL
+            LG-->>API: kết thúc invocation, Task giữ RUNNING
         else WRITE đã APPROVED
-            EO->>EO: kiểm tra snapshot + request_hash
-            EO->>NA: execute(operation, mapping)
+            LG->>LG: kiểm tra snapshot + request_hash
+            LG->>NA: execute(operation, mapping)
         end
         NA->>NT: execute(device_id, access_mode, commands)
         NT->>IR: lấy DeviceConfig và giải mã credential
@@ -137,10 +135,10 @@ sequenceDiagram
         NT->>D: đăng nhập và gửi command
         D-->>NT: output
         NT-->>NA: CommandResult[]
-        NA-->>EO: NetworkExecutionResult
-        EO->>ES: lưu status, execution và action logs
+        NA-->>LG: NetworkExecutionResult
+        LG->>ES: lưu status, execution và action logs
     end
-    EO-->>API: kết quả thực thi
+    LG-->>API: node analyze lưu phản hồi
     API-->>U: HTTP response
 ```
 
@@ -148,9 +146,9 @@ Nhánh `NetworkTool → Device` chỉ xảy ra với READ hoặc WRITE đã vư�
 gate. Một WRITE đang chờ phê duyệt tuyệt đối không được giải mã credential và
 không được mở kết nối thiết bị.
 
-## 4. Planning: từ Message thành execution plan
+## 4. Node `plan`: từ Message thành execution plan
 
-`PlanningOrchestrator.plan_user_message()` xử lý theo thứ tự:
+Node `plan` của LangGraph gọi planning handler theo thứ tự:
 
 1. Kiểm tra Message do `USER` gửi.
 2. Kiểm tra Message thuộc đúng Conversation.
@@ -167,9 +165,9 @@ không được mở kết nối thiết bị.
 Planner chỉ chọn thiết bị và tạo command dự kiến. Planner không kết nối thiết
 bị, không đọc credential và không tự thực thi command.
 
-## 5. Execution: thực thi DAG
+## 5. Node `execute`: thực thi DAG
 
-`ExecutionOrchestrator.execute_task()` đọc Operation theo `display_order` và
+Execution handler đọc Operation theo `display_order` và
 kiểm tra dependency:
 
 - `ON_SUCCESS`: Operation trước phải `SUCCESS`.
@@ -253,7 +251,8 @@ Hoặc:
 
 ### Tiếp tục sau Approval
 
-Decision API gọi `ExecutionOrchestrator.resume_after_approval()`:
+Decision API gọi `NetworkAutomationWorkflow.resume_after_approval()`; graph
+khôi phục Task từ PostgreSQL rồi đi vào node `execute`:
 
 ```text
 approval.operation_device_id
@@ -335,7 +334,7 @@ Task được tổng hợp từ các Operation:
 | --- | --- |
 | JWT/session không hợp lệ | HTTP 401, không lưu Message |
 | Thiếu `Chatbot/Add` | HTTP 403, không lưu Message |
-| GNS3 Server không truy cập được | HTTP 503; Message đã lưu nhưng chưa gọi Planner |
+| GNS3 Server không truy cập được | Background workflow dừng và ghi log; Message đã được trả về trước đó |
 | Planner/LLM lỗi | Request lỗi; Task đã tạo trước lời gọi LLM có thể còn `PENDING` |
 | Planner trả Device lạ | Từ chối plan, không lưu Operations |
 | Credential/connection lỗi | Mapping và Execution `FAILED` |
@@ -346,24 +345,16 @@ Task được tổng hợp từ các Operation:
 Việc Message được lưu trước GNS3/Planner giúp không mất yêu cầu gốc, nhưng cần cơ
 chế retry/recovery riêng cho Task bị dừng do lỗi hạ tầng hoặc LLM.
 
-## 12. Phản hồi hiện tại và Analyst Agent
+## 12. Phản hồi và Analyst Agent
 
-Source code đã có `AnalystAgent` và prompt trả lời tiếng Việt. Tuy nhiên, Analyst
-hiện **chưa được lắp trong `agents/dependencies.py`, chưa được
-`ExecutionOrchestrator` gọi và chưa tạo Message `FINAL_RESPONSE`**.
+Node `analyze` gọi `AnalystAgent` sau node `execute`. Khi Task đã kết thúc,
+Analyst tạo summary, findings, likely causes và recommendations; workflow lưu
+Message `AGENT/FINAL_RESPONSE` vào Conversation. Nếu Task đang
+`WAITING_APPROVAL`, analysis handler tạo Message `AGENT/APPROVAL_REQUEST` thay
+vì khẳng định Task đã hoàn tất.
 
-Vì vậy, “thực thi hoàn tất” trong code hiện tại có nghĩa là:
-
-```text
-Task/Operation/Mapping đã có trạng thái cuối
-+ TaskExecution và DeviceActionLog đã được lưu
-```
-
-Nó chưa có nghĩa là Conversation đã nhận câu trả lời tổng hợp từ Analyst.
-Response của Conversation API hiện trả Message người dùng hoặc dữ liệu bắt đầu
-Conversation sau khi pipeline đồng bộ kết thúc/tạm dừng.
-
-Luồng cần bổ sung sau này để hoàn thành trải nghiệm Chat UI:
+Conversation API trả Message người dùng ngay, còn frontend polling Task activity
+và Messages để nhận kết quả từ background LangGraph workflow.
 
 ```text
 Execution results

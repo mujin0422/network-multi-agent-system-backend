@@ -4,6 +4,15 @@ FastAPI backend thử nghiệm cho nền tảng tự động hóa mạng bằng 
 Ứng dụng được tổ chức theo domain service: API và Agent chỉ gọi public service,
 không truy cập trực tiếp repository hoặc provider nội bộ của domain.
 
+Luồng AI cấp cao được điều phối bằng LangGraph:
+
+```text
+check_gns3 → plan → execute → analyze
+```
+
+Sau quyết định approval, graph khôi phục Task từ PostgreSQL và tiếp tục tại
+`execute → analyze`.
+
 ## Yêu cầu
 
 - Python 3.11 trở lên
@@ -252,6 +261,7 @@ Luồng chỉ tạo Conversation khi người dùng gửi Message đầu tiên �
 Các luồng bảo mật và thực thi chi tiết:
 
 - [End-to-end từ USER message đến khi thực thi hoàn tất](docs/end-to-end-ai-request-execution-flow.md)
+- [LangGraph workflow và cơ chế resume](docs/langgraph-workflow.md)
 - [Credential thiết bị, đăng nhập và thực thi command](docs/network-device-credential-execution-flow.md)
 - [Đăng nhập API, JWT, session và phân quyền RBAC](docs/authentication-authorization-jwt-flow.md)
 
@@ -282,7 +292,7 @@ thể thay repository thật bằng stub mà không đổi route hoặc domain s
 
 ```text
 src/app/
-├── agents/          # Agent implementations, registry và routing
+├── agents/          # Agent implementations và LangGraph workflow
 ├── core/            # Settings, logging, ID và shared errors
 ├── domains/         # Domain services, persistence và HTTP routers
 ├── tools/           # Agent tool adapters

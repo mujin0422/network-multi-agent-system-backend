@@ -1,6 +1,6 @@
 # Agents
 
-`agents` là application layer điều phối AI và execution workflow. Agent không
+`agents` là application layer triển khai AI và LangGraph execution workflow. Agent không
 sở hữu database table, không dùng repository/ORM trực tiếp và không expose HTTP
 API riêng. Frontend gửi yêu cầu qua Message API của Conversation domain.
 
@@ -10,6 +10,7 @@ API riêng. Frontend gửi yêu cầu qua Message API của Conversation domain.
 agents/
 ├── __init__.py
 ├── dependencies.py
+├── workflow.py
 ├── planner/
 │   ├── __init__.py
 │   ├── agent.py
@@ -92,9 +93,9 @@ Việt.
 Analyst có thể tạo summary, findings, likely causes và recommendations. Analyst
 không kết nối thiết bị, không chạy command và không tự thay đổi cấu hình.
 
-## Planning Orchestrator
+## Planning node handler
 
-`PlanningOrchestrator` điều phối luồng:
+`PlanningOrchestrator` là handler được node `plan` của LangGraph gọi:
 
 ```text
 USER Message
@@ -108,9 +109,9 @@ USER Message
 Execution domain sinh ID, timestamp và trạng thái ban đầu. Ba nhóm record của
 plan được PostgreSQL repository lưu trong cùng một transaction.
 
-## Execution Orchestrator
+## Execution node handler
 
-`ExecutionOrchestrator` điều phối luồng:
+`ExecutionOrchestrator` là handler được node `execute` của LangGraph gọi:
 
 ```text
 TaskDetail
@@ -132,12 +133,25 @@ TaskOperationDevice; mỗi lần gọi Network Agent được ghi vào
 ghi vào `device_action_logs`. Approval và retry trong tương lai vẫn thuộc
 Execution Orchestrator/Execution domain, không đưa vào Network Agent hay tool.
 
+## LangGraph workflow
+
+`NetworkAutomationWorkflow` biên dịch hai graph:
+
+```text
+USER message:       check_gns3 → plan → execute → analyze → END
+Approval decision:               execute → analyze → END
+```
+
+Graph thứ hai khôi phục Task từ PostgreSQL bằng `operation_device_id`. Business
+state không được sao chép sang một checkpointer khác; các bảng Task, Operation,
+Approval và Activity Event vẫn là nguồn sự thật.
+
 ## Dependency composition
 
 `dependencies.py` là composition root cho agent layer:
 
 - Khởi tạo NVIDIA chat model và Planner Agent.
-- Khởi tạo Planning/Execution Orchestrator.
+- Biên dịch `NetworkAutomationWorkflow` cùng các node handler.
 - Khởi tạo Network Agent và backend được chọn bởi `NETWORK_BACKEND`.
 - Kết nối agent với public domain services.
 
@@ -147,17 +161,13 @@ File này không chứa business rule.
 
 ```text
 Message Router
-  → PlanningOrchestrator
-      ├── PlannerAgent
-      ├── DeviceService
-      └── ExecutionService
-  → ExecutionOrchestrator
-      ├── ExecutionService
-      └── NetworkAgent
-          └── NetworkTool
-              ├── NetmikoNetworkTool
-              └── NornirNetworkTool
-                  └── NetworkService
+  → NetworkAutomationWorkflow (LangGraph)
+      ├── plan → PlanningOrchestrator → PlannerAgent
+      ├── execute → ExecutionOrchestrator → NetworkAgent
+      │                                      └── NetworkTool
+      │                                          ├── NetmikoNetworkTool
+      │                                          └── NornirNetworkTool
+      └── analyze → AnalysisOrchestrator → AnalystAgent
 ```
 
 Các cách gọi bị cấm:
