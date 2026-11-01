@@ -323,7 +323,7 @@ Mô hình dữ liệu `task_evaluations` đã định nghĩa khung lưu kết qu
 - **Remediation result:** biện pháp khắc phục có được thực hiện và đạt hiệu quả hay không.
 - **Safety result:** quá trình có tuân thủ ràng buộc an toàn hay không.
 
-Mỗi tiêu chí có thể nhận `PASS`, `FAIL`, `UNKNOWN` hoặc `NOT_APPLICABLE`; đánh giá có thể do hệ thống hoặc con người thực hiện. Bằng chứng cần lưu trong `evaluation_evidence`. Với phép đo định lượng trong tương lai, nên bổ sung: tỷ lệ kế hoạch hợp lệ, tỷ lệ command thành công, độ chính xác RCA, tỷ lệ khắc phục thành công, số thao tác ghi bị chặn đúng, thời gian planning/execution/analysis, và tỷ lệ cần can thiệp thủ công. Hiện repository chưa có evaluator service, benchmark runner hoặc tập ground truth để tính các chỉ số này.
+Mỗi tiêu chí có thể nhận `PASS`, `FAIL`, `UNKNOWN` hoặc `NOT_APPLICABLE`; đánh giá có thể do hệ thống hoặc con người thực hiện. Kết quả được chuẩn hóa thành các bản ghi `Task_Evaluation_Metrics`, trong đó `expected_value`, `actual_value` và `evidence` bảo toàn Ground Truth, kết quả quan sát và bằng chứng đánh giá. Benchmark runner hiện hỗ trợ các tiêu chí GOAL, RCA, REMEDIATION và SAFETY; các phép đo định lượng có thể mở rộng thêm gồm tỷ lệ kế hoạch hợp lệ, tỷ lệ command thành công, thời gian planning/execution/analysis và tỷ lệ cần can thiệp thủ công.
 
 ## 4.4. Kết quả thực nghiệm cấu hình mạng
 
