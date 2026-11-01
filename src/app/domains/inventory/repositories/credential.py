@@ -15,7 +15,9 @@ from app.domains.inventory.utils import encrypted_credential
 class CredentialRepositoryProtocol(Protocol):
     """Persistence contract cho các use case Credential."""
 
-    def create(self, credential: Credential, password: str, secret: str | None) -> None: ...
+    def create(self, credential: Credential, password: str, secret: str | None) -> None:
+        """Tạo mới dữ liệu theo nghiệp vụ của phương thức create."""
+        ...
 
     def update(
         self,
@@ -24,17 +26,24 @@ class CredentialRepositoryProtocol(Protocol):
         secret: str | None,
         update_password: bool,
         update_secret: bool,
-    ) -> None: ...
+    ) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update."""
+        ...
 
-    def get(self, credential_id: str) -> Credential | None: ...
+    def get_by_id(self, credential_id: str) -> Credential | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
 
-    def list(self) -> list[Credential]: ...
+    def get_all(self) -> list[Credential]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
 
 
 class CredentialRepository:
     """Lưu metadata và ciphertext Credential trong PostgreSQL."""
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
+        """Khởi tạo CredentialRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
@@ -80,14 +89,14 @@ class CredentialRepository:
         with self._sessions.begin() as session:
             session.execute(statement)
 
-    def get(self, credential_id: str) -> Credential | None:
+    def get_by_id(self, credential_id: str) -> Credential | None:
         """Lấy metadata Credential theo ID, không đọc ciphertext."""
 
         with self._sessions() as session:
             model = session.get(CredentialModel, credential_id)
             return Credential.model_validate(model, from_attributes=True) if model else None
 
-    def list(self) -> list[Credential]:
+    def get_all(self) -> list[Credential]:
         """Lấy toàn bộ metadata Credential từ database."""
 
         statement = select(CredentialModel)

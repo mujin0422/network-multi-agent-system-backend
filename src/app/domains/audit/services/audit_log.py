@@ -13,6 +13,7 @@ class AuditLogService:
     """Cung cấp thao tác append nội bộ và truy vấn audit log chỉ đọc."""
 
     def __init__(self, repository: AuditLogRepositoryProtocol) -> None:
+        """Khởi tạo AuditLogService cùng các phụ thuộc cần thiết."""
         self._repository = repository
 
     def record(self, payload: AuditLogCreate) -> AuditLog:
@@ -29,7 +30,7 @@ class AuditLogService:
     def get(self, audit_log_id: UUID) -> AuditLog:
         """Trả audit log theo ID hoặc phát sinh lỗi 404 ở HTTP layer."""
 
-        audit_log = self._repository.get(audit_log_id)
+        audit_log = self._repository.get_by_id(audit_log_id)
         if audit_log is None:
             raise ResourceNotFoundError(f"Không tìm thấy audit log '{audit_log_id}'")
         return audit_log
@@ -48,7 +49,7 @@ class AuditLogService:
     ) -> list[AuditLog]:
         """Ủy quyền truy vấn có phân trang và bộ lọc cho repository."""
 
-        return self._repository.list_logs(
+        return self._repository.get_all(
             actor_user_id=actor_user_id,
             action=action,
             resource_type=resource_type,

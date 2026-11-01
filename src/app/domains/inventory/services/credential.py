@@ -2,16 +2,18 @@
 
 from datetime import UTC, datetime
 
-from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import CredentialRepositoryProtocol
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
+from app.domains.inventory.utils import ensure_unique_name
 
 
 class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
     def __init__(self, repository: CredentialRepositoryProtocol) -> None:
+        """Khởi tạo CredentialService cùng các phụ thuộc cần thiết."""
         self._repository = repository
 
     # =============================================================================
@@ -25,7 +27,11 @@ class CredentialService:
     ) -> Credential:
         """Tạo metadata và chuyển secret cho repository mã hóa."""
 
-        self._ensure_unique_name(payload.name)
+        ensure_unique_name(
+            self._repository.get_all(),
+            payload.name,
+            resource_label="credential",
+        )
         now = datetime.now(UTC)
         credential = Credential(
             id=generate_id(IdPrefix.CREDENTIAL),
@@ -44,12 +50,12 @@ class CredentialService:
     def list_credentials(self) -> list[Credential]:
         """Lấy danh sách metadata Credential."""
 
-        return self._repository.list()
+        return self._repository.get_all()
 
     def get_credential(self, credential_id: str) -> Credential:
         """Lấy metadata Credential hoặc phát sinh lỗi HTTP 404."""
 
-        credential = self._repository.get(credential_id)
+        credential = self._repository.get_by_id(credential_id)
         if credential is None:
             raise ResourceNotFoundError(
                 f"Không tìm thấy credential '{credential_id}'"
@@ -78,7 +84,12 @@ class CredentialService:
         candidate = current.model_copy(
             update={**changes, "last_updated_at": datetime.now(UTC)}
         )
-        self._ensure_unique_name(candidate.name, exclude_credential_id=credential_id)
+        ensure_unique_name(
+            self._repository.get_all(),
+            candidate.name,
+            resource_label="credential",
+            exclude_id=credential_id,
+        )
         self._repository.update(
             candidate,
             password=payload.password,
@@ -87,22 +98,3 @@ class CredentialService:
             update_secret="secret" in fields_set,
         )
         return candidate
-
-    # =============================================================================
-    # Xác minh tên Credential
-    # =============================================================================
-
-    def _ensure_unique_name(
-        self,
-        name: str,
-        exclude_credential_id: str | None = None,
-    ) -> None:
-        """Không cho phép tên Credential trùng nhau, không phân biệt hoa thường."""
-
-        for credential in self._repository.list():
-            if credential.id == exclude_credential_id:
-                continue
-            if credential.name.casefold() == name.casefold():
-                raise ResourceConflictError(
-                    f"Tên credential '{name}' đã được sử dụng"
-                )

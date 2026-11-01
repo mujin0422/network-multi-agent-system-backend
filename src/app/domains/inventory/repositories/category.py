@@ -14,16 +14,19 @@ from app.domains.inventory.schemas import Category
 class CategoryRepositoryProtocol(Protocol):
     """Persistence contract cho use case lấy danh sách Category."""
 
-    def list(self) -> list[Category]: ...
+    def get_all(self) -> list[Category]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
 
 
 class CategoryRepository:
     """Đọc loại thiết bị từ bảng ``categories``."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo CategoryRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def list(self) -> list[Category]:
+    def get_all(self) -> list[Category]:
         """Trả toàn bộ Category từ database."""
 
         statement = select(CategoryModel)

@@ -14,7 +14,7 @@ class StubCategoryRepository:
     def __init__(self, categories: list[Category]) -> None:
         self._categories = categories
 
-    def list(self) -> list[Category]:
+    def get_all(self) -> list[Category]:
         return [category.model_copy(deep=True) for category in self._categories]
 
 

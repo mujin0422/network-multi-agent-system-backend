@@ -12,7 +12,9 @@ from app.domains.inventory.schemas import DeviceConfig
 class DeviceConfigRepositoryProtocol(Protocol):
     """Contract for retrieving one device together with its credential."""
 
-    def get(self, device_identifier: str) -> DeviceConfig | None: ...
+    def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_identifier."""
+        ...
 
 
 class DeviceConfigRepository:
@@ -23,12 +25,14 @@ class DeviceConfigRepository:
     """
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
+        """Khởi tạo DeviceConfigRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
-    def get(self, device_identifier: str) -> DeviceConfig | None:
+    def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
         # Cho phép agent gọi bằng cả primary key (devc-...) và hostname (P1).
         # Credential chỉ được giải mã trong luồng kết nối và không được ghi log.
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_identifier."""
         statement = (
             select(
                 DeviceModel.hostname.label("gns3_node_name"),

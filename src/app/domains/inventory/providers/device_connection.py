@@ -22,7 +22,7 @@ class DeviceConnectionProvider:
 
     def get_device_config(self, device_identifier: str) -> DeviceConfig | None:
         """Load one connection-ready device from PostgreSQL."""
-        return self._repository.get(device_identifier)
+        return self._repository.get_by_identifier(device_identifier)
 
     def prepare_device(self, device_identifier: str) -> DeviceConfig:
         """Lấy config kết nối đã giải mã từ database."""

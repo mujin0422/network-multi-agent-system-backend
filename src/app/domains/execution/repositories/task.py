@@ -12,16 +12,25 @@ from app.domains.execution.schemas import Task
 class TaskRepositoryProtocol(Protocol):
     """Contract persistence của bảng tasks."""
 
-    def save_task(self, task: Task) -> None: ...
-    def get_task(self, task_id: str) -> Task | None: ...
-    def list_tasks(self) -> list[Task]: ...
-    def find_task_by_source_message(self, message_id: str) -> Task | None: ...
+    def save_task(self, task: Task) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task."""
+        ...
+    def get_by_id(self, task_id: str) -> Task | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
+        ...
+    def get_all(self) -> list[Task]:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
+        ...
+    def get_by_source_message_id(self, message_id: str) -> Task | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_source_message_id."""
+        ...
 
 
 class TaskRepository:
     """Quản lý vòng đời record thuộc bảng tasks."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo TaskRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_task(self, task: Task) -> None:
@@ -51,14 +60,14 @@ class TaskRepository:
         model.started_at = task.started_at
         model.completed_at = task.completed_at
 
-    def get_task(self, task_id: str) -> Task | None:
+    def get_by_id(self, task_id: str) -> Task | None:
         """Lấy Task theo primary key."""
 
         with self._sessions() as session:
             model = session.get(TaskModel, task_id)
             return Task.model_validate(model, from_attributes=True) if model else None
 
-    def list_tasks(self) -> list[Task]:
+    def get_all(self) -> list[Task]:
         """Lấy danh sách Task, Task mới nhất đứng trước."""
 
         statement = select(TaskModel).order_by(TaskModel.created_at.desc(), TaskModel.id)
@@ -68,7 +77,7 @@ class TaskRepository:
                 for model in session.scalars(statement).all()
             ]
 
-    def find_task_by_source_message(self, message_id: str) -> Task | None:
+    def get_by_source_message_id(self, message_id: str) -> Task | None:
         """Tìm Task đã được tạo từ USER message để chống tạo trùng."""
 
         statement = select(TaskModel).where(TaskModel.source_message_id == message_id)

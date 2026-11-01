@@ -92,7 +92,7 @@ class StubExecutionRepository:
         self.operation_devices = []
         self.activities = []
 
-    def find_task_by_source_message(self, message_id):
+    def get_task_by_source_message_id(self, message_id):
         return next(
             (task for task in self.tasks.values() if task.source_message_id == message_id),
             None,
@@ -101,16 +101,16 @@ class StubExecutionRepository:
     def save_task(self, task):
         self.tasks[task.id] = task
 
-    def get_task(self, task_id):
+    def get_task_by_id(self, task_id):
         return self.tasks.get(task_id)
 
-    def list_tasks(self):
+    def get_all_tasks(self):
         return list(self.tasks.values())
 
-    def list_operations(self, task_id):
+    def get_operations_by_task_id(self, task_id):
         return [item for item in self.operations if item.task_id == task_id]
 
-    def get_operation(self, operation_id):
+    def get_operation_by_id(self, operation_id):
         return next((item for item in self.operations if item.id == operation_id), None)
 
     def save_operation(self, operation):
@@ -122,7 +122,7 @@ class StubExecutionRepository:
         self.dependencies.extend(dependencies)
         self.operation_devices.extend(operation_devices)
 
-    def list_task_activity_events(self, task_id):
+    def get_task_activity_events_by_task_id(self, task_id):
         return [item for item in self.activities if item.task_id == task_id]
 
     def save_task_activity_event(self, event):
@@ -133,7 +133,7 @@ class StubDeviceRepository:
     def __init__(self, device):
         self.device = device
 
-    def list(self):
+    def get_all(self):
         return [self.device]
 
 

@@ -8,6 +8,7 @@ class CategoryService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới loại thiết bị."""
 
     def __init__(self, repository: CategoryRepositoryProtocol) -> None:
+        """Khởi tạo CategoryService cùng các phụ thuộc cần thiết."""
         self._repository = repository
 
     # =============================================================================
@@ -17,4 +18,4 @@ class CategoryService:
     def list_categories(self) -> list[Category]:
         """Lấy danh sách Category có thể dùng khi khai báo Device."""
 
-        return self._repository.list()
+        return self._repository.get_all()

@@ -29,6 +29,7 @@ class ConversationService:
         conversation_repository: ConversationRepositoryProtocol,
         message_repository: MessageRepositoryProtocol,
     ) -> None:
+        """Khởi tạo ConversationService cùng các phụ thuộc cần thiết."""
         self._conversation_repository = conversation_repository
         self._message_repository = message_repository
 
@@ -80,14 +81,18 @@ class ConversationService:
 
     # READ (Conversation) — Lấy danh sách conversation, có thể lọc theo user_id.
     def list(self, user_id: str | None = None) -> list[Conversation]:
-        return self._conversation_repository.list_conversations(user_id)
+        """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list."""
+        return self._conversation_repository.get_all(user_id)
 
     # READ (Conversation) — Lấy chi tiết conversation theo mã, bao gồm danh sách message.
     def get(self, conversation_id: str) -> ConversationDetail:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get."""
         conversation = self._require_conversation(conversation_id)
         return ConversationDetail(
             **conversation.model_dump(),
-            messages=self._message_repository.list_by_conversation(conversation_id),
+            messages=self._message_repository.get_all_by_conversation_id(
+                conversation_id
+            ),
         )
 
     # =============================================================================
@@ -96,11 +101,13 @@ class ConversationService:
 
     # READ (Message) — Lấy danh sách message của một conversation đã tồn tại.
     def list_messages(self, conversation_id: str) -> list[Message]:
+        """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_messages."""
         self._require_conversation(conversation_id)
-        return self._message_repository.list_by_conversation(conversation_id)
+        return self._message_repository.get_all_by_conversation_id(conversation_id)
 
     # CREATE (Message) — Lưu message mới vào conversation đã tồn tại.
     def add_message(self, conversation_id: str, payload: MessageCreate) -> Message:
+        """Tạo mới dữ liệu theo nghiệp vụ của phương thức add_message."""
         self._require_conversation(conversation_id)
         now = datetime.now(UTC)
         message = Message(
@@ -126,7 +133,8 @@ class ConversationService:
 
     # READ (Conversation) — Xác nhận conversation tồn tại, nếu không ném lỗi ResourceNotFoundError.
     def _require_conversation(self, conversation_id: str) -> Conversation:
-        conversation = self._conversation_repository.get_conversation(conversation_id)
+        """Kiểm tra điều kiện nghiệp vụ trong phương thức _require_conversation."""
+        conversation = self._conversation_repository.get_by_id(conversation_id)
         if conversation is None:
             raise ResourceNotFoundError(
                 f"Không tìm thấy conversation '{conversation_id}'"

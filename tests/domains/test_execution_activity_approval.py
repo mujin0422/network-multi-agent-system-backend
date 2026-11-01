@@ -69,19 +69,19 @@ class ApprovalRepositoryStub:
         )
         self.expired_ids: list[str] = []
 
-    def get_task(self, task_id: str):
+    def get_task_by_id(self, task_id: str):
         return self.task if task_id == self.task.id else None
 
-    def get_operation(self, operation_id: str):
+    def get_operation_by_id(self, operation_id: str):
         return self.operation if operation_id == self.operation.id else None
 
-    def list_task_activity_events(self, task_id: str):
+    def get_task_activity_events_by_task_id(self, task_id: str):
         return [self.event] if task_id == self.task.id else []
 
-    def list_operation_approvals(self, operation_id: str):
+    def get_operation_approvals_by_operation_id(self, operation_id: str):
         return [self.approval] if operation_id == self.operation.id else []
 
-    def get_operation_approval(self, approval_id: str):
+    def get_operation_approval_by_id(self, approval_id: str):
         return self.approval if approval_id == self.approval.id else None
 
     def expire_operation_approval(self, approval_id: str) -> None:
