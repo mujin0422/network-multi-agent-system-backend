@@ -23,10 +23,7 @@ from app.domains.identity.schemas import User, UserRecord, UserStatus
 from app.domains.identity.services import IdentityService
 from app.domains.identity.utils import hash_password
 from app.agents.dependencies import (
-    get_analysis_orchestrator,
-    get_execution_orchestrator,
-    get_gns3_provider,
-    get_planning_orchestrator,
+    get_network_automation_workflow,
 )
 from app.core.config import Settings
 from datetime import UTC, datetime
@@ -122,52 +119,21 @@ async def override_identity_service() -> IdentityService:
 app.dependency_overrides[get_identity_service] = override_identity_service
 
 
-class StubPlanningOrchestrator:
-    async def plan_user_message(self, conversation, message):
-        return None
+class StubNetworkAutomationWorkflow:
+    async def run_message(self, conversation, message):
+        return {"conversation": conversation, "message": message}
+
+    async def resume_after_approval(self, operation_device_id):
+        return {"operation_device_id": operation_device_id}
 
 
-async def override_planning_orchestrator() -> StubPlanningOrchestrator:
-    return StubPlanningOrchestrator()
+async def override_network_automation_workflow() -> StubNetworkAutomationWorkflow:
+    return StubNetworkAutomationWorkflow()
 
 
-app.dependency_overrides[get_planning_orchestrator] = override_planning_orchestrator
-
-
-class StubExecutionOrchestrator:
-    async def execute_task(self, task):
-        return []
-
-
-async def override_execution_orchestrator() -> StubExecutionOrchestrator:
-    return StubExecutionOrchestrator()
-
-
-app.dependency_overrides[get_execution_orchestrator] = override_execution_orchestrator
-
-
-class StubAnalysisOrchestrator:
-    async def analyze_and_respond(self, task, results):
-        return None
-
-
-async def override_analysis_orchestrator() -> StubAnalysisOrchestrator:
-    return StubAnalysisOrchestrator()
-
-
-app.dependency_overrides[get_analysis_orchestrator] = override_analysis_orchestrator
-
-
-class StubGNS3Provider:
-    def check_server_available(self):
-        return {"version": "test"}
-
-
-async def override_gns3_provider() -> StubGNS3Provider:
-    return StubGNS3Provider()
-
-
-app.dependency_overrides[get_gns3_provider] = override_gns3_provider
+app.dependency_overrides[get_network_automation_workflow] = (
+    override_network_automation_workflow
+)
 
 
 class StubConversationTitleGenerator:
