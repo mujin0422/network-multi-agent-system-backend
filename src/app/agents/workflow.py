@@ -1,4 +1,4 @@
-"""LangGraph workflow for the end-to-end network automation lifecycle."""
+"""Workflow LangGraph điều phối toàn bộ vòng đời tự động hóa mạng."""
 
 from typing import NotRequired, TypedDict
 
@@ -16,11 +16,11 @@ from app.domains.inventory.providers import GNS3Provider
 
 
 class NetworkWorkflowState(TypedDict):
-    """State exchanged between LangGraph nodes.
+    """Trạng thái được trao đổi giữa các node của LangGraph.
 
-    Business state remains persisted by the domain services in PostgreSQL.
-    LangGraph owns the workflow transition state only, avoiding a second source
-    of truth for Task, Operation and Approval lifecycle data.
+    Trạng thái nghiệp vụ vẫn do domain service lưu trong PostgreSQL. LangGraph
+    chỉ quản lý dữ liệu chuyển tiếp giữa các node để không tạo thêm một nguồn
+    dữ liệu cạnh tranh cho vòng đời Task, Operation và Approval.
     """
 
     conversation: NotRequired[Conversation]
@@ -31,7 +31,7 @@ class NetworkWorkflowState(TypedDict):
 
 
 class NetworkAutomationWorkflow:
-    """Compiled LangGraph coordinating planning, execution and analysis."""
+    """LangGraph đã biên dịch, điều phối lập kế hoạch, thực thi và phân tích."""
 
     def __init__(
         self,
@@ -40,6 +40,8 @@ class NetworkAutomationWorkflow:
         execution: ExecutionOrchestrator,
         analysis: AnalysisOrchestrator,
     ) -> None:
+        """Khởi tạo các dependency và biên dịch hai graph xử lý chính."""
+
         self._gns3_provider = gns3_provider
         self._planning = planning
         self._execution = execution
@@ -48,6 +50,8 @@ class NetworkAutomationWorkflow:
         self._approval_graph = self._build_approval_graph()
 
     def _build_message_graph(self):
+        """Tạo graph đầy đủ dành cho một message mới từ người dùng."""
+
         builder = StateGraph(NetworkWorkflowState)
         builder.add_node("check_gns3", self._check_gns3)
         builder.add_node("plan", self._plan)
@@ -62,6 +66,8 @@ class NetworkAutomationWorkflow:
         return builder.compile()
 
     def _build_approval_graph(self):
+        """Tạo graph tiếp tục thực thi sau khi cấu hình được phê duyệt."""
+
         builder = StateGraph(NetworkWorkflowState)
         builder.add_node("execute", self._execute)
         builder.add_node("analyze", self._analyze)
@@ -74,12 +80,15 @@ class NetworkAutomationWorkflow:
         self,
         _state: NetworkWorkflowState,
     ) -> dict:
-        # This is the same short availability probe used before LangGraph.
-        # Device commands remain offloaded by NetworkAgent.
+        """Kiểm tra nhanh khả năng truy cập GNS3 trước khi lập kế hoạch."""
+
+        # Đây chỉ là health probe; lệnh thiết bị vẫn do NetworkAgent thực hiện.
         self._gns3_provider.check_server_available()
         return {}
 
     async def _plan(self, state: NetworkWorkflowState) -> dict:
+        """Đọc Conversation và Message từ state để tạo Task có kế hoạch."""
+
         conversation = state.get("conversation")
         message = state.get("message")
         if conversation is None or message is None:
@@ -88,6 +97,8 @@ class NetworkAutomationWorkflow:
         return {"task": task}
 
     async def _execute(self, state: NetworkWorkflowState) -> dict:
+        """Thực thi Task trong state và trả kết quả mạng cho node kế tiếp."""
+
         task = state.get("task")
         if task is None:
             raise ValueError("Workflow thực thi cần Task")
@@ -95,6 +106,8 @@ class NetworkAutomationWorkflow:
         return {"execution_results": results}
 
     async def _analyze(self, state: NetworkWorkflowState) -> dict:
+        """Phân tích kết quả thực thi và tạo phản hồi cuối cho hội thoại."""
+
         task = state.get("task")
         if task is None:
             raise ValueError("Workflow phân tích cần Task")
@@ -109,7 +122,7 @@ class NetworkAutomationWorkflow:
         conversation: Conversation,
         message: Message,
     ) -> NetworkWorkflowState:
-        """Run the complete graph for one USER message."""
+        """Chạy graph đầy đủ cho một message do người dùng gửi."""
 
         return await self._message_graph.ainvoke(
             {
@@ -123,7 +136,7 @@ class NetworkAutomationWorkflow:
         self,
         operation_device_id: str,
     ) -> NetworkWorkflowState:
-        """Enter the graph at execution using Task state persisted in PostgreSQL."""
+        """Tiếp tục từ node thực thi bằng Task đã được lưu trong PostgreSQL."""
 
         task = self._execution.load_task_for_operation_device(operation_device_id)
         return await self._approval_graph.ainvoke(
@@ -134,6 +147,6 @@ class NetworkAutomationWorkflow:
         )
 
     def graph_mermaid(self) -> str:
-        """Expose a deterministic diagram for documentation and diagnostics."""
+        """Xuất sơ đồ Mermaid ổn định để làm tài liệu và chẩn đoán."""
 
         return self._message_graph.get_graph().draw_mermaid()
