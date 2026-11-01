@@ -1,6 +1,7 @@
 """Public API cho network execution tools."""
 
 from app.tools.network.backends import NetmikoNetworkTool, NornirNetworkTool
+from app.tools.network.commands import normalize_config_commands
 from app.tools.network.protocol import NetworkTool
 from app.tools.network.schemas import CommandResult
 
@@ -9,4 +10,5 @@ __all__ = [
     "NetmikoNetworkTool",
     "NetworkTool",
     "NornirNetworkTool",
+    "normalize_config_commands",
 ]

@@ -4,6 +4,8 @@ import asyncio
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from app.agents.orchestrator import PlanningOrchestrator
 from app.agents.planner import PlannerAgent
 from app.domains.conversation.schemas import Conversation, Message, MessageSender
@@ -11,6 +13,7 @@ from app.domains.execution.schemas import (
     AccessMode,
     DependencyType,
     DeviceRole,
+    ExecutionPlanCreate,
     TaskType,
 )
 from app.domains.execution.services import ExecutionService
@@ -87,6 +90,7 @@ class StubExecutionRepository:
         self.operations = []
         self.dependencies = []
         self.operation_devices = []
+        self.activities = []
 
     def find_task_by_source_message(self, message_id):
         return next(
@@ -117,6 +121,12 @@ class StubExecutionRepository:
         self.operations.extend(operations)
         self.dependencies.extend(dependencies)
         self.operation_devices.extend(operation_devices)
+
+    def list_task_activity_events(self, task_id):
+        return [item for item in self.activities if item.task_id == task_id]
+
+    def save_task_activity_event(self, event):
+        self.activities.append(event)
 
 
 class StubDeviceRepository:
@@ -198,3 +208,68 @@ def test_planner_retries_when_model_omits_device_command() -> None:
 
     assert model.call_count == 2
     assert plan.operations[0].operation_parameters == {"command": "show ip route"}
+
+
+def test_planner_normalizes_write_commands_before_approval() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "CONFIGURATION",
+            "operations": [
+                {
+                    "operation_intent": "CONFIGURE_MPLS",
+                    "operation_parameters": {
+                        "commands": [
+                            "configure terminal",
+                            "interface GigabitEthernet0/0",
+                            "mpls ip",
+                            "exit",
+                            "end",
+                            "write memory",
+                        ]
+                    },
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "TARGET",
+                            "access_mode": "WRITE",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    normalized = PlannerAgent._normalize_write_commands(plan)
+
+    assert normalized.operations[0].operation_parameters == {
+        "commands": ["interface GigabitEthernet0/0", "mpls ip", "exit"]
+    }
+
+
+def test_planner_rejects_physical_interface_missing_from_gns3_node() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "CONFIGURATION",
+            "operations": [
+                {
+                    "operation_intent": "CONFIGURE_INTERFACE",
+                    "operation_parameters": {
+                        "commands": ["interface GigabitEthernet0/0", "no shutdown"]
+                    },
+                    "devices": [
+                        {
+                            "device_id": "devc-p3",
+                            "device_role": "TARGET",
+                            "access_mode": "WRITE",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="FastEthernet0/0"):
+        PlannerAgent._validate_interface_commands(
+            plan,
+            {"devc-p3": ["FastEthernet0/0", "FastEthernet1/0"]},
+        )

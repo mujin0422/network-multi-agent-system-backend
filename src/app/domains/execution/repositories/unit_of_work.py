@@ -64,6 +64,7 @@ class ExecutionRepositoryProtocol(
     def list_dependencies(self, operation_id: str) -> list[OperationDependency]: ...
     def save_task_execution(self, execution: TaskExecution) -> None: ...
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None: ...
+    def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]: ...
 
 
 class ExecutionRepository:
@@ -144,6 +145,9 @@ class ExecutionRepository:
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
         self._device_action_logs.add_all(logs)
+
+    def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
+        return self._device_action_logs.list_recent(limit)
 
     def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]:
         return self._task_activity_events.list_task_activity_events(task_id)

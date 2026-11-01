@@ -102,13 +102,16 @@ ConversationTitleGenerator.generate()
 ConversationService.update_title()
         │
         ▼
-GNS3 availability check
+LangGraph: check_gns3
         │
         ▼
-PlanningOrchestrator.plan_user_message()
+LangGraph: plan
         │
         ▼
-ExecutionOrchestrator.execute_task()
+LangGraph: execute
+        │
+        ▼
+LangGraph: analyze
         │
         ▼
 Trả Conversation + Message đầu tiên cho Frontend

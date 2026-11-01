@@ -10,7 +10,12 @@ from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
 from app.domains.identity.repositories import IdentityRepository
 from app.domains.identity.schemas import User
-from app.domains.identity.services import IdentityService, RoleService, UserService
+from app.domains.identity.services import (
+    AccessControlService,
+    IdentityService,
+    RoleService,
+    UserService,
+)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -35,6 +40,11 @@ def _build_role_service() -> RoleService:
     return RoleService(_build_identity_repository())
 
 
+@lru_cache
+def _build_access_control_service() -> AccessControlService:
+    return AccessControlService(_build_identity_repository())
+
+
 async def get_identity_service() -> IdentityService:
     return _build_identity_service()
 
@@ -45,6 +55,10 @@ async def get_user_service() -> UserService:
 
 async def get_role_service() -> RoleService:
     return _build_role_service()
+
+
+async def get_access_control_service() -> AccessControlService:
+    return _build_access_control_service()
 
 
 async def get_current_identity(

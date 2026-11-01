@@ -1,6 +1,7 @@
 """Analyst Agent phân tích output, không kết nối thiết bị."""
 
 import json
+import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -45,8 +46,12 @@ class AnalystAgent:
                             "Kết quả trước không hợp lệ hoặc đã bị cắt. Hãy tạo lại "
                             "một JSON MỚI, ngắn gọn và hoàn chỉnh; không tiếp tục đoạn cũ.\n"
                             f"Lỗi: {exc.__cause__ or exc}\n"
-                            "Giới hạn: summary <= 1200 ký tự; mỗi danh sách <= 5 ý; "
-                            "mỗi ý <= 300 ký tự.\n"
+                            "Giới hạn: summary <= 600 ký tự; mỗi danh sách <= 4 ý; "
+                            "mỗi ý <= 240 ký tự. Không lặp dữ kiện giữa các phần.\n"
+                            "Dùng đúng 5 key summary, findings, likely_causes, "
+                            "recommendations, requires_more_data và luôn đặt mọi "
+                            "key trong dấu ngoặc kép. Escape dấu ngoặc kép bên trong "
+                            "chuỗi và không đặt dấu phẩy sau phần tử cuối.\n"
                             f"Phần đầu nội dung sai để đối chiếu: {invalid_content[:600]}"
                         )
                     )
@@ -66,9 +71,30 @@ class AnalystAgent:
                 return AnalysisResult.model_validate(content)
             if not isinstance(content, str):
                 raise ValueError("Analyst Agent không trả JSON dạng text")
-            raw_json = content.strip()
-            if raw_json.startswith("```") and raw_json.endswith("```"):
-                raw_json = "\n".join(raw_json.splitlines()[1:-1]).strip()
-            return AnalysisResult.model_validate_json(raw_json)
+            raw_json = AnalystAgent._extract_json_object(content)
+            try:
+                return AnalysisResult.model_validate_json(raw_json)
+            except (ValidationError, ValueError):
+                # Một số model local/NIM đôi khi bỏ dấu ngoặc kép ở key hoặc
+                # thêm dấu phẩy cuối dù prompt đã yêu cầu JSON nghiêm ngặt.
+                # Chỉ sửa các key thuộc schema để không thay đổi nội dung lệnh.
+                repaired_json = re.sub(
+                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data)(\s*:)',
+                    r'\1"\2"\3',
+                    raw_json,
+                )
+                repaired_json = re.sub(r",(\s*[}\]])", r"\1", repaired_json)
+                return AnalysisResult.model_validate_json(repaired_json)
         except (ValidationError, ValueError) as exc:
             raise ValueError("Analyst Agent trả JSON không đúng AnalysisResult") from exc
+
+    @staticmethod
+    def _extract_json_object(content: str) -> str:
+        raw_json = content.strip()
+        if raw_json.startswith("```") and raw_json.endswith("```"):
+            raw_json = "\n".join(raw_json.splitlines()[1:-1]).strip()
+        object_start = raw_json.find("{")
+        object_end = raw_json.rfind("}")
+        if object_start >= 0 and object_end > object_start:
+            return raw_json[object_start : object_end + 1]
+        return raw_json

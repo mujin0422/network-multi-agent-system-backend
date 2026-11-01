@@ -6,9 +6,23 @@ from uuid import UUID
 import pytest
 
 from app.core.config import Settings
-from app.core.exceptions import AuthenticationError, AuthorizationError
-from app.domains.identity.schemas import User, UserRecord, UserStatus
-from app.domains.identity.services import IdentityService
+from app.core.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
+from app.domains.identity.schemas import (
+    Action,
+    ManagementFunction,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRecord,
+    UserStatus,
+)
+from app.domains.identity.services import AccessControlService, IdentityService
 from app.domains.identity.utils import hash_password
 
 
@@ -107,3 +121,56 @@ def test_permission_is_loaded_from_role_permissions(identity):
     service.require_permission(user, "Device Management", "View")
     with pytest.raises(AuthorizationError):
         service.require_permission(user, "Device Management", "Delete")
+
+
+class MemoryAccessControlRepository:
+    def __init__(self) -> None:
+        now = datetime.now(UTC)
+        self.roles = {
+            "role-admin": Role(id="role-admin", name="Super Admin", created_at=now),
+            "role-operator": Role(id="role-operator", name="Operator", created_at=now),
+        }
+        self.role_permissions = {
+            "role-operator": [
+                RolePermission(role_id="role-operator", permission_id="perm-view")
+            ]
+        }
+
+    def get_role(self, role_id):
+        return self.roles.get(role_id)
+
+    def list_actions(self):
+        return [Action(id="act-view", name="View")]
+
+    def list_management_functions(self):
+        return [ManagementFunction(id="func-device", name="Device Management")]
+
+    def list_permission_catalog(self):
+        return [Permission(id="perm-view", function_id="func-device", action_id="act-view")]
+
+    def list_role_permissions(self, role_id):
+        return self.role_permissions.get(role_id, [])
+
+    def replace_role_permissions(self, role_id, permission_ids):
+        rows = [RolePermission(role_id=role_id, permission_id=item) for item in sorted(permission_ids)]
+        self.role_permissions[role_id] = rows
+        return rows
+
+
+def test_access_control_catalog_and_role_permission_replacement() -> None:
+    service = AccessControlService(MemoryAccessControlRepository())
+
+    catalog = service.get_catalog()
+    rows = service.replace_role_permissions("role-operator", [])
+
+    assert [item.name for item in catalog.functions] == ["Device Management"]
+    assert rows == []
+
+
+def test_access_control_rejects_unknown_permission_and_super_admin_changes() -> None:
+    service = AccessControlService(MemoryAccessControlRepository())
+
+    with pytest.raises(ResourceNotFoundError):
+        service.replace_role_permissions("role-operator", ["perm-unknown"])
+    with pytest.raises(ResourceConflictError):
+        service.replace_role_permissions("role-admin", ["perm-view"])

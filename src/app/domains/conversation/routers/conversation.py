@@ -6,13 +6,8 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
-from app.agents.dependencies import (
-    get_analysis_orchestrator,
-    get_execution_orchestrator,
-    get_gns3_provider,
-    get_planning_orchestrator,
-)
-from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator, PlanningOrchestrator
+from app.agents.dependencies import get_network_automation_workflow
+from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.conversation.schemas import (
     Conversation,
     ConversationDetail,
@@ -32,7 +27,6 @@ from app.domains.conversation.services import (
 )
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
-from app.domains.inventory.providers import GNS3Provider
 
 
 router = APIRouter()
@@ -57,18 +51,12 @@ async def _generate_conversation_title(
 async def _run_ai_workflow(
     conversation: Conversation,
     message: Message,
-    planning_orchestrator: PlanningOrchestrator,
-    execution_orchestrator: ExecutionOrchestrator,
-    analysis_orchestrator: AnalysisOrchestrator,
-    gns3_provider: GNS3Provider,
+    workflow: NetworkAutomationWorkflow,
 ) -> None:
-    """Chạy workflow sau khi HTTP response đã trả để UI polling timeline."""
+    """Invoke LangGraph after the HTTP response for UI timeline polling."""
 
     try:
-        gns3_provider.check_server_available()
-        task = await planning_orchestrator.plan_user_message(conversation, message)
-        results = await execution_orchestrator.execute_task(task)
-        await analysis_orchestrator.analyze_and_respond(task, results)
+        await workflow.run_message(conversation, message)
     except Exception:
         logger.exception("AI workflow thất bại cho message %s", message.id)
 
@@ -78,20 +66,14 @@ async def _run_first_message_workflow(
     title_generator: ConversationTitleGeneratorProtocol,
     conversation: Conversation,
     message: Message,
-    planning_orchestrator: PlanningOrchestrator,
-    execution_orchestrator: ExecutionOrchestrator,
-    analysis_orchestrator: AnalysisOrchestrator,
-    gns3_provider: GNS3Provider,
+    workflow: NetworkAutomationWorkflow,
 ) -> None:
     """Ưu tiên workflow; sinh title sau để không gọi hai LLM đồng thời."""
 
     await _run_ai_workflow(
         conversation,
         message,
-        planning_orchestrator,
-        execution_orchestrator,
-        analysis_orchestrator,
-        gns3_provider,
+        workflow,
     )
     await _generate_conversation_title(
         service,
@@ -116,19 +98,10 @@ async def start_conversation(
         ConversationTitleGeneratorProtocol,
         Depends(get_conversation_title_generator),
     ],
-    planning_orchestrator: Annotated[
-        PlanningOrchestrator,
-        Depends(get_planning_orchestrator),
+    workflow: Annotated[
+        NetworkAutomationWorkflow,
+        Depends(get_network_automation_workflow),
     ],
-    execution_orchestrator: Annotated[
-        ExecutionOrchestrator,
-        Depends(get_execution_orchestrator),
-    ],
-    analysis_orchestrator: Annotated[
-        AnalysisOrchestrator,
-        Depends(get_analysis_orchestrator),
-    ],
-    gns3_provider: Annotated[GNS3Provider, Depends(get_gns3_provider)],
     user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
 ) -> ConversationStarted:
     """Tạo Conversation, lưu Message đầu tiên, sinh title và chạy AI workflow."""
@@ -144,10 +117,7 @@ async def start_conversation(
         title_generator,
         started.conversation,
         started.message,
-        planning_orchestrator,
-        execution_orchestrator,
-        analysis_orchestrator,
-        gns3_provider,
+        workflow,
     )
 
     return ConversationStarted(
@@ -216,19 +186,10 @@ async def add_message(
     payload: MessageCreate,
     background_tasks: BackgroundTasks,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
-    planning_orchestrator: Annotated[
-        PlanningOrchestrator,
-        Depends(get_planning_orchestrator),
+    workflow: Annotated[
+        NetworkAutomationWorkflow,
+        Depends(get_network_automation_workflow),
     ],
-    execution_orchestrator: Annotated[
-        ExecutionOrchestrator,
-        Depends(get_execution_orchestrator),
-    ],
-    analysis_orchestrator: Annotated[
-        AnalysisOrchestrator,
-        Depends(get_analysis_orchestrator),
-    ],
-    gns3_provider: Annotated[GNS3Provider, Depends(get_gns3_provider)],
     _user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
 ) -> Message:
     """Lưu message và kích hoạt planning nếu người gửi là USER.
@@ -250,10 +211,7 @@ async def add_message(
             _run_ai_workflow,
             conversation,
             message,
-            planning_orchestrator,
-            execution_orchestrator,
-            analysis_orchestrator,
-            gns3_provider,
+            workflow,
         )
 
     # Bước 4: API trả ngay message đã lưu.

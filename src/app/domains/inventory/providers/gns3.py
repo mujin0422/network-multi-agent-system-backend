@@ -25,6 +25,24 @@ class GNS3Provider:
             )
         return result
 
+    def list_node_interfaces(self) -> dict[str, list[str]]:
+        """Lấy tên interface thật của từng node trong topology hiện tại."""
+
+        result = self._request(f"{self._settings.gns3_project_url}/nodes")
+        if not isinstance(result, list):
+            raise ExternalServiceUnavailableError(
+                "GNS3 Server trả về danh sách node không hợp lệ"
+            )
+        return {
+            str(node["name"]): [
+                str(port["name"])
+                for port in node.get("ports", [])
+                if isinstance(port, dict) and port.get("name")
+            ]
+            for node in result
+            if isinstance(node, dict) and node.get("name")
+        }
+
     def _request(self, url: str) -> Any:
         request = Request(url, method="GET")
         try:

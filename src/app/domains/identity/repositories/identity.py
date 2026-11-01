@@ -20,7 +20,16 @@ from app.domains.identity.repositories.user_session import (
     UserSessionRepository,
     UserSessionRepositoryProtocol,
 )
-from app.domains.identity.schemas import Role, User, UserRecord, UserSessionRecord
+from app.domains.identity.schemas import (
+    Action,
+    ManagementFunction,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRecord,
+    UserSessionRecord,
+)
 
 
 class IdentityRepositoryProtocol(
@@ -86,6 +95,23 @@ class IdentityRepository:
 
     def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
         return self._role_permissions.get_permissions(role_id)
+
+    def list_actions(self) -> list[Action]:
+        return self._role_permissions.list_actions()
+
+    def list_management_functions(self) -> list[ManagementFunction]:
+        return self._role_permissions.list_management_functions()
+
+    def list_permission_catalog(self) -> list[Permission]:
+        return self._role_permissions.list_permission_catalog()
+
+    def list_role_permissions(self, role_id: str) -> list[RolePermission]:
+        return self._role_permissions.list_role_permissions(role_id)
+
+    def replace_role_permissions(
+        self, role_id: str, permission_ids: set[str]
+    ) -> list[RolePermission]:
+        return self._role_permissions.replace_role_permissions(role_id, permission_ids)
 
     # =============================================================================
     # User Session — quản lý phiên và rotate refresh token nguyên tử

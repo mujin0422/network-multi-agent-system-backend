@@ -280,6 +280,9 @@ class ExecutionService:
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
         self._repository.save_device_action_logs(logs)
 
+    def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
+        return self._repository.list_device_action_logs(limit)
+
     # =============================================================================
     # Execution Plan — tạo operation và lưu kế hoạch nguyên tử
     # =============================================================================
