@@ -24,3 +24,31 @@ def test_legacy_project_id_environment_name_is_still_supported() -> None:
 
     assert settings.gns3_project_id == "legacy-project"
     assert settings.gns3_project_url.endswith("/projects/legacy-project")
+
+
+def test_provider_lists_node_interface_names(monkeypatch) -> None:
+    settings = Settings(
+        gns3_ip="192.0.2.10",
+        gns3_port=3080,
+        gns3_project_id="project-1",
+        _env_file=None,
+    )
+    provider = GNS3Provider(settings)
+
+    monkeypatch.setattr(
+        provider,
+        "_request",
+        lambda _url: [
+            {
+                "name": "P3",
+                "ports": [
+                    {"name": "FastEthernet0/0"},
+                    {"name": "FastEthernet1/0"},
+                ],
+            }
+        ],
+    )
+
+    assert provider.list_node_interfaces() == {
+        "P3": ["FastEthernet0/0", "FastEthernet1/0"]
+    }

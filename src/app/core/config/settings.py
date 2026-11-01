@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     ssh_timeout: int = Field(default=60, gt=0)
     ssh_auth_timeout: int = Field(default=30, gt=0)
     ssh_delay_factor: float = Field(default=0.5, gt=0)
+    netmiko_read_timeout: float = Field(default=120.0, gt=0)
+    netmiko_cmd_verify: bool = False
     network_backend: Literal["netmiko", "nornir"] = "netmiko"
     nornir_num_workers: int = Field(default=20, gt=0, le=200)
 

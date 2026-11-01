@@ -5,15 +5,24 @@ from typing import Any
 from app.domains.execution.schemas import AccessMode
 from app.domains.inventory.schemas import DeviceConfig
 from app.domains.inventory.services import NetworkService
+from app.tools.network.commands import normalize_config_commands
 from app.tools.network.schemas import CommandResult
 
 
 class NornirNetworkTool:
     """Tạo Nornir inventory động từ thiết bị được lưu trong database."""
 
-    def __init__(self, network_service: NetworkService, num_workers: int = 20) -> None:
+    def __init__(
+        self,
+        network_service: NetworkService,
+        num_workers: int = 20,
+        read_timeout: float = 60.0,
+        cmd_verify: bool = False,
+    ) -> None:
         self._network_service = network_service
         self._num_workers = num_workers
+        self._read_timeout = read_timeout
+        self._cmd_verify = cmd_verify
 
     def execute(
         self,
@@ -22,12 +31,16 @@ class NornirNetworkTool:
         commands: list[str],
     ) -> list[CommandResult]:
         device = self._network_service.prepare_device(device_id)
+        if access_mode == AccessMode.WRITE:
+            commands = normalize_config_commands(commands)
 
         nornir = self._build_nornir(device_id, device)
         aggregated_result = nornir.run(
             task=self._run_commands,
             access_mode=access_mode,
             commands=commands,
+            read_timeout=self._read_timeout,
+            cmd_verify=self._cmd_verify,
         )
         host_result = aggregated_result[device_id]
         if host_result.failed:
@@ -44,7 +57,7 @@ class NornirNetworkTool:
             return [
                 CommandResult(
                     command="\n".join(commands),
-                    output=str(task_results[-1].result),
+                    output="\n".join(str(item.result) for item in task_results),
                 )
             ]
         return [
@@ -89,20 +102,34 @@ class NornirNetworkTool:
         )
 
     @staticmethod
-    def _run_commands(task: Any, access_mode: AccessMode, commands: list[str]) -> None:
-        from nornir_netmiko.tasks import netmiko_send_command, netmiko_send_config
+    def _run_commands(
+        task: Any,
+        access_mode: AccessMode,
+        commands: list[str],
+        read_timeout: float,
+        cmd_verify: bool,
+    ) -> None:
+        from nornir_netmiko.tasks import (
+            netmiko_save_config,
+            netmiko_send_command,
+            netmiko_send_config,
+        )
 
         if access_mode == AccessMode.WRITE:
             task.run(
                 task=netmiko_send_config,
                 config_commands=commands,
+                read_timeout=read_timeout,
+                cmd_verify=cmd_verify,
                 name="configure device",
             )
+            task.run(task=netmiko_save_config, name="save configuration")
             return
 
         for command in commands:
             task.run(
                 task=netmiko_send_command,
                 command_string=command,
+                read_timeout=read_timeout,
                 name=command,
             )
