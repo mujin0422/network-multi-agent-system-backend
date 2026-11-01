@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     auth_jwt_secret: str = "development-only-change-me"
     auth_access_token_minutes: int = Field(default=15, gt=0, le=1440)
     auth_refresh_token_days: int = Field(default=30, gt=0, le=365)
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Prevent production from signing JWTs with a default or weak secret."""
+
+        if self.app_env == "production" and (
+            self.auth_jwt_secret == "development-only-change-me"
+            or len(self.auth_jwt_secret.encode("utf-8")) < 32
+        ):
+            raise ValueError(
+                "AUTH_JWT_SECRET must be a random secret of at least 32 bytes in production"
+            )
+        return self
 
     # GNS3 project settings.
     gns3_ip: str = "127.0.0.1"

@@ -1,9 +1,11 @@
 """Unit tests for IdentityService authentication and RBAC behavior."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import jwt
 import pytest
+from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.core.exceptions import (
@@ -19,6 +21,7 @@ from app.domains.identity.schemas import (
     Role,
     RolePermission,
     User,
+    UserCreate,
     UserRecord,
     UserStatus,
 )
@@ -113,6 +116,52 @@ def test_login_rejects_bad_password_and_disabled_user(identity):
     repo.user = repo.user.model_copy(update={"user_status": UserStatus.DISABLED})
     with pytest.raises(AuthenticationError):
         service.login("test@example.com", "correct-password")
+
+
+def test_authenticate_rejects_forged_and_expired_access_tokens(identity):
+    service, repo = identity
+    tokens = service.login("test@example.com", "correct-password")
+
+    forged = jwt.encode(
+        jwt.decode(tokens.access_token, options={"verify_signature": False}),
+        "different-secret",
+        algorithm="HS256",
+    )
+    with pytest.raises(AuthenticationError):
+        service.authenticate(forged)
+
+    now = datetime.now(UTC)
+    expired = jwt.encode(
+        {
+            "sub": "user-test",
+            "sid": str(next(iter(repo.sessions))),
+            "iat": now - timedelta(minutes=2),
+            "exp": now - timedelta(minutes=1),
+            "jti": "expired-token",
+        },
+        "unit-test-secret",
+        algorithm="HS256",
+    )
+    with pytest.raises(AuthenticationError):
+        service.authenticate(expired)
+
+
+def test_user_password_rejects_values_longer_than_bcrypt_limit():
+    with pytest.raises(ValidationError):
+        UserCreate(
+            role_id="role-test",
+            email="test@example.com",
+            password="á" * 37,
+            full_name="Test User",
+        )
+
+
+def test_production_rejects_default_or_short_jwt_secret():
+    with pytest.raises(ValidationError):
+        Settings(app_env="production", auth_jwt_secret="short-secret")
+
+    settings = Settings(app_env="production", auth_jwt_secret="x" * 32)
+    assert settings.auth_jwt_secret == "x" * 32
 
 
 def test_permission_is_loaded_from_role_permissions(identity):

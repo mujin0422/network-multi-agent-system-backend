@@ -84,7 +84,12 @@ class IdentityService:
 
     def authenticate(self, token: str) -> tuple[User, UUID]:
         try:
-            data = jwt.decode(token, self._settings.auth_jwt_secret, algorithms=["HS256"])
+            data = jwt.decode(
+                token,
+                self._settings.auth_jwt_secret,
+                algorithms=["HS256"],
+                options={"require": ["sub", "sid", "iat", "exp", "jti"]},
+            )
             payload = AccessTokenPayload.model_validate(data)
             session_id = UUID(payload.sid)
         except (jwt.PyJWTError, ValueError):
