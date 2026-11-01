@@ -28,10 +28,10 @@ from app.domains.execution.routers.dependencies import get_execution_service
 router = APIRouter()
 operations_router = APIRouter()
 approvals_router = APIRouter()
-audit_logs_router = APIRouter()
+device_action_logs_router = APIRouter()
 
 
-@audit_logs_router.get("/", response_model=list[DeviceActionLog])
+@device_action_logs_router.get("/", response_model=list[DeviceActionLog])
 async def list_device_action_logs(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
