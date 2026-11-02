@@ -192,7 +192,12 @@ class ApprovalTimeoutRepository:
                         mapping.operation_device_status
                         for mapping in mappings_by_operation.get(item.id, [])
                     ]
-                    if OperationDeviceStatus.SUCCESS in statuses:
+                    if statuses and all(
+                        status == OperationDeviceStatus.SUCCESS for status in statuses
+                    ):
+                        item.operation_status = OperationStatus.SUCCESS
+                        any_success = True
+                    elif OperationDeviceStatus.SUCCESS in statuses:
                         item.operation_status = OperationStatus.PARTIAL_SUCCESS
                         any_success = True
                     elif OperationDeviceStatus.REJECTED in statuses:
