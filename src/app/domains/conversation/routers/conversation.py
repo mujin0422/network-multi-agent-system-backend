@@ -17,6 +17,7 @@ from app.domains.conversation.schemas import (
     Message,
     MessageCreate,
     MessageSender,
+    MessageType,
 )
 from app.domains.conversation.routers.dependencies import (
     get_conversation_service,
@@ -81,11 +82,11 @@ async def _run_first_message_workflow(
             task = state.get("task")
             if task is None:
                 raise RuntimeError("Workflow benchmark không trả về Task")
-            benchmark_service.complete(
-                benchmark_run_id,
-                task,
-                state.get("response"),
-            )
+            # Approval_REQUEST is not a final result. Evaluation happens after
+            # the approval workflow resumes and produces a FINAL_RESPONSE.
+            response = state.get("response")
+            if response is not None and response.message_type == MessageType.FINAL_RESPONSE:
+                benchmark_service.complete(benchmark_run_id, task, response)
     except Exception as exc:
         if benchmark_run_id is not None:
             benchmark_service.fail(benchmark_run_id, exc)

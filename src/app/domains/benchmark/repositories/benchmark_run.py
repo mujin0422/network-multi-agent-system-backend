@@ -18,6 +18,9 @@ class BenchmarkRunRepositoryProtocol(Protocol):
     def get_by_id(self, run_id: str) -> BenchmarkRunRecord:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         ...
+    def get_by_source_message_id(self, source_message_id: str) -> BenchmarkRunRecord | None:
+        """Find an active/completed run after its Chat workflow resumes."""
+        ...
     def save(self, run: BenchmarkRunRecord) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
         ...
@@ -71,6 +74,15 @@ class BenchmarkRunRepository:
             if model is None:
                 raise ResourceNotFoundError(f"Không tìm thấy benchmark run '{run_id}'")
             return self._to_schema(model)
+
+    def get_by_source_message_id(self, source_message_id: str) -> BenchmarkRunRecord | None:
+        with self._sessions() as session:
+            model = session.scalar(
+                select(BenchmarkRunModel).where(
+                    BenchmarkRunModel.source_message_id == source_message_id
+                )
+            )
+            return self._to_schema(model) if model is not None else None
 
     def save(self, run: BenchmarkRunRecord) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
