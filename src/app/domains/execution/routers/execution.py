@@ -93,13 +93,13 @@ async def list_task_activity_events(
     response_model=Operation,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_operation(
+async def create_operation(
     task_id: str,
     payload: OperationCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
 ) -> Operation:
-    return service.add_operation(task_id, payload)
+    return service.create_operation(task_id, payload)
 
 
 @operations_router.get(
@@ -135,8 +135,8 @@ async def decide_operation_device_approval(
 
     approval = service.decide_operation_approval(
         approval_id,
-        user.id,
-        payload.decision,
+        user_id=user.id,
+        decision=payload.decision,
     )
     mapping = service.get_operation_device(approval.operation_device_id)
     operation = service.get_operation(mapping.operation_id)

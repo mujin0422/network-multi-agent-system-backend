@@ -5,7 +5,7 @@ from typing import Any
 from netmiko import ConnectHandler
 
 from app.core.config import Settings
-from app.domains.inventory.repositories import DeviceConfigRepositoryProtocol
+from app.domains.inventory.repositories import DeviceConfigRepository
 from app.domains.inventory.schemas import DeviceConfig
 
 
@@ -15,7 +15,7 @@ class DeviceConnectionProvider:
     def __init__(
         self,
         settings: Settings,
-        repository: DeviceConfigRepositoryProtocol,
+        repository: DeviceConfigRepository,
     ) -> None:
         self._settings = settings
         self._repository = repository

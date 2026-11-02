@@ -1,8 +1,6 @@
 """Repository cho bảng operation_device_approvals."""
 
 from datetime import datetime
-from typing import Protocol
-
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
@@ -16,50 +14,6 @@ from app.domains.execution.schemas import (
     OperationDeviceApproval,
     OperationDeviceStatus,
 )
-
-
-class OperationDeviceApprovalRepositoryProtocol(Protocol):
-    def save_operation_device_approval(
-        self,
-        approval: OperationDeviceApproval,
-    ) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device_approval."""
-        ...
-
-    def get_all_by_operation_id(
-        self,
-        operation_id: str,
-    ) -> list[OperationDeviceApproval]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_operation_id."""
-        ...
-
-    def get_by_id(
-        self,
-        approval_id: str,
-    ) -> OperationDeviceApproval | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_by_operation_device_id(
-        self,
-        operation_device_id: str,
-    ) -> OperationDeviceApproval | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_operation_device_id."""
-        ...
-
-    def expire_operation_approval(self, approval_id: str) -> None:
-        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức expire_operation_approval."""
-        ...
-
-    def decide_operation_approval(
-        self,
-        approval_id: str,
-        user_id: str,
-        decision: ApprovalDecision,
-        decided_at: datetime,
-    ) -> OperationDeviceApproval | None:
-        """Xử lý trạng thái nghiệp vụ trong phương thức decide_operation_approval."""
-        ...
 
 
 class OperationDeviceApprovalRepository:
@@ -148,6 +102,7 @@ class OperationDeviceApprovalRepository:
     def decide_operation_approval(
         self,
         approval_id: str,
+        *,
         user_id: str,
         decision: ApprovalDecision,
         decided_at: datetime,

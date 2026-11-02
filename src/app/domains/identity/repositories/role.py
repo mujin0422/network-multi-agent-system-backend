@@ -1,7 +1,5 @@
 """Repository cho Role — bảng roles."""
 
-from typing import Protocol
-
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
@@ -13,24 +11,6 @@ from app.domains.identity.schemas import Role
 # =============================================================================
 
 
-class RoleRepositoryProtocol(Protocol):
-    def get_by_id(self, role_id: str) -> Role | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_all(self) -> list[Role]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
-
-    def get_by_name(self, name: str) -> Role | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_name."""
-        ...
-
-    def save_role(self, role: Role) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
-        ...
-
-
 class RoleRepository:
     """Sở hữu query và transaction cho Role — bảng roles."""
 
@@ -39,13 +19,11 @@ class RoleRepository:
         self._sessions = create_session_factory(database_url)
 
     def get_by_id(self, role_id: str) -> Role | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(RoleModel, role_id)
             return Role.model_validate(model, from_attributes=True) if model else None
 
     def get_all(self) -> list[Role]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
         with self._sessions() as session:
             models = session.scalars(select(RoleModel)).all()
             return [
@@ -53,7 +31,6 @@ class RoleRepository:
             ]
 
     def get_by_name(self, name: str) -> Role | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_name."""
         statement = select(RoleModel).where(func.lower(RoleModel.name) == name.lower())
         with self._sessions() as session:
             model = session.scalar(statement)

@@ -1,7 +1,7 @@
 """Public API của System Audit domain."""
 
 from app.domains.audit.models import AuditLogModel
-from app.domains.audit.repositories import AuditLogRepository, AuditLogRepositoryProtocol
+from app.domains.audit.repositories import AuditLogRepository
 from app.domains.audit.schemas import (
     AuditActorType,
     AuditEventStatus,
@@ -17,6 +17,5 @@ __all__ = [
     "AuditLogCreate",
     "AuditLogModel",
     "AuditLogRepository",
-    "AuditLogRepositoryProtocol",
     "AuditLogService",
 ]

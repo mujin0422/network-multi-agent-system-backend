@@ -1,7 +1,6 @@
 """Repository cho User Session — quản lý phiên và rotate refresh token nguyên tử."""
 
 from datetime import UTC, datetime
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -13,34 +12,6 @@ from app.domains.identity.schemas import UserSessionRecord
 # =============================================================================
 # User Session — quản lý phiên và rotate refresh token nguyên tử
 # =============================================================================
-
-
-class UserSessionRepositoryProtocol(Protocol):
-    def save_session(self, session: UserSessionRecord) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_session."""
-        ...
-
-    def get_by_token_hash(self, token_hash: str) -> UserSessionRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_token_hash."""
-        ...
-
-    def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None:
-        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức revoke_session."""
-        ...
-
-    def get_is_active_by_id(self, session_id: UUID) -> bool:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_is_active_by_id."""
-        ...
-
-    def get_active_by_id(self, session_id: UUID) -> UserSessionRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_active_by_id."""
-        ...
-
-    def rotate_session(
-        self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord
-    ) -> bool:
-        """Cập nhật dữ liệu theo nghiệp vụ của phương thức rotate_session."""
-        ...
 
 
 class UserSessionRepository:
@@ -77,7 +48,6 @@ class UserSessionRepository:
         )
 
     def get_by_token_hash(self, token_hash: str) -> UserSessionRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_token_hash."""
         with self._sessions() as session:
             model = session.scalar(
                 select(UserSessionModel).where(
@@ -98,12 +68,10 @@ class UserSessionRepository:
         with self._sessions.begin() as session:
             session.execute(statement)
 
-    def get_is_active_by_id(self, session_id: UUID) -> bool:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_is_active_by_id."""
+    def get_is_active(self, session_id: UUID) -> bool:
         return self.get_active_by_id(session_id) is not None
 
     def get_active_by_id(self, session_id: UUID) -> UserSessionRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_active_by_id."""
         statement = select(UserSessionModel).where(
             UserSessionModel.id == session_id,
             UserSessionModel.revoked_at.is_(None),

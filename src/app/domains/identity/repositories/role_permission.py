@@ -1,7 +1,5 @@
 """Repository cho Role Permission — tra cứu quyền được gán cho role."""
 
-from typing import Protocol
-
 from sqlalchemy import delete, select
 
 from app.core.database import create_session_factory
@@ -23,34 +21,6 @@ from app.domains.identity.schemas import (
 # =============================================================================
 
 
-class RolePermissionRepositoryProtocol(Protocol):
-    def get_by_role_id(self, role_id: str) -> set[tuple[str, str]]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_role_id."""
-        ...
-
-    def get_all_actions(self) -> list[Action]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_actions."""
-        ...
-
-    def get_all_management_functions(self) -> list[ManagementFunction]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_management_functions."""
-        ...
-
-    def get_all_permissions(self) -> list[Permission]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_permissions."""
-        ...
-
-    def get_all_by_role_id(self, role_id: str) -> list[RolePermission]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_role_id."""
-        ...
-
-    def replace_role_permissions(
-        self, role_id: str, permission_ids: set[str]
-    ) -> list[RolePermission]:
-        """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
-        ...
-
-
 class RolePermissionRepository:
     """Sở hữu query và transaction cho Role Permission — tra cứu quyền được gán cho role."""
 
@@ -58,8 +28,10 @@ class RolePermissionRepository:
         """Khởi tạo RolePermissionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def get_by_role_id(self, role_id: str) -> set[tuple[str, str]]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_role_id."""
+    def get_all_permission_pairs_by_role_id(
+        self,
+        role_id: str,
+    ) -> set[tuple[str, str]]:
         statement = (
             select(ManagementFunctionModel.name, ActionModel.name)
             .join(
@@ -80,13 +52,11 @@ class RolePermissionRepository:
             }
 
     def get_all_actions(self) -> list[Action]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_actions."""
         with self._sessions() as session:
             rows = session.scalars(select(ActionModel).order_by(ActionModel.id)).all()
             return [Action.model_validate(row, from_attributes=True) for row in rows]
 
     def get_all_management_functions(self) -> list[ManagementFunction]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_management_functions."""
         with self._sessions() as session:
             rows = session.scalars(
                 select(ManagementFunctionModel).order_by(ManagementFunctionModel.id)
@@ -97,7 +67,6 @@ class RolePermissionRepository:
             ]
 
     def get_all_permissions(self) -> list[Permission]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_permissions."""
         with self._sessions() as session:
             rows = session.scalars(
                 select(PermissionModel).order_by(PermissionModel.id)
@@ -105,7 +74,6 @@ class RolePermissionRepository:
             return [Permission.model_validate(row, from_attributes=True) for row in rows]
 
     def get_all_by_role_id(self, role_id: str) -> list[RolePermission]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_role_id."""
         statement = (
             select(RolePermissionModel)
             .where(RolePermissionModel.role_id == role_id)

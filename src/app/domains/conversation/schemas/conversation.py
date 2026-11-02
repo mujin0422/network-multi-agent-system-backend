@@ -22,6 +22,18 @@ class ConversationStart(BaseModel):
     )
 
 
+class ConversationTitleUpdate(BaseModel):
+    """Payload đổi tiêu đề conversation do người dùng sở hữu."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Tiêu đề mới của conversation.",
+    )
+
+
 class Conversation(BaseModel):
     """Bản ghi tương ứng bảng ``conversations``."""
 

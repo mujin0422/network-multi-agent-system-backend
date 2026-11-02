@@ -53,7 +53,7 @@ class MemoryIdentityRepository:
     def get_role_by_id(self, role_id):
         return None
 
-    def get_permissions_by_role_id(self, role_id):
+    def get_all_permission_pairs_by_role_id(self, role_id):
         return set(self.permissions)
 
     def save_session(self, session):
@@ -66,19 +66,15 @@ class MemoryIdentityRepository:
         old = self.sessions[session_id]
         self.sessions[session_id] = old.model_copy(update={"revoked_at": revoked_at})
 
-    def get_session_is_active_by_id(self, session_id):
+    def get_is_session_active(self, session_id):
         s = self.sessions.get(session_id)
         return bool(s and not s.revoked_at and s.expires_at > datetime.now(UTC))
 
     def get_active_session_by_id(self, session_id):
-        return (
-            self.sessions.get(session_id)
-            if self.get_session_is_active_by_id(session_id)
-            else None
-        )
+        return self.sessions.get(session_id) if self.get_is_session_active(session_id) else None
 
     def rotate_session(self, session_id, revoked_at, replacement):
-        if not self.get_session_is_active_by_id(session_id):
+        if not self.get_is_session_active(session_id):
             return False
         self.revoke_session(session_id, revoked_at)
         self.save_session(replacement)
@@ -201,7 +197,7 @@ class MemoryAccessControlRepository:
     def get_all_permissions(self):
         return [Permission(id="perm-view", function_id="func-device", action_id="act-view")]
 
-    def get_role_permissions_by_role_id(self, role_id):
+    def get_all_role_permissions_by_role_id(self, role_id):
         return self.role_permissions.get(role_id, [])
 
     def replace_role_permissions(self, role_id, permission_ids):

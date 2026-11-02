@@ -1,44 +1,12 @@
-"""Persistence contract và PostgreSQL adapter cho resource Device."""
+"""PostgreSQL repository cho resource Device."""
 
 from __future__ import annotations
-
-from typing import Protocol
 
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import DeviceModel
 from app.domains.inventory.schemas import Device
-
-
-class DeviceRepositoryProtocol(Protocol):
-    """Cổng persistence tối thiểu mà ``DeviceService`` yêu cầu."""
-
-    def save(self, device: Device) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
-        ...
-
-    def get_by_id(self, device_id: str) -> Device | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_by_hostname(self, hostname: str) -> Device | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_hostname."""
-        ...
-
-    def get_all(self) -> list[Device]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
-
-    def get_page(
-        self,
-        brand_id: str | None,
-        category_id: str | None,
-        offset: int,
-        limit: int,
-    ) -> tuple[list[Device], int]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_page."""
-        ...
 
 
 class DeviceRepository:
@@ -95,6 +63,7 @@ class DeviceRepository:
 
     def get_page(
         self,
+        *,
         brand_id: str | None,
         category_id: str | None,
         offset: int,

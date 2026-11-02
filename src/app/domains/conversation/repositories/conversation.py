@@ -1,36 +1,10 @@
-"""Persistence contract và PostgreSQL adapter của Conversation domain."""
-
-from typing import Protocol
+"""PostgreSQL repository của Conversation domain."""
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.conversation.models import ConversationModel, MessageModel
 from app.domains.conversation.schemas import Conversation, Message
-
-
-class ConversationRepositoryProtocol(Protocol):
-    """Contract persistence của bảng conversations dành cho service."""
-
-    def save_conversation(self, conversation: Conversation) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_conversation."""
-        ...
-
-    def create_with_first_message(
-        self,
-        conversation: Conversation,
-        message: Message,
-    ) -> None:
-        """Tạo mới dữ liệu theo nghiệp vụ của phương thức create_with_first_message."""
-        ...
-
-    def get_by_id(self, conversation_id: str) -> Conversation | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_all(self, user_id: str | None = None) -> list[Conversation]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
 
 
 class ConversationRepository:
@@ -64,8 +38,6 @@ class ConversationRepository:
     ) -> None:
         """Tạo Conversation và USER_REQUEST đầu tiên trong cùng transaction."""
 
-        if message.conversation_id != conversation.id:
-            raise ValueError("Message đầu tiên không thuộc Conversation cần tạo")
         with self._sessions.begin() as session:
             session.add(ConversationModel(**conversation.model_dump()))
             session.add(MessageModel(**message.model_dump()))

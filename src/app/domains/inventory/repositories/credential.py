@@ -1,8 +1,6 @@
-"""Persistence port và PostgreSQL adapter cho resource Credential."""
+"""PostgreSQL repository cho resource Credential."""
 
 from __future__ import annotations
-
-from typing import Protocol
 
 from sqlalchemy import select, update
 
@@ -10,33 +8,6 @@ from app.core.database import create_session_factory
 from app.domains.inventory.models import CredentialModel
 from app.domains.inventory.schemas import Credential
 from app.domains.inventory.utils import encrypted_credential
-
-
-class CredentialRepositoryProtocol(Protocol):
-    """Persistence contract cho các use case Credential."""
-
-    def create(self, credential: Credential, password: str, secret: str | None) -> None:
-        """Tạo mới dữ liệu theo nghiệp vụ của phương thức create."""
-        ...
-
-    def update(
-        self,
-        credential: Credential,
-        password: str | None,
-        secret: str | None,
-        update_password: bool,
-        update_secret: bool,
-    ) -> None:
-        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update."""
-        ...
-
-    def get_by_id(self, credential_id: str) -> Credential | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_all(self) -> list[Credential]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
 
 
 class CredentialRepository:
@@ -47,7 +18,13 @@ class CredentialRepository:
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
-    def create(self, credential: Credential, password: str, secret: str | None) -> None:
+    def create(
+        self,
+        credential: Credential,
+        *,
+        password: str,
+        secret: str | None,
+    ) -> None:
         """Mã hóa password/secret bằng AES-256 trước khi insert."""
 
         model = CredentialModel(
@@ -65,6 +42,7 @@ class CredentialRepository:
     def update(
         self,
         credential: Credential,
+        *,
         password: str | None,
         secret: str | None,
         update_password: bool,

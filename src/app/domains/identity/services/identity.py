@@ -13,7 +13,7 @@ from app.core.exceptions import (
     ResourceNotFoundError,
 )
 from app.core.utils import IdPrefix, generate_id, generate_uuid
-from app.domains.identity.repositories import IdentityRepositoryProtocol
+from app.domains.identity.repositories import IdentityRepository
 from app.domains.identity.schemas import (
     AccessTokenPayload,
     PermissionCatalog,
@@ -44,7 +44,7 @@ from app.domains.identity.utils import (
 class IdentityService:
     def __init__(
         self,
-        repository: IdentityRepositoryProtocol,
+        repository: IdentityRepository,
         settings: Settings,
     ) -> None:
         """Khởi tạo IdentityService cùng các phụ thuộc cần thiết."""
@@ -67,7 +67,6 @@ class IdentityService:
         return self._new_session(user, now)
 
     def refresh(self, refresh_token: str) -> TokenResponse:
-        """Xử lý xác thực theo nghiệp vụ của phương thức refresh."""
         session = self._repository.get_session_by_token_hash(
             hash_refresh_token(refresh_token)
         )
@@ -111,10 +110,10 @@ class IdentityService:
         return user, session_id
 
     def require_permission(self, user: User, function: str, action: str) -> None:
-        """Thực hiện chức năng của phương thức require_permission."""
-        if (function, action) not in self._repository.get_permissions_by_role_id(
-            user.role_id
-        ):
+        if (
+            function,
+            action,
+        ) not in self._repository.get_all_permission_pairs_by_role_id(user.role_id):
             raise AuthorizationError("Không có quyền thực hiện thao tác này")
 
     # =============================================================================
@@ -149,8 +148,7 @@ class IdentityService:
 class UserService:
     """Tạo và cập nhật user, không để lộ password hash qua API."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
-        """Khởi tạo UserService cùng các phụ thuộc cần thiết."""
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def create_user(self, payload: UserCreate) -> User:
@@ -185,7 +183,6 @@ class UserService:
         return user
 
     def update_user(self, user_id: str, payload: UserUpdate) -> User:
-        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_user."""
         current = self._repository.get_user_record_by_id(user_id)
         if current is None:
             raise ResourceNotFoundError(f"Không tìm thấy user '{user_id}'")
@@ -208,7 +205,6 @@ class UserService:
         return User.model_validate(updated.model_dump())
 
     def _ensure_role_exists(self, role_id: str) -> None:
-        """Kiểm tra điều kiện nghiệp vụ trong phương thức _ensure_role_exists."""
         if self._repository.get_role_by_id(role_id) is None:
             raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
 
@@ -231,8 +227,7 @@ class UserService:
 class RoleService:
     """Tạo và cập nhật role cùng thông tin audit."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
-        """Khởi tạo RoleService cùng các phụ thuộc cần thiết."""
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def create_role(self, payload: RoleCreate, actor_id: str) -> Role:
@@ -299,8 +294,7 @@ class RoleService:
 class AccessControlService:
     """Đọc catalog và thay thế ma trận quyền của từng role."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
-        """Khởi tạo AccessControlService cùng các phụ thuộc cần thiết."""
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def get_catalog(self) -> PermissionCatalog:
@@ -314,7 +308,7 @@ class AccessControlService:
     def list_role_permissions(self, role_id: str) -> list[RolePermission]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_role_permissions."""
         self._require_role(role_id, require_mutable=False)
-        return self._repository.get_role_permissions_by_role_id(role_id)
+        return self._repository.get_all_role_permissions_by_role_id(role_id)
 
     def replace_role_permissions(
         self, role_id: str, permission_ids: list[str]
@@ -331,7 +325,6 @@ class AccessControlService:
         return self._repository.replace_role_permissions(role_id, requested)
 
     def _require_role(self, role_id: str, *, require_mutable: bool) -> Role:
-        """Kiểm tra điều kiện nghiệp vụ trong phương thức _require_role."""
         role = self._repository.get_role_by_id(role_id)
         if role is None:
             raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")

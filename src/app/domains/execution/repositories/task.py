@@ -1,29 +1,12 @@
-"""Persistence contract và repository cho bảng tasks."""
+"""Repository cho bảng tasks."""
 
-from typing import Any, Protocol
+from typing import Any
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import TaskModel
 from app.domains.execution.schemas import Task
-
-
-class TaskRepositoryProtocol(Protocol):
-    """Contract persistence của bảng tasks."""
-
-    def save_task(self, task: Task) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task."""
-        ...
-    def get_by_id(self, task_id: str) -> Task | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-    def get_all(self) -> list[Task]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
-    def get_by_source_message_id(self, message_id: str) -> Task | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_source_message_id."""
-        ...
 
 
 class TaskRepository:

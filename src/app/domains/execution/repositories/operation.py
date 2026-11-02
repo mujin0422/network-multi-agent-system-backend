@@ -1,26 +1,12 @@
-"""Persistence contract và repository cho bảng task_operations."""
+"""Repository cho bảng task_operations."""
 
-from typing import Any, Protocol
+from typing import Any
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import OperationModel
 from app.domains.execution.schemas import Operation
-
-
-class OperationRepositoryProtocol(Protocol):
-    """Contract persistence của bảng task_operations."""
-
-    def save_operation(self, operation: Operation) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation."""
-        ...
-    def get_by_id(self, operation_id: str) -> Operation | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-    def get_all_by_task_id(self, task_id: str) -> list[Operation]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_task_id."""
-        ...
 
 
 class OperationRepository:
@@ -68,7 +54,7 @@ class OperationRepository:
             ]
 
     @staticmethod
-    def add_all_in_session(session: Any, operations: list[Operation]) -> None:
+    def save_all_in_session(session: Any, operations: list[Operation]) -> None:
         """Thêm operations bằng transaction chung của execution plan."""
 
         session.add_all(OperationModel(**item.model_dump()) for item in operations)

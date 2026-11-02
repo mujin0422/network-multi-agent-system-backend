@@ -12,8 +12,7 @@ class DeviceActionLogRepository:
         """Khởi tạo DeviceActionLogRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def add_all(self, action_logs: list[DeviceActionLog]) -> None:
-        """Tạo mới dữ liệu theo nghiệp vụ của phương thức add_all."""
+    def save_all(self, action_logs: list[DeviceActionLog]) -> None:
         if not action_logs:
             return
         with self._sessions.begin() as session:
@@ -23,7 +22,6 @@ class DeviceActionLogRepository:
             )
 
     def get_recent(self, limit: int = 500) -> list[DeviceActionLog]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_recent."""
         statement = (
             select(DeviceActionLogModel)
             .order_by(DeviceActionLogModel.executed_at.desc())

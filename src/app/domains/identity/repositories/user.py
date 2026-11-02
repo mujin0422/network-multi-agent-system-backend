@@ -1,8 +1,6 @@
 """Repository cho User — bảng users."""
 
 from datetime import datetime
-from typing import Protocol
-
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
@@ -12,32 +10,6 @@ from app.domains.identity.schemas import User, UserRecord
 # =============================================================================
 # User — bảng users
 # =============================================================================
-
-
-class UserRepositoryProtocol(Protocol):
-    def get_by_email(self, email: str) -> UserRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_email."""
-        ...
-
-    def get_by_id(self, user_id: str) -> User | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
-        ...
-
-    def get_all(self) -> list[User]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
-        ...
-
-    def get_record_by_id(self, user_id: str) -> UserRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_record_by_id."""
-        ...
-
-    def save_user(self, user: UserRecord) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
-        ...
-
-    def update_login(self, user_id: str, logged_in_at: datetime) -> None:
-        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
-        ...
 
 
 class UserRepository:
@@ -53,7 +25,6 @@ class UserRepository:
         return UserRecord.model_validate(model, from_attributes=True) if model else None
 
     def get_by_email(self, email: str) -> UserRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_email."""
         with self._sessions() as session:
             return self._user_record(
                 session.scalar(
@@ -62,13 +33,11 @@ class UserRepository:
             )
 
     def get_by_id(self, user_id: str) -> User | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(UserModel, user_id)
             return User.model_validate(model, from_attributes=True) if model else None
 
     def get_all(self) -> list[User]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
         with self._sessions() as session:
             models = session.scalars(select(UserModel)).all()
             return [
@@ -76,7 +45,6 @@ class UserRepository:
             ]
 
     def get_record_by_id(self, user_id: str) -> UserRecord | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_record_by_id."""
         with self._sessions() as session:
             return self._user_record(session.get(UserModel, user_id))
 

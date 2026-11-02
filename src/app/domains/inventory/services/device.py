@@ -5,7 +5,7 @@ from math import ceil
 
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.inventory.repositories import DeviceRepositoryProtocol
+from app.domains.inventory.repositories import DeviceRepository
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 from app.domains.inventory.utils import ensure_unique_device
 
@@ -13,8 +13,7 @@ from app.domains.inventory.utils import ensure_unique_device
 class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
-    def __init__(self, repository: DeviceRepositoryProtocol) -> None:
-        """Khởi tạo DeviceService cùng các phụ thuộc cần thiết."""
+    def __init__(self, repository: DeviceRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -45,6 +44,7 @@ class DeviceService:
         self,
         page: int,
         page_size: int,
+        *,
         brand_id: str | None = None,
         category_id: str | None = None,
     ) -> DevicePage:
@@ -104,3 +104,33 @@ class DeviceService:
         )
         self._repository.save(updated)
         return updated
+
+    # =============================================================================
+    # Xác minh tính duy nhất của Device
+    # =============================================================================
+
+    def _ensure_unique_device(
+        self,
+        hostname: str,
+        host: str,
+        port: int,
+        exclude_device_id: str | None = None,
+    ) -> None:
+        """Bảo vệ hai unique constraint trước khi repository ghi database.
+
+        Kiểm tra ở service tạo thông báo lỗi dễ hiểu cho frontend. PostgreSQL vẫn
+        giữ UNIQUE constraint như lớp bảo vệ cuối cùng khi có request đồng thời.
+        """
+        # Hai constraint này phản ánh trực tiếp thiết kế DB: hostname là duy nhất,
+        # đồng thời một host/port không được ánh xạ cho hai thiết bị.
+        for device in self._repository.get_all():
+            if device.id == exclude_device_id:
+                continue
+            if device.hostname.casefold() == hostname.casefold():
+                raise ResourceConflictError(
+                    f"Hostname '{hostname}' đã được sử dụng"
+                )
+            if (device.host, device.port) == (host, port):
+                raise ResourceConflictError(
+                    f"Địa chỉ '{host}:{port}' đã được sử dụng"
+                )

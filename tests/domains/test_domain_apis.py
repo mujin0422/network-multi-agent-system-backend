@@ -59,7 +59,7 @@ class StubIdentityRepository:
     def get_role_by_id(self, role_id):
         return None
 
-    def get_permissions_by_role_id(self, role_id):
+    def get_all_permission_pairs_by_role_id(self, role_id):
         return {
             ("Chatbot", "View"),
             ("Chatbot", "Add"),
@@ -84,19 +84,19 @@ class StubIdentityRepository:
             update={"revoked_at": revoked_at}
         )
 
-    def get_session_is_active_by_id(self, session_id):
+    def get_is_session_active(self, session_id):
         s = self.sessions.get(session_id)
         return bool(s and s.revoked_at is None and s.expires_at > datetime.now(UTC))
 
     def get_active_session_by_id(self, session_id):
         return (
             self.sessions.get(session_id)
-            if self.get_session_is_active_by_id(session_id)
+            if self.get_is_session_active(session_id)
             else None
         )
 
     def rotate_session(self, session_id, revoked_at, replacement):
-        if not self.get_session_is_active_by_id(session_id):
+        if not self.get_is_session_active(session_id):
             return False
         self.revoke_session(session_id, revoked_at)
         self.save_session(replacement)
@@ -231,7 +231,7 @@ class StubExecutionRepository:
     def get_operation_by_id(self, operation_id: str) -> Operation | None:
         return self._operations.get(operation_id)
 
-    def get_operations_by_task_id(self, task_id: str) -> list[Operation]:
+    def get_all_operations_by_task_id(self, task_id: str) -> list[Operation]:
         return sorted(
             (
                 operation

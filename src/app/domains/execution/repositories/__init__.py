@@ -1,51 +1,27 @@
-"""Persistence ports and adapters for the Execution domain."""
+"""Các repository công khai của Execution domain."""
 
 from app.domains.execution.repositories.device_action_log import (
     DeviceActionLogRepository,
 )
-from app.domains.execution.repositories.unit_of_work import (
-    ExecutionRepository,
-    ExecutionRepositoryProtocol,
-)
-from app.domains.execution.repositories.operation import (
-    OperationRepository,
-    OperationRepositoryProtocol,
-)
+from app.domains.execution.repositories.unit_of_work import ExecutionRepository
+from app.domains.execution.repositories.operation import OperationRepository
 from app.domains.execution.repositories.operation_dependency import (
     OperationDependencyRepository,
 )
-from app.domains.execution.repositories.operation_device import (
-    OperationDeviceRepository,
-    OperationDeviceRepositoryProtocol,
-)
-from app.domains.execution.repositories.operation_device_approval import (
-    OperationDeviceApprovalRepository,
-    OperationDeviceApprovalRepositoryProtocol,
-)
-from app.domains.execution.repositories.task import (
-    TaskRepository,
-    TaskRepositoryProtocol,
-)
-from app.domains.execution.repositories.task_activity_event import (
-    TaskActivityEventRepository,
-    TaskActivityEventRepositoryProtocol,
-)
+from app.domains.execution.repositories.operation_device import OperationDeviceRepository
+from app.domains.execution.repositories.operation_device_approval import OperationDeviceApprovalRepository
+from app.domains.execution.repositories.task import TaskRepository
+from app.domains.execution.repositories.task_activity_event import TaskActivityEventRepository
 from app.domains.execution.repositories.task_execution import TaskExecutionRepository
 
 __all__ = [
     "DeviceActionLogRepository",
     "ExecutionRepository",
-    "ExecutionRepositoryProtocol",
     "OperationDependencyRepository",
     "OperationDeviceRepository",
-    "OperationDeviceRepositoryProtocol",
     "OperationDeviceApprovalRepository",
-    "OperationDeviceApprovalRepositoryProtocol",
     "OperationRepository",
-    "OperationRepositoryProtocol",
     "TaskRepository",
-    "TaskRepositoryProtocol",
     "TaskActivityEventRepository",
-    "TaskActivityEventRepositoryProtocol",
     "TaskExecutionRepository",
 ]

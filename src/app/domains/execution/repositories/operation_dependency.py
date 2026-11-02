@@ -16,7 +16,10 @@ class OperationDependencyRepository:
         """Khởi tạo OperationDependencyRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def get_all_by_operation_id(self, operation_id: str) -> list[OperationDependency]:
+    def get_all_by_operation_id(
+        self,
+        operation_id: str,
+    ) -> list[OperationDependency]:
         """Lấy các operation tiên quyết của một operation."""
 
         statement = select(OperationDependencyModel).where(
@@ -29,7 +32,7 @@ class OperationDependencyRepository:
             ]
 
     @staticmethod
-    def add_all_in_session(
+    def save_all_in_session(
         session: Any,
         dependencies: list[OperationDependency],
     ) -> None:

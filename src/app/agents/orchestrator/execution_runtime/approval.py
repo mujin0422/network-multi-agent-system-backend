@@ -43,8 +43,8 @@ class ApprovalGate:
             self._execution_service.create_operation_device_approval(
                 operation,
                 mapping,
-                commands,
-                build_approval_request_hash(mapping.id, commands),
+                commands=commands,
+                request_hash=build_approval_request_hash(mapping.id, commands),
             )
             self._wait(mapping)
             return False

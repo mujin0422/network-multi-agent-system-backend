@@ -86,8 +86,8 @@ def test_role_permissions_remain_scoped_to_role(identity_database):
         session.flush()
         session.add(RolePermissionModel(role_id="role-test", permission_id="perm-test"))
 
-    assert repository.get_permissions_by_role_id("role-test") == {("Device Management", "View")}
-    assert repository.get_permissions_by_role_id("other-role") == set()
+    assert repository.get_all_permission_pairs_by_role_id("role-test") == {("Device Management", "View")}
+    assert repository.get_all_permission_pairs_by_role_id("other-role") == set()
 
 
 def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_database):
@@ -107,14 +107,14 @@ def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_da
     invalid = original.model_copy(update={"id": uuid4()})
     with pytest.raises(IntegrityError):
         repository.rotate_session(original.id, now, invalid)
-    assert repository.get_session_is_active_by_id(original.id)
+    assert repository.get_is_session_active(original.id)
 
     replacement = original.model_copy(
         update={"id": uuid4(), "refresh_token_hash": "replacement-hash"}
     )
     assert repository.rotate_session(original.id, now, replacement)
     assert repository.get_active_session_by_id(original.id) is None
-    assert repository.get_session_is_active_by_id(replacement.id)
+    assert repository.get_is_session_active(replacement.id)
     assert not repository.rotate_session(original.id, now, replacement)
     repository.revoke_session(replacement.id, now)
-    assert not repository.get_session_is_active_by_id(replacement.id)
+    assert not repository.get_is_session_active(replacement.id)

@@ -1,20 +1,10 @@
-"""Persistence adapters used to build connection-ready device configuration."""
-
-from typing import Protocol
+"""Repository tạo cấu hình kết nối thiết bị."""
 
 from sqlalchemy import case, func, or_, select
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import CredentialModel, DeviceModel
 from app.domains.inventory.schemas import DeviceConfig
-
-
-class DeviceConfigRepositoryProtocol(Protocol):
-    """Contract for retrieving one device together with its credential."""
-
-    def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_identifier."""
-        ...
 
 
 class DeviceConfigRepository:

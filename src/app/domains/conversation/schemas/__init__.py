@@ -5,6 +5,7 @@ from app.domains.conversation.schemas.conversation import (
     ConversationDetail,
     ConversationStart,
     ConversationStarted,
+    ConversationTitleUpdate,
 )
 from app.domains.conversation.schemas.message import (
     Message,
@@ -18,6 +19,7 @@ __all__ = [
     "ConversationDetail",
     "ConversationStart",
     "ConversationStarted",
+    "ConversationTitleUpdate",
     "Message",
     "MessageCreate",
     "MessageSender",

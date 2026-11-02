@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.inventory.repositories import CredentialRepositoryProtocol
+from app.domains.inventory.repositories import CredentialRepository
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
 from app.domains.inventory.utils import ensure_unique_name
 
@@ -12,8 +12,7 @@ from app.domains.inventory.utils import ensure_unique_name
 class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
-    def __init__(self, repository: CredentialRepositoryProtocol) -> None:
-        """Khởi tạo CredentialService cùng các phụ thuộc cần thiết."""
+    def __init__(self, repository: CredentialRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -44,7 +43,11 @@ class CredentialService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.create(credential, payload.password, payload.secret)
+        self._repository.create(
+            credential,
+            password=payload.password,
+            secret=payload.secret,
+        )
         return credential
 
     def list_credentials(self) -> list[Credential]:
@@ -98,3 +101,22 @@ class CredentialService:
             update_secret="secret" in fields_set,
         )
         return candidate
+
+    # =============================================================================
+    # Xác minh tên Credential
+    # =============================================================================
+
+    def _ensure_unique_name(
+        self,
+        name: str,
+        exclude_credential_id: str | None = None,
+    ) -> None:
+        """Không cho phép tên Credential trùng nhau, không phân biệt hoa thường."""
+
+        for credential in self._repository.get_all():
+            if credential.id == exclude_credential_id:
+                continue
+            if credential.name.casefold() == name.casefold():
+                raise ResourceConflictError(
+                    f"Tên credential '{name}' đã được sử dụng"
+                )

@@ -2,7 +2,15 @@
 
 import asyncio
 
-from app.domains.conversation.schemas import Conversation, ConversationStart, Message
+import pytest
+
+from app.core.exceptions import ResourceNotFoundError
+from app.domains.conversation.schemas import (
+    Conversation,
+    ConversationStart,
+    ConversationTitleUpdate,
+    Message,
+)
 from app.domains.conversation.services import ConversationService, ConversationTitleGenerator
 from app.domains.conversation.utils import (
     fallback_conversation_title,
@@ -105,3 +113,55 @@ def test_start_creates_conversation_and_first_message_together() -> None:
     assert started.message.conversation_id == started.conversation.id
     assert started.message.sender_by == "USER"
     assert started.message.message_type == "USER_REQUEST"
+
+
+def test_user_can_rename_owned_conversation() -> None:
+    repository = StubConversationRepository()
+    service = ConversationService(repository, StubMessageRepository())
+    started = service.start(
+        "user-test",
+        ConversationStart(message="Kiểm tra routing table trên P1"),
+    )
+
+    renamed = service.rename(
+        started.conversation.id,
+        "user-test",
+        ConversationTitleUpdate(title="  **OSPF P1**  "),
+    )
+
+    assert renamed.title == "OSPF P1"
+    assert repository.conversation == renamed
+
+
+def test_user_cannot_rename_another_users_conversation() -> None:
+    repository = StubConversationRepository()
+    service = ConversationService(repository, StubMessageRepository())
+    started = service.start(
+        "user-owner",
+        ConversationStart(message="Kiểm tra routing table trên P1"),
+    )
+
+    with pytest.raises(ResourceNotFoundError):
+        service.rename(
+            started.conversation.id,
+            "user-other",
+            ConversationTitleUpdate(title="Không được phép"),
+        )
+
+
+def test_generated_title_does_not_override_manual_title() -> None:
+    repository = StubConversationRepository()
+    service = ConversationService(repository, StubMessageRepository())
+    started = service.start(
+        "user-test",
+        ConversationStart(message="Kiểm tra routing table trên P1"),
+    )
+    service.rename(
+        started.conversation.id,
+        "user-test",
+        ConversationTitleUpdate(title="Tiêu đề thủ công"),
+    )
+
+    result = service.update_title(started.conversation, "Tiêu đề tự động")
+
+    assert result.title == "Tiêu đề thủ công"

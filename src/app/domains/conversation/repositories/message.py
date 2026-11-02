@@ -1,24 +1,10 @@
-"""Persistence contract và repository cho bảng messages."""
-
-from typing import Protocol
+"""Repository cho bảng messages."""
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.conversation.models import MessageModel
 from app.domains.conversation.schemas import Message
-
-
-class MessageRepositoryProtocol(Protocol):
-    """Contract persistence của bảng messages dành cho service."""
-
-    def save(self, message: Message) -> None:
-        """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
-        ...
-
-    def get_all_by_conversation_id(self, conversation_id: str) -> list[Message]:
-        """Truy vấn dữ liệu theo phạm vi của phương thức get_all_by_conversation_id."""
-        ...
 
 
 class MessageRepository:
