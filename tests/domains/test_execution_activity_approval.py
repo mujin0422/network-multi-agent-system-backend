@@ -117,6 +117,11 @@ def test_lists_activity_and_safe_approval_response() -> None:
     response = service.list_operation_approvals("oper-test")[0]
 
     assert response.id == "aprv-test"
+    assert response.operation_device_id == "opdv-test"
+    assert response.approval_status == ApprovalStatus.PENDING
+    assert response.commands_snapshot == ["interface Ethernet0/0", "no shutdown"]
+    assert response.reason == "Thay đổi cấu hình thiết bị"
+    assert response.requested_at == repository.approval.requested_at
     assert "request_hash" not in response.model_dump()
 
 
