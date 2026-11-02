@@ -1,25 +1,12 @@
 """Facade chuyển tiếp các repository theo bảng cho Identity services."""
 
 from datetime import datetime
-from typing import Protocol
 from uuid import UUID
 
-from app.domains.identity.repositories.role import (
-    RoleRepository,
-    RoleRepositoryProtocol,
-)
-from app.domains.identity.repositories.role_permission import (
-    RolePermissionRepository,
-    RolePermissionRepositoryProtocol,
-)
-from app.domains.identity.repositories.user import (
-    UserRepository,
-    UserRepositoryProtocol,
-)
-from app.domains.identity.repositories.user_session import (
-    UserSessionRepository,
-    UserSessionRepositoryProtocol,
-)
+from app.domains.identity.repositories.role import RoleRepository
+from app.domains.identity.repositories.role_permission import RolePermissionRepository
+from app.domains.identity.repositories.user import UserRepository
+from app.domains.identity.repositories.user_session import UserSessionRepository
 from app.domains.identity.schemas import (
     Action,
     ManagementFunction,
@@ -30,16 +17,6 @@ from app.domains.identity.schemas import (
     UserRecord,
     UserSessionRecord,
 )
-
-
-class IdentityRepositoryProtocol(
-    UserRepositoryProtocol,
-    RoleRepositoryProtocol,
-    RolePermissionRepositoryProtocol,
-    UserSessionRepositoryProtocol,
-    Protocol,
-):
-    """Contract tổng hợp giữ nguyên giao diện các service đang sử dụng."""
 
 
 class IdentityRepository:
@@ -56,16 +33,16 @@ class IdentityRepository:
     # =============================================================================
 
     def get_user_by_email(self, email: str) -> UserRecord | None:
-        return self._users.get_user_by_email(email)
+        return self._users.get_by_email(email)
 
-    def get_user(self, user_id: str) -> User | None:
-        return self._users.get_user(user_id)
+    def get_user_by_id(self, user_id: str) -> User | None:
+        return self._users.get_by_id(user_id)
 
-    def list_users(self) -> list[User]:
-        return self._users.list_users()
+    def get_all_users(self) -> list[User]:
+        return self._users.get_all()
 
-    def get_user_with_password(self, user_id: str) -> UserRecord | None:
-        return self._users.get_user_with_password(user_id)
+    def get_user_record_by_id(self, user_id: str) -> UserRecord | None:
+        return self._users.get_record_by_id(user_id)
 
     def save_user(self, user: UserRecord) -> None:
         self._users.save_user(user)
@@ -77,14 +54,14 @@ class IdentityRepository:
     # Role — bảng roles
     # =============================================================================
 
-    def get_role(self, role_id: str) -> Role | None:
-        return self._roles.get_role(role_id)
+    def get_role_by_id(self, role_id: str) -> Role | None:
+        return self._roles.get_by_id(role_id)
 
-    def list_roles(self) -> list[Role]:
-        return self._roles.list_roles()
+    def get_all_roles(self) -> list[Role]:
+        return self._roles.get_all()
 
     def get_role_by_name(self, name: str) -> Role | None:
-        return self._roles.get_role_by_name(name)
+        return self._roles.get_by_name(name)
 
     def save_role(self, role: Role) -> None:
         self._roles.save_role(role)
@@ -93,20 +70,26 @@ class IdentityRepository:
     # Role Permission — tra cứu quyền được gán cho role
     # =============================================================================
 
-    def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
-        return self._role_permissions.get_permissions(role_id)
+    def get_all_permission_pairs_by_role_id(
+        self,
+        role_id: str,
+    ) -> set[tuple[str, str]]:
+        return self._role_permissions.get_all_permission_pairs_by_role_id(role_id)
 
-    def list_actions(self) -> list[Action]:
-        return self._role_permissions.list_actions()
+    def get_all_actions(self) -> list[Action]:
+        return self._role_permissions.get_all_actions()
 
-    def list_management_functions(self) -> list[ManagementFunction]:
-        return self._role_permissions.list_management_functions()
+    def get_all_management_functions(self) -> list[ManagementFunction]:
+        return self._role_permissions.get_all_management_functions()
 
-    def list_permission_catalog(self) -> list[Permission]:
-        return self._role_permissions.list_permission_catalog()
+    def get_all_permissions(self) -> list[Permission]:
+        return self._role_permissions.get_all_permissions()
 
-    def list_role_permissions(self, role_id: str) -> list[RolePermission]:
-        return self._role_permissions.list_role_permissions(role_id)
+    def get_all_role_permissions_by_role_id(
+        self,
+        role_id: str,
+    ) -> list[RolePermission]:
+        return self._role_permissions.get_all_by_role_id(role_id)
 
     def replace_role_permissions(
         self, role_id: str, permission_ids: set[str]
@@ -120,17 +103,17 @@ class IdentityRepository:
     def save_session(self, session: UserSessionRecord) -> None:
         self._user_sessions.save_session(session)
 
-    def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None:
-        return self._user_sessions.get_session_by_hash(token_hash)
+    def get_session_by_token_hash(self, token_hash: str) -> UserSessionRecord | None:
+        return self._user_sessions.get_by_token_hash(token_hash)
 
     def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None:
         self._user_sessions.revoke_session(session_id, revoked_at)
 
-    def is_session_active(self, session_id: UUID) -> bool:
-        return self._user_sessions.is_session_active(session_id)
+    def get_is_session_active(self, session_id: UUID) -> bool:
+        return self._user_sessions.get_is_active(session_id)
 
-    def get_active_session(self, session_id: UUID) -> UserSessionRecord | None:
-        return self._user_sessions.get_active_session(session_id)
+    def get_active_session_by_id(self, session_id: UUID) -> UserSessionRecord | None:
+        return self._user_sessions.get_active_by_id(session_id)
 
     def rotate_session(
         self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord

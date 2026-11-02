@@ -1,8 +1,6 @@
 """Repository cho User — bảng users."""
 
 from datetime import datetime
-from typing import Protocol
-
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
@@ -12,20 +10,6 @@ from app.domains.identity.schemas import User, UserRecord
 # =============================================================================
 # User — bảng users
 # =============================================================================
-
-
-class UserRepositoryProtocol(Protocol):
-    def get_user_by_email(self, email: str) -> UserRecord | None: ...
-
-    def get_user(self, user_id: str) -> User | None: ...
-
-    def list_users(self) -> list[User]: ...
-
-    def get_user_with_password(self, user_id: str) -> UserRecord | None: ...
-
-    def save_user(self, user: UserRecord) -> None: ...
-
-    def update_login(self, user_id: str, logged_in_at: datetime) -> None: ...
 
 
 class UserRepository:
@@ -38,7 +22,7 @@ class UserRepository:
     def _user_record(model: UserModel | None) -> UserRecord | None:
         return UserRecord.model_validate(model, from_attributes=True) if model else None
 
-    def get_user_by_email(self, email: str) -> UserRecord | None:
+    def get_by_email(self, email: str) -> UserRecord | None:
         with self._sessions() as session:
             return self._user_record(
                 session.scalar(
@@ -46,19 +30,19 @@ class UserRepository:
                 )
             )
 
-    def get_user(self, user_id: str) -> User | None:
+    def get_by_id(self, user_id: str) -> User | None:
         with self._sessions() as session:
             model = session.get(UserModel, user_id)
             return User.model_validate(model, from_attributes=True) if model else None
 
-    def list_users(self) -> list[User]:
+    def get_all(self) -> list[User]:
         with self._sessions() as session:
             models = session.scalars(select(UserModel)).all()
             return [
                 User.model_validate(model, from_attributes=True) for model in models
             ]
 
-    def get_user_with_password(self, user_id: str) -> UserRecord | None:
+    def get_record_by_id(self, user_id: str) -> UserRecord | None:
         with self._sessions() as session:
             return self._user_record(session.get(UserModel, user_id))
 

@@ -8,7 +8,7 @@ from app.core.exceptions import (
     ResourceNotFoundError,
 )
 from app.core.utils import IdPrefix, generate_id
-from app.domains.execution.repositories import ExecutionRepositoryProtocol
+from app.domains.execution.repositories import ExecutionRepository
 from app.domains.execution.schemas import (
     ApprovalDecision,
     ApprovalStatus,
@@ -37,7 +37,7 @@ from app.domains.execution.schemas import (
 
 
 class ExecutionService:
-    def __init__(self, repository: ExecutionRepositoryProtocol) -> None:
+    def __init__(self, repository: ExecutionRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -46,7 +46,7 @@ class ExecutionService:
 
     def create_task(self, payload: TaskCreate) -> Task:
         # source_message_id là UNIQUE: một message người dùng chỉ sinh một Task.
-        if self._repository.find_task_by_source_message(payload.source_message_id):
+        if self._repository.get_task_by_source_message_id(payload.source_message_id):
             raise ResourceConflictError(
                 f"Message '{payload.source_message_id}' đã tạo Task trước đó"
             )
@@ -61,13 +61,13 @@ class ExecutionService:
         return task
 
     def list_tasks(self) -> list[Task]:
-        return self._repository.list_tasks()
+        return self._repository.get_all_tasks()
 
     def get_task(self, task_id: str) -> TaskDetail:
         task = self._require_task(task_id)
         return TaskDetail(
             **task.model_dump(),
-            operations=self._repository.list_operations(task_id),
+            operations=self._repository.get_all_operations_by_task_id(task_id),
         )
 
     # =============================================================================
@@ -86,7 +86,9 @@ class ExecutionService:
         """Lấy các device mapping đã được Planner tạo cho operation."""
 
         self._require_operation(operation_id)
-        return self._repository.list_operation_devices(operation_id)
+        return self._repository.get_all_operation_devices_by_operation_id(
+            operation_id
+        )
 
     def get_operation_device(
         self,
@@ -94,7 +96,7 @@ class ExecutionService:
     ) -> TaskOperationDevice:
         """Lấy mapping hoặc báo lỗi để Orchestrator có thể resume Task."""
 
-        mapping = self._repository.get_operation_device(operation_device_id)
+        mapping = self._repository.get_operation_device_by_id(operation_device_id)
         if mapping is None:
             raise ResourceNotFoundError(
                 f"Không tìm thấy Task Operation Device '{operation_device_id}'"
@@ -103,7 +105,7 @@ class ExecutionService:
 
     def list_dependencies(self, operation_id: str) -> list[OperationDependency]:
         self._require_operation(operation_id)
-        return self._repository.list_dependencies(operation_id)
+        return self._repository.get_all_dependencies_by_operation_id(operation_id)
 
     # =============================================================================
     # Task Activity Event — lấy và ghi timeline của các agent
@@ -113,7 +115,7 @@ class ExecutionService:
         """Lấy timeline của Task sau khi xác nhận Task tồn tại."""
 
         self._require_task(task_id)
-        return self._repository.list_task_activity_events(task_id)
+        return self._repository.get_all_task_activity_events_by_task_id(task_id)
 
     def record_activity(
         self,
@@ -132,7 +134,7 @@ class ExecutionService:
 
         self._require_task(task_id)
         now = datetime.now(UTC)
-        events = self._repository.list_task_activity_events(task_id)
+        events = self._repository.get_all_task_activity_events_by_task_id(task_id)
         if started_at is None:
             started_at = now
         if completed_at is None and event_status in {
@@ -171,7 +173,9 @@ class ExecutionService:
         self._require_operation(operation_id)
         return [
             self._to_approval_response(approval)
-            for approval in self._repository.list_operation_approvals(operation_id)
+            for approval in self._repository.get_all_operation_approvals_by_operation_id(
+                operation_id
+            )
         ]
 
     def get_operation_device_approval(
@@ -180,18 +184,21 @@ class ExecutionService:
     ) -> OperationDeviceApproval | None:
         """Lấy Approval nội bộ để Orchestrator kiểm tra trước khi WRITE."""
 
-        return self._repository.get_operation_device_approval(operation_device_id)
+        return self._repository.get_approval_by_operation_device_id(
+            operation_device_id
+        )
 
     def create_operation_device_approval(
         self,
         operation: Operation,
         mapping: TaskOperationDevice,
+        *,
         commands: list[str],
         request_hash: str,
     ) -> OperationDeviceApproval:
         """Tạo snapshot PENDING trước khi cho phép thực thi lệnh WRITE."""
 
-        existing = self._repository.get_operation_device_approval(mapping.id)
+        existing = self._repository.get_approval_by_operation_device_id(mapping.id)
         if existing is not None:
             return existing
 
@@ -222,12 +229,13 @@ class ExecutionService:
     def decide_operation_approval(
         self,
         approval_id: str,
+        *,
         user_id: str,
         decision: ApprovalDecision,
     ) -> OperationDeviceApprovalResponse:
         """Chốt một Approval đúng một lần bằng danh tính từ access token."""
 
-        approval = self._repository.get_operation_approval(approval_id)
+        approval = self._repository.get_operation_approval_by_id(approval_id)
         if approval is None:
             raise ResourceNotFoundError(
                 f"Không tìm thấy Operation Device Approval '{approval_id}'"
@@ -244,14 +252,14 @@ class ExecutionService:
 
         decided = self._repository.decide_operation_approval(
             approval_id,
-            user_id,
-            decision,
-            now,
+            user_id=user_id,
+            decision=decision,
+            decided_at=now,
         )
         if decided is None:
             # Repository khóa bản ghi khi cập nhật. None tại đây nghĩa là một
             # request đồng thời đã chốt Approval hoặc thời hạn vừa kết thúc.
-            current = self._repository.get_operation_approval(approval_id)
+            current = self._repository.get_operation_approval_by_id(approval_id)
             if current is not None and current.approval_status == ApprovalStatus.EXPIRED:
                 raise ResourceConflictError(f"Approval '{approval_id}' đã hết hạn")
             raise ResourceConflictError(f"Approval '{approval_id}' đã được xử lý")
@@ -281,13 +289,13 @@ class ExecutionService:
         self._repository.save_device_action_logs(logs)
 
     def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
-        return self._repository.list_device_action_logs(limit)
+        return self._repository.get_recent_device_action_logs(limit)
 
     # =============================================================================
     # Execution Plan — tạo operation và lưu kế hoạch nguyên tử
     # =============================================================================
 
-    def add_operation(self, task_id: str, payload: OperationCreate) -> Operation:
+    def create_operation(self, task_id: str, payload: OperationCreate) -> Operation:
         task = self._require_task(task_id)
         if task.task_status not in {TaskStatus.PENDING, TaskStatus.PLANNING}:
             raise InvalidStateTransitionError(
@@ -321,7 +329,7 @@ class ExecutionService:
         """Chuyển structured plan thành các record và lưu nguyên tử."""
 
         task = self._require_task(task_id)
-        if self._repository.list_operations(task_id):
+        if self._repository.get_all_operations_by_task_id(task_id):
             raise ResourceConflictError(f"Task '{task_id}' đã có execution plan")
         if task.task_status != TaskStatus.PENDING:
             raise InvalidStateTransitionError(
@@ -379,9 +387,9 @@ class ExecutionService:
         )
         self._repository.save_execution_plan(
             planned_task,
-            operations,
-            dependencies,
-            operation_devices,
+            operations=operations,
+            dependencies=dependencies,
+            operation_devices=operation_devices,
         )
         return TaskDetail(**planned_task.model_dump(), operations=operations)
 
@@ -390,13 +398,13 @@ class ExecutionService:
     # =============================================================================
 
     def _require_task(self, task_id: str) -> Task:
-        task = self._repository.get_task(task_id)
+        task = self._repository.get_task_by_id(task_id)
         if task is None:
             raise ResourceNotFoundError(f"Không tìm thấy Task '{task_id}'")
         return task
 
     def _require_operation(self, operation_id: str) -> Operation:
-        operation = self._repository.get_operation(operation_id)
+        operation = self._repository.get_operation_by_id(operation_id)
         if operation is None:
             raise ResourceNotFoundError(f"Không tìm thấy Operation '{operation_id}'")
         return operation

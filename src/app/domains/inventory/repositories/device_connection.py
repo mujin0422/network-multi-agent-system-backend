@@ -1,18 +1,10 @@
-"""Persistence adapters used to build connection-ready device configuration."""
-
-from typing import Protocol
+"""Repository tạo cấu hình kết nối thiết bị."""
 
 from sqlalchemy import case, func, or_, select
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import CredentialModel, DeviceModel
 from app.domains.inventory.schemas import DeviceConfig
-
-
-class DeviceConfigRepositoryProtocol(Protocol):
-    """Contract for retrieving one device together with its credential."""
-
-    def get(self, device_identifier: str) -> DeviceConfig | None: ...
 
 
 class DeviceConfigRepository:
@@ -26,7 +18,7 @@ class DeviceConfigRepository:
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
-    def get(self, device_identifier: str) -> DeviceConfig | None:
+    def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
         # Cho phép agent gọi bằng cả primary key (devc-...) và hostname (P1).
         # Credential chỉ được giải mã trong luồng kết nối và không được ghi log.
         statement = (

@@ -47,7 +47,12 @@ async def list_devices(
 ) -> DevicePage:
     """Trả một trang device, có thể lọc đồng thời theo brand và category."""
 
-    return service.list_devices(page, page_size, brand_id, category_id)
+    return service.list_devices(
+        page,
+        page_size,
+        brand_id=brand_id,
+        category_id=category_id,
+    )
 
 
 # READ — Lấy chi tiết một thiết bị theo hostname.

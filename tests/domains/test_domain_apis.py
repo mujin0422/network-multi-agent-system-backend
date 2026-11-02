@@ -46,20 +46,20 @@ class StubIdentityRepository:
     def get_user_by_email(self, email):
         return self.user if email == self.user.email else None
 
-    def get_user(self, user_id):
+    def get_user_by_id(self, user_id):
         return (
             User.model_validate(self.user.model_dump())
             if user_id == self.user.id
             else None
         )
 
-    def get_user_with_password(self, user_id):
+    def get_user_record_by_id(self, user_id):
         return self.user if user_id == self.user.id else None
 
-    def get_role(self, role_id):
+    def get_role_by_id(self, role_id):
         return None
 
-    def get_permissions(self, role_id):
+    def get_all_permission_pairs_by_role_id(self, role_id):
         return {
             ("Chatbot", "View"),
             ("Chatbot", "Add"),
@@ -73,7 +73,7 @@ class StubIdentityRepository:
     def save_session(self, session):
         self.sessions[session.id] = session
 
-    def get_session_by_hash(self, token_hash):
+    def get_session_by_token_hash(self, token_hash):
         return next(
             (s for s in self.sessions.values() if s.refresh_token_hash == token_hash),
             None,
@@ -84,19 +84,19 @@ class StubIdentityRepository:
             update={"revoked_at": revoked_at}
         )
 
-    def is_session_active(self, session_id):
+    def get_is_session_active(self, session_id):
         s = self.sessions.get(session_id)
         return bool(s and s.revoked_at is None and s.expires_at > datetime.now(UTC))
 
-    def get_active_session(self, session_id):
+    def get_active_session_by_id(self, session_id):
         return (
             self.sessions.get(session_id)
-            if self.is_session_active(session_id)
+            if self.get_is_session_active(session_id)
             else None
         )
 
     def rotate_session(self, session_id, revoked_at, replacement):
-        if not self.is_session_active(session_id):
+        if not self.get_is_session_active(session_id):
             return False
         self.revoke_session(session_id, revoked_at)
         self.save_session(replacement)
@@ -187,17 +187,17 @@ class StubConversationRepository:
         self.save_conversation(conversation)
         self.save(message)
 
-    def get_conversation(self, conversation_id: str) -> Conversation | None:
+    def get_by_id(self, conversation_id: str) -> Conversation | None:
         return self._conversations.get(conversation_id)
 
-    def list_conversations(self, user_id: str | None = None) -> list[Conversation]:
+    def get_all(self, user_id: str | None = None) -> list[Conversation]:
         values = self._conversations.values()
         return [item for item in values if user_id is None or item.user_id == user_id]
 
     def save(self, message: Message) -> None:
         self._messages.setdefault(message.conversation_id, []).append(message)
 
-    def list_by_conversation(self, conversation_id: str) -> list[Message]:
+    def get_all_by_conversation_id(self, conversation_id: str) -> list[Message]:
         return list(self._messages.get(conversation_id, []))
 
 
@@ -209,13 +209,13 @@ class StubExecutionRepository:
     def save_task(self, task: Task) -> None:
         self._tasks[task.id] = task
 
-    def get_task(self, task_id: str) -> Task | None:
+    def get_task_by_id(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
 
-    def list_tasks(self) -> list[Task]:
+    def get_all_tasks(self) -> list[Task]:
         return list(self._tasks.values())
 
-    def find_task_by_source_message(self, message_id: str) -> Task | None:
+    def get_task_by_source_message_id(self, message_id: str) -> Task | None:
         return next(
             (
                 task
@@ -228,10 +228,10 @@ class StubExecutionRepository:
     def save_operation(self, operation: Operation) -> None:
         self._operations[operation.id] = operation
 
-    def get_operation(self, operation_id: str) -> Operation | None:
+    def get_operation_by_id(self, operation_id: str) -> Operation | None:
         return self._operations.get(operation_id)
 
-    def list_operations(self, task_id: str) -> list[Operation]:
+    def get_all_operations_by_task_id(self, task_id: str) -> list[Operation]:
         return sorted(
             (
                 operation

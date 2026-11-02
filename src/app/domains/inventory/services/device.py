@@ -5,14 +5,14 @@ from math import ceil
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.inventory.repositories import DeviceRepositoryProtocol
+from app.domains.inventory.repositories import DeviceRepository
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 
 
 class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
-    def __init__(self, repository: DeviceRepositoryProtocol) -> None:
+    def __init__(self, repository: DeviceRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -38,12 +38,13 @@ class DeviceService:
         self,
         page: int,
         page_size: int,
+        *,
         brand_id: str | None = None,
         category_id: str | None = None,
     ) -> DevicePage:
         """Lọc và lấy một trang thiết bị từ repository."""
 
-        items, total = self._repository.list_page(
+        items, total = self._repository.get_page(
             brand_id=brand_id,
             category_id=category_id,
             offset=(page - 1) * page_size,
@@ -60,11 +61,11 @@ class DeviceService:
     def list_available_devices(self) -> list[Device]:
         """Cung cấp inventory công khai cho application-layer orchestrator."""
 
-        return self._repository.list()
+        return self._repository.get_all()
 
     def get_device(self, device_id: str) -> Device:
         """Lấy một thiết bị hoặc phát sinh lỗi nghiệp vụ ánh xạ thành HTTP 404."""
-        device = self._repository.get(device_id)
+        device = self._repository.get_by_id(device_id)
         if device is None:
             raise ResourceNotFoundError(f"Không tìm thấy device '{device_id}'")
         return device
@@ -115,7 +116,7 @@ class DeviceService:
         """
         # Hai constraint này phản ánh trực tiếp thiết kế DB: hostname là duy nhất,
         # đồng thời một host/port không được ánh xạ cho hai thiết bị.
-        for device in self._repository.list():
+        for device in self._repository.get_all():
             if device.id == exclude_device_id:
                 continue
             if device.hostname.casefold() == hostname.casefold():

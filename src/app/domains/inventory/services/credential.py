@@ -4,14 +4,14 @@ from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.inventory.repositories import CredentialRepositoryProtocol
+from app.domains.inventory.repositories import CredentialRepository
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
 
 
 class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
-    def __init__(self, repository: CredentialRepositoryProtocol) -> None:
+    def __init__(self, repository: CredentialRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -38,18 +38,22 @@ class CredentialService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.create(credential, payload.password, payload.secret)
+        self._repository.create(
+            credential,
+            password=payload.password,
+            secret=payload.secret,
+        )
         return credential
 
     def list_credentials(self) -> list[Credential]:
         """Lấy danh sách metadata Credential."""
 
-        return self._repository.list()
+        return self._repository.get_all()
 
     def get_credential(self, credential_id: str) -> Credential:
         """Lấy metadata Credential hoặc phát sinh lỗi HTTP 404."""
 
-        credential = self._repository.get(credential_id)
+        credential = self._repository.get_by_id(credential_id)
         if credential is None:
             raise ResourceNotFoundError(
                 f"Không tìm thấy credential '{credential_id}'"
@@ -99,7 +103,7 @@ class CredentialService:
     ) -> None:
         """Không cho phép tên Credential trùng nhau, không phân biệt hoa thường."""
 
-        for credential in self._repository.list():
+        for credential in self._repository.get_all():
             if credential.id == exclude_credential_id:
                 continue
             if credential.name.casefold() == name.casefold():

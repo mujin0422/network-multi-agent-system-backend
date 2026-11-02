@@ -1,6 +1,6 @@
-"""Persistence contract và repository cho bảng task_operation_devices."""
+"""Repository cho bảng task_operation_devices."""
 
-from typing import Any, Protocol
+from typing import Any
 
 from sqlalchemy import select
 
@@ -9,27 +9,13 @@ from app.domains.execution.models import TaskOperationDeviceModel
 from app.domains.execution.schemas import TaskOperationDevice
 
 
-class OperationDeviceRepositoryProtocol(Protocol):
-    """Contract đọc mapping trong bảng task_operation_devices."""
-
-    def list_operation_devices(
-        self,
-        operation_id: str,
-    ) -> list[TaskOperationDevice]: ...
-    def get_operation_device(
-        self,
-        operation_device_id: str,
-    ) -> TaskOperationDevice | None: ...
-    def save_operation_device(self, mapping: TaskOperationDevice) -> None: ...
-
-
 class OperationDeviceRepository:
     """Quản lý thiết bị, role và access mode được gán cho operation."""
 
     def __init__(self, database_url: str) -> None:
         self._sessions = create_session_factory(database_url)
 
-    def list_operation_devices(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
     ) -> list[TaskOperationDevice]:
@@ -57,7 +43,7 @@ class OperationDeviceRepository:
             model.started_at = mapping.started_at
             model.completed_at = mapping.completed_at
 
-    def get_operation_device(
+    def get_by_id(
         self,
         operation_device_id: str,
     ) -> TaskOperationDevice | None:
@@ -72,7 +58,7 @@ class OperationDeviceRepository:
             )
 
     @staticmethod
-    def add_all_in_session(
+    def save_all_in_session(
         session: Any,
         mappings: list[TaskOperationDevice],
     ) -> None:

@@ -14,7 +14,7 @@ from app.core.exceptions import (
     ResourceNotFoundError,
 )
 from app.core.utils import IdPrefix, generate_id, generate_uuid
-from app.domains.identity.repositories import IdentityRepositoryProtocol
+from app.domains.identity.repositories import IdentityRepository
 from app.domains.identity.schemas import (
     AccessTokenPayload,
     PermissionCatalog,
@@ -45,7 +45,7 @@ from app.domains.identity.utils import (
 class IdentityService:
     def __init__(
         self,
-        repository: IdentityRepositoryProtocol,
+        repository: IdentityRepository,
         settings: Settings,
     ) -> None:
         self._repository = repository
@@ -66,11 +66,13 @@ class IdentityService:
         return self._new_session(user, now)
 
     def refresh(self, refresh_token: str) -> TokenResponse:
-        session = self._repository.get_session_by_hash(hash_refresh_token(refresh_token))
+        session = self._repository.get_session_by_token_hash(
+            hash_refresh_token(refresh_token)
+        )
         now = datetime.now(UTC)
         if not session or session.revoked_at or session.expires_at <= now:
             raise AuthenticationError("Refresh token không hợp lệ hoặc đã hết hạn")
-        user = self._repository.get_user_with_password(session.user_id)
+        user = self._repository.get_user_record_by_id(session.user_id)
         if not user or user.user_status != UserStatus.ACTIVE:
             raise AuthenticationError("Tài khoản không hoạt động")
         return self._rotate_session(user, session.id, now)
@@ -96,16 +98,19 @@ class IdentityService:
             raise AuthenticationError("Access token không hợp lệ hoặc đã hết hạn") from None
         # Session ID is embedded in the signed token; check the session revocation
         # state through repository method added for bearer authentication.
-        session = self._repository.get_active_session(session_id)
+        session = self._repository.get_active_session_by_id(session_id)
         if not session:
             raise AuthenticationError("Phiên đăng nhập đã bị thu hồi")
-        user = self._repository.get_user(payload.sub)
+        user = self._repository.get_user_by_id(payload.sub)
         if not user or user.id != session.user_id or user.user_status != UserStatus.ACTIVE:
             raise AuthenticationError("Tài khoản không hoạt động")
         return user, session_id
 
     def require_permission(self, user: User, function: str, action: str) -> None:
-        if (function, action) not in self._repository.get_permissions(user.role_id):
+        if (
+            function,
+            action,
+        ) not in self._repository.get_all_permission_pairs_by_role_id(user.role_id):
             raise AuthorizationError("Không có quyền thực hiện thao tác này")
 
     # =============================================================================
@@ -166,7 +171,7 @@ class IdentityService:
 class UserService:
     """Tạo và cập nhật user, không để lộ password hash qua API."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def create_user(self, payload: UserCreate) -> User:
@@ -189,18 +194,18 @@ class UserService:
     def list_users(self) -> list[User]:
         """Lấy danh sách user công khai, không bao gồm password hash."""
 
-        return self._repository.list_users()
+        return self._repository.get_all_users()
 
     def get_user(self, user_id: str) -> User:
         """Lấy user theo ID hoặc phát sinh lỗi nếu không tồn tại."""
 
-        user = self._repository.get_user(user_id)
+        user = self._repository.get_user_by_id(user_id)
         if user is None:
             raise ResourceNotFoundError(f"Không tìm thấy user '{user_id}'")
         return user
 
     def update_user(self, user_id: str, payload: UserUpdate) -> User:
-        current = self._repository.get_user_with_password(user_id)
+        current = self._repository.get_user_record_by_id(user_id)
         if current is None:
             raise ResourceNotFoundError(f"Không tìm thấy user '{user_id}'")
 
@@ -222,7 +227,7 @@ class UserService:
         return User.model_validate(updated.model_dump())
 
     def _ensure_role_exists(self, role_id: str) -> None:
-        if self._repository.get_role(role_id) is None:
+        if self._repository.get_role_by_id(role_id) is None:
             raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
 
     def _ensure_unique_email(
@@ -243,7 +248,7 @@ class UserService:
 class RoleService:
     """Tạo và cập nhật role cùng thông tin audit."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def create_role(self, payload: RoleCreate, actor_id: str) -> Role:
@@ -263,12 +268,12 @@ class RoleService:
     def list_roles(self) -> list[Role]:
         """Lấy danh sách role hiện có."""
 
-        return self._repository.list_roles()
+        return self._repository.get_all_roles()
 
     def get_role(self, role_id: str) -> Role:
         """Lấy role theo ID hoặc phát sinh lỗi nếu không tồn tại."""
 
-        role = self._repository.get_role(role_id)
+        role = self._repository.get_role_by_id(role_id)
         if role is None:
             raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
         return role
@@ -307,26 +312,26 @@ class RoleService:
 class AccessControlService:
     """Đọc catalog và thay thế ma trận quyền của từng role."""
 
-    def __init__(self, repository: IdentityRepositoryProtocol) -> None:
+    def __init__(self, repository: IdentityRepository) -> None:
         self._repository = repository
 
     def get_catalog(self) -> PermissionCatalog:
         return PermissionCatalog(
-            functions=self._repository.list_management_functions(),
-            actions=self._repository.list_actions(),
-            permissions=self._repository.list_permission_catalog(),
+            functions=self._repository.get_all_management_functions(),
+            actions=self._repository.get_all_actions(),
+            permissions=self._repository.get_all_permissions(),
         )
 
     def list_role_permissions(self, role_id: str) -> list[RolePermission]:
         self._require_role(role_id, require_mutable=False)
-        return self._repository.list_role_permissions(role_id)
+        return self._repository.get_all_role_permissions_by_role_id(role_id)
 
     def replace_role_permissions(
         self, role_id: str, permission_ids: list[str]
     ) -> list[RolePermission]:
         self._require_role(role_id, require_mutable=True)
         requested = set(permission_ids)
-        valid = {item.id for item in self._repository.list_permission_catalog()}
+        valid = {item.id for item in self._repository.get_all_permissions()}
         unknown = sorted(requested - valid)
         if unknown:
             raise ResourceNotFoundError(
@@ -335,7 +340,7 @@ class AccessControlService:
         return self._repository.replace_role_permissions(role_id, requested)
 
     def _require_role(self, role_id: str, *, require_mutable: bool) -> Role:
-        role = self._repository.get_role(role_id)
+        role = self._repository.get_role_by_id(role_id)
         if role is None:
             raise ResourceNotFoundError(f"Không tìm thấy role '{role_id}'")
         if require_mutable and role.name.casefold() == "super admin":

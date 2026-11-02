@@ -1,8 +1,6 @@
-"""Persistence port và PostgreSQL adapter cho resource Credential."""
+"""PostgreSQL repository cho resource Credential."""
 
 from __future__ import annotations
-
-from typing import Protocol
 
 from sqlalchemy import select, update
 
@@ -12,25 +10,6 @@ from app.domains.inventory.schemas import Credential
 from app.domains.inventory.utils import encrypted_credential
 
 
-class CredentialRepositoryProtocol(Protocol):
-    """Persistence contract cho các use case Credential."""
-
-    def create(self, credential: Credential, password: str, secret: str | None) -> None: ...
-
-    def update(
-        self,
-        credential: Credential,
-        password: str | None,
-        secret: str | None,
-        update_password: bool,
-        update_secret: bool,
-    ) -> None: ...
-
-    def get(self, credential_id: str) -> Credential | None: ...
-
-    def list(self) -> list[Credential]: ...
-
-
 class CredentialRepository:
     """Lưu metadata và ciphertext Credential trong PostgreSQL."""
 
@@ -38,7 +17,13 @@ class CredentialRepository:
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 
-    def create(self, credential: Credential, password: str, secret: str | None) -> None:
+    def create(
+        self,
+        credential: Credential,
+        *,
+        password: str,
+        secret: str | None,
+    ) -> None:
         """Mã hóa password/secret bằng AES-256 trước khi insert."""
 
         model = CredentialModel(
@@ -56,6 +41,7 @@ class CredentialRepository:
     def update(
         self,
         credential: Credential,
+        *,
         password: str | None,
         secret: str | None,
         update_password: bool,
@@ -80,14 +66,14 @@ class CredentialRepository:
         with self._sessions.begin() as session:
             session.execute(statement)
 
-    def get(self, credential_id: str) -> Credential | None:
+    def get_by_id(self, credential_id: str) -> Credential | None:
         """Lấy metadata Credential theo ID, không đọc ciphertext."""
 
         with self._sessions() as session:
             model = session.get(CredentialModel, credential_id)
             return Credential.model_validate(model, from_attributes=True) if model else None
 
-    def list(self) -> list[Credential]:
+    def get_all(self) -> list[Credential]:
         """Lấy toàn bộ metadata Credential từ database."""
 
         statement = select(CredentialModel)

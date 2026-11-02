@@ -55,19 +55,19 @@ def test_user_and_role_queries_preserve_password_privacy(identity_database):
     repository, _ = identity_database
 
     assert repository.get_role_by_name("ADMIN").id == "role-test"
-    assert len(repository.list_roles()) == 1
+    assert len(repository.get_all_roles()) == 1
     assert repository.get_user_by_email("TEST@EXAMPLE.COM").password_hash == (
         "test-password-hash"
     )
-    assert "password_hash" not in repository.get_user("user-test").model_dump()
-    assert "password_hash" not in repository.list_users()[0].model_dump()
+    assert "password_hash" not in repository.get_user_by_id("user-test").model_dump()
+    assert "password_hash" not in repository.get_all_users()[0].model_dump()
 
-    user = repository.get_user_with_password("user-test")
+    user = repository.get_user_record_by_id("user-test")
     repository.save_user(user.model_copy(update={"full_name": "Updated User"}))
     repository.update_login("user-test", datetime.now(UTC))
-    assert repository.get_user("user-test").full_name == "Updated User"
-    assert repository.get_user("user-test").last_login_at is not None
-    role = repository.get_role("role-test")
+    assert repository.get_user_by_id("user-test").full_name == "Updated User"
+    assert repository.get_user_by_id("user-test").last_login_at is not None
+    role = repository.get_role_by_id("role-test")
     repository.save_role(role.model_copy(update={"name": "Operator"}))
     assert repository.get_role_by_name("operator").id == role.id
 
@@ -86,8 +86,8 @@ def test_role_permissions_remain_scoped_to_role(identity_database):
         session.flush()
         session.add(RolePermissionModel(role_id="role-test", permission_id="perm-test"))
 
-    assert repository.get_permissions("role-test") == {("Device Management", "View")}
-    assert repository.get_permissions("other-role") == set()
+    assert repository.get_all_permission_pairs_by_role_id("role-test") == {("Device Management", "View")}
+    assert repository.get_all_permission_pairs_by_role_id("other-role") == set()
 
 
 def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_database):
@@ -101,20 +101,20 @@ def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_da
         expires_at=now + timedelta(days=1),
     )
     repository.save_session(original)
-    assert repository.get_session_by_hash("original-hash").id == original.id
+    assert repository.get_session_by_token_hash("original-hash").id == original.id
 
     # Trùng hash làm INSERT thất bại; UPDATE thu hồi phiên cũ phải rollback.
     invalid = original.model_copy(update={"id": uuid4()})
     with pytest.raises(IntegrityError):
         repository.rotate_session(original.id, now, invalid)
-    assert repository.is_session_active(original.id)
+    assert repository.get_is_session_active(original.id)
 
     replacement = original.model_copy(
         update={"id": uuid4(), "refresh_token_hash": "replacement-hash"}
     )
     assert repository.rotate_session(original.id, now, replacement)
-    assert repository.get_active_session(original.id) is None
-    assert repository.is_session_active(replacement.id)
+    assert repository.get_active_session_by_id(original.id) is None
+    assert repository.get_is_session_active(replacement.id)
     assert not repository.rotate_session(original.id, now, replacement)
     repository.revoke_session(replacement.id, now)
-    assert not repository.is_session_active(replacement.id)
+    assert not repository.get_is_session_active(replacement.id)

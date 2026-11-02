@@ -44,37 +44,37 @@ class MemoryIdentityRepository:
     def get_user_by_email(self, email):
         return self.user if email == self.user.email else None
 
-    def get_user(self, user_id):
+    def get_user_by_id(self, user_id):
         return User.model_validate(self.user.model_dump()) if user_id == self.user.id else None
 
-    def get_user_with_password(self, user_id):
+    def get_user_record_by_id(self, user_id):
         return self.user if user_id == self.user.id else None
 
-    def get_role(self, role_id):
+    def get_role_by_id(self, role_id):
         return None
 
-    def get_permissions(self, role_id):
+    def get_all_permission_pairs_by_role_id(self, role_id):
         return set(self.permissions)
 
     def save_session(self, session):
         self.sessions[session.id] = session
 
-    def get_session_by_hash(self, token_hash):
+    def get_session_by_token_hash(self, token_hash):
         return next((s for s in self.sessions.values() if s.refresh_token_hash == token_hash), None)
 
     def revoke_session(self, session_id, revoked_at):
         old = self.sessions[session_id]
         self.sessions[session_id] = old.model_copy(update={"revoked_at": revoked_at})
 
-    def is_session_active(self, session_id):
+    def get_is_session_active(self, session_id):
         s = self.sessions.get(session_id)
         return bool(s and not s.revoked_at and s.expires_at > datetime.now(UTC))
 
-    def get_active_session(self, session_id):
-        return self.sessions.get(session_id) if self.is_session_active(session_id) else None
+    def get_active_session_by_id(self, session_id):
+        return self.sessions.get(session_id) if self.get_is_session_active(session_id) else None
 
     def rotate_session(self, session_id, revoked_at, replacement):
-        if not self.is_session_active(session_id):
+        if not self.get_is_session_active(session_id):
             return False
         self.revoke_session(session_id, revoked_at)
         self.save_session(replacement)
@@ -185,19 +185,19 @@ class MemoryAccessControlRepository:
             ]
         }
 
-    def get_role(self, role_id):
+    def get_role_by_id(self, role_id):
         return self.roles.get(role_id)
 
-    def list_actions(self):
+    def get_all_actions(self):
         return [Action(id="act-view", name="View")]
 
-    def list_management_functions(self):
+    def get_all_management_functions(self):
         return [ManagementFunction(id="func-device", name="Device Management")]
 
-    def list_permission_catalog(self):
+    def get_all_permissions(self):
         return [Permission(id="perm-view", function_id="func-device", action_id="act-view")]
 
-    def list_role_permissions(self, role_id):
+    def get_all_role_permissions_by_role_id(self, role_id):
         return self.role_permissions.get(role_id, [])
 
     def replace_role_permissions(self, role_id, permission_ids):

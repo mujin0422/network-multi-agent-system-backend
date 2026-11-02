@@ -1,7 +1,5 @@
 """Repository cho timeline trong bảng task_activity_events."""
 
-from typing import Protocol
-
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
@@ -9,16 +7,11 @@ from app.domains.execution.models import TaskActivityEventModel
 from app.domains.execution.schemas import TaskActivityEvent
 
 
-class TaskActivityEventRepositoryProtocol(Protocol):
-    def save_task_activity_event(self, event: TaskActivityEvent) -> None: ...
-    def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]: ...
-
-
 class TaskActivityEventRepository:
     def __init__(self, database_url: str) -> None:
         self._sessions = create_session_factory(database_url)
 
-    def list_task_activity_events(self, task_id: str) -> list[TaskActivityEvent]:
+    def get_all_by_task_id(self, task_id: str) -> list[TaskActivityEvent]:
         """Lấy timeline của Task theo sequence_number ổn định."""
 
         statement = (

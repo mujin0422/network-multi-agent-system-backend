@@ -1,34 +1,12 @@
-"""Persistence contract và PostgreSQL adapter cho resource Device."""
+"""PostgreSQL repository cho resource Device."""
 
 from __future__ import annotations
-
-from typing import Protocol
 
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import DeviceModel
 from app.domains.inventory.schemas import Device
-
-
-class DeviceRepositoryProtocol(Protocol):
-    """Cổng persistence tối thiểu mà ``DeviceService`` yêu cầu."""
-
-    def save(self, device: Device) -> None: ...
-
-    def get(self, device_id: str) -> Device | None: ...
-
-    def get_by_hostname(self, hostname: str) -> Device | None: ...
-
-    def list(self) -> list[Device]: ...
-
-    def list_page(
-        self,
-        brand_id: str | None,
-        category_id: str | None,
-        offset: int,
-        limit: int,
-    ) -> tuple[list[Device], int]: ...
 
 
 class DeviceRepository:
@@ -58,7 +36,7 @@ class DeviceRepository:
                 if field not in {"id", "created_at", "created_by"}:
                     setattr(model, field, value)
 
-    def get(self, device_id: str) -> Device | None:
+    def get_by_id(self, device_id: str) -> Device | None:
         """Đọc một thiết bị bằng primary key và validate thành schema Device."""
         with self._sessions() as session:
             model = session.get(DeviceModel, device_id)
@@ -74,7 +52,7 @@ class DeviceRepository:
             model = session.scalar(statement)
             return Device.model_validate(model, from_attributes=True) if model else None
 
-    def list(self) -> list[Device]:
+    def get_all(self) -> list[Device]:
         """Đọc toàn bộ thiết bị từ database."""
 
         statement = select(DeviceModel)
@@ -82,8 +60,9 @@ class DeviceRepository:
             models = session.scalars(statement).all()
             return [Device.model_validate(item, from_attributes=True) for item in models]
 
-    def list_page(
+    def get_page(
         self,
+        *,
         brand_id: str | None,
         category_id: str | None,
         offset: int,

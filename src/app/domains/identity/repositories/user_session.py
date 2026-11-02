@@ -1,7 +1,6 @@
 """Repository cho User Session — quản lý phiên và rotate refresh token nguyên tử."""
 
 from datetime import UTC, datetime
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -13,22 +12,6 @@ from app.domains.identity.schemas import UserSessionRecord
 # =============================================================================
 # User Session — quản lý phiên và rotate refresh token nguyên tử
 # =============================================================================
-
-
-class UserSessionRepositoryProtocol(Protocol):
-    def save_session(self, session: UserSessionRecord) -> None: ...
-
-    def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None: ...
-
-    def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None: ...
-
-    def is_session_active(self, session_id: UUID) -> bool: ...
-
-    def get_active_session(self, session_id: UUID) -> UserSessionRecord | None: ...
-
-    def rotate_session(
-        self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord
-    ) -> bool: ...
 
 
 class UserSessionRepository:
@@ -60,7 +43,7 @@ class UserSessionRepository:
             revoked_at=record.revoked_at,
         )
 
-    def get_session_by_hash(self, token_hash: str) -> UserSessionRecord | None:
+    def get_by_token_hash(self, token_hash: str) -> UserSessionRecord | None:
         with self._sessions() as session:
             model = session.scalar(
                 select(UserSessionModel).where(
@@ -80,10 +63,10 @@ class UserSessionRepository:
         with self._sessions.begin() as session:
             session.execute(statement)
 
-    def is_session_active(self, session_id: UUID) -> bool:
-        return self.get_active_session(session_id) is not None
+    def get_is_active(self, session_id: UUID) -> bool:
+        return self.get_active_by_id(session_id) is not None
 
-    def get_active_session(self, session_id: UUID) -> UserSessionRecord | None:
+    def get_active_by_id(self, session_id: UUID) -> UserSessionRecord | None:
         statement = select(UserSessionModel).where(
             UserSessionModel.id == session_id,
             UserSessionModel.revoked_at.is_(None),

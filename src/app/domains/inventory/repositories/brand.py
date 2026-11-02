@@ -1,24 +1,12 @@
-"""Persistence port và adapters cho resource Brand."""
+"""PostgreSQL repository cho resource Brand."""
 
 from __future__ import annotations
-
-from typing import Protocol
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.inventory.models import BrandModel
 from app.domains.inventory.schemas import Brand
-
-
-class BrandRepositoryProtocol(Protocol):
-    """Persistence contract cho các use case Brand."""
-
-    def save(self, brand: Brand) -> None: ...
-
-    def get(self, brand_id: str) -> Brand | None: ...
-
-    def list(self) -> list[Brand]: ...
 
 
 class BrandRepository:
@@ -38,14 +26,14 @@ class BrandRepository:
             model.name = brand.name
             model.supported_drivers = brand.supported_drivers
 
-    def get(self, brand_id: str) -> Brand | None:
+    def get_by_id(self, brand_id: str) -> Brand | None:
         """Lấy một Brand theo primary key."""
 
         with self._sessions() as session:
             model = session.get(BrandModel, brand_id)
             return Brand.model_validate(model, from_attributes=True) if model else None
 
-    def list(self) -> list[Brand]:
+    def get_all(self) -> list[Brand]:
         """Trả toàn bộ Brand từ database."""
 
         statement = select(BrandModel)

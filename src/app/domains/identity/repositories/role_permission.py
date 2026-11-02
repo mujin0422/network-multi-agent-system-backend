@@ -1,7 +1,5 @@
 """Repository cho Role Permission — tra cứu quyền được gán cho role."""
 
-from typing import Protocol
-
 from sqlalchemy import delete, select
 
 from app.core.database import create_session_factory
@@ -23,29 +21,16 @@ from app.domains.identity.schemas import (
 # =============================================================================
 
 
-class RolePermissionRepositoryProtocol(Protocol):
-    def get_permissions(self, role_id: str) -> set[tuple[str, str]]: ...
-
-    def list_actions(self) -> list[Action]: ...
-
-    def list_management_functions(self) -> list[ManagementFunction]: ...
-
-    def list_permission_catalog(self) -> list[Permission]: ...
-
-    def list_role_permissions(self, role_id: str) -> list[RolePermission]: ...
-
-    def replace_role_permissions(
-        self, role_id: str, permission_ids: set[str]
-    ) -> list[RolePermission]: ...
-
-
 class RolePermissionRepository:
     """Sở hữu query và transaction cho Role Permission — tra cứu quyền được gán cho role."""
 
     def __init__(self, database_url: str) -> None:
         self._sessions = create_session_factory(database_url)
 
-    def get_permissions(self, role_id: str) -> set[tuple[str, str]]:
+    def get_all_permission_pairs_by_role_id(
+        self,
+        role_id: str,
+    ) -> set[tuple[str, str]]:
         statement = (
             select(ManagementFunctionModel.name, ActionModel.name)
             .join(
@@ -65,12 +50,12 @@ class RolePermissionRepository:
                 for function_name, action_name in session.execute(statement)
             }
 
-    def list_actions(self) -> list[Action]:
+    def get_all_actions(self) -> list[Action]:
         with self._sessions() as session:
             rows = session.scalars(select(ActionModel).order_by(ActionModel.id)).all()
             return [Action.model_validate(row, from_attributes=True) for row in rows]
 
-    def list_management_functions(self) -> list[ManagementFunction]:
+    def get_all_management_functions(self) -> list[ManagementFunction]:
         with self._sessions() as session:
             rows = session.scalars(
                 select(ManagementFunctionModel).order_by(ManagementFunctionModel.id)
@@ -80,14 +65,14 @@ class RolePermissionRepository:
                 for row in rows
             ]
 
-    def list_permission_catalog(self) -> list[Permission]:
+    def get_all_permissions(self) -> list[Permission]:
         with self._sessions() as session:
             rows = session.scalars(
                 select(PermissionModel).order_by(PermissionModel.id)
             ).all()
             return [Permission.model_validate(row, from_attributes=True) for row in rows]
 
-    def list_role_permissions(self, role_id: str) -> list[RolePermission]:
+    def get_all_by_role_id(self, role_id: str) -> list[RolePermission]:
         statement = (
             select(RolePermissionModel)
             .where(RolePermissionModel.role_id == role_id)
@@ -113,4 +98,4 @@ class RolePermissionRepository:
                 RolePermissionModel(role_id=role_id, permission_id=permission_id)
                 for permission_id in sorted(permission_ids)
             )
-        return self.list_role_permissions(role_id)
+        return self.get_all_by_role_id(role_id)

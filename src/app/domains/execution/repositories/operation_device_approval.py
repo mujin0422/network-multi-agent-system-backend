@@ -1,8 +1,6 @@
 """Repository cho bảng operation_device_approvals."""
 
 from datetime import datetime
-from typing import Protocol
-
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
@@ -18,38 +16,6 @@ from app.domains.execution.schemas import (
 )
 
 
-class OperationDeviceApprovalRepositoryProtocol(Protocol):
-    def save_operation_device_approval(
-        self,
-        approval: OperationDeviceApproval,
-    ) -> None: ...
-
-    def list_operation_approvals(
-        self,
-        operation_id: str,
-    ) -> list[OperationDeviceApproval]: ...
-
-    def get_operation_approval(
-        self,
-        approval_id: str,
-    ) -> OperationDeviceApproval | None: ...
-
-    def get_operation_device_approval(
-        self,
-        operation_device_id: str,
-    ) -> OperationDeviceApproval | None: ...
-
-    def expire_operation_approval(self, approval_id: str) -> None: ...
-
-    def decide_operation_approval(
-        self,
-        approval_id: str,
-        user_id: str,
-        decision: ApprovalDecision,
-        decided_at: datetime,
-    ) -> OperationDeviceApproval | None: ...
-
-
 class OperationDeviceApprovalRepository:
     def __init__(self, database_url: str) -> None:
         self._sessions = create_session_factory(database_url)
@@ -63,7 +29,7 @@ class OperationDeviceApprovalRepository:
         with self._sessions.begin() as session:
             session.add(OperationDeviceApprovalModel(**approval.model_dump()))
 
-    def list_operation_approvals(
+    def get_all_by_operation_id(
         self,
         operation_id: str,
     ) -> list[OperationDeviceApproval]:
@@ -88,7 +54,7 @@ class OperationDeviceApprovalRepository:
                 for model in session.scalars(statement).all()
             ]
 
-    def get_operation_approval(
+    def get_by_id(
         self,
         approval_id: str,
     ) -> OperationDeviceApproval | None:
@@ -100,7 +66,7 @@ class OperationDeviceApprovalRepository:
                 else None
             )
 
-    def get_operation_device_approval(
+    def get_by_operation_device_id(
         self,
         operation_device_id: str,
     ) -> OperationDeviceApproval | None:
@@ -134,6 +100,7 @@ class OperationDeviceApprovalRepository:
     def decide_operation_approval(
         self,
         approval_id: str,
+        *,
         user_id: str,
         decision: ApprovalDecision,
         decided_at: datetime,

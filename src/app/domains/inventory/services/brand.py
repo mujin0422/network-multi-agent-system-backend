@@ -2,14 +2,14 @@
 
 from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.inventory.repositories import BrandRepositoryProtocol
+from app.domains.inventory.repositories import BrandRepository
 from app.domains.inventory.schemas import Brand, BrandCreate, BrandUpdate
 
 
 class BrandService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới hãng thiết bị."""
 
-    def __init__(self, repository: BrandRepositoryProtocol) -> None:
+    def __init__(self, repository: BrandRepository) -> None:
         self._repository = repository
 
     # =============================================================================
@@ -27,12 +27,12 @@ class BrandService:
     def list_brands(self) -> list[Brand]:
         """Lấy danh sách brand có thể dùng khi khai báo device."""
 
-        return self._repository.list()
+        return self._repository.get_all()
 
     def get_brand(self, brand_id: str) -> Brand:
         """Lấy một Brand theo ID hoặc phát sinh lỗi ánh xạ thành HTTP 404."""
 
-        brand = self._repository.get(brand_id)
+        brand = self._repository.get_by_id(brand_id)
         if brand is None:
             raise ResourceNotFoundError(f"Không tìm thấy brand '{brand_id}'")
         return brand
@@ -59,7 +59,7 @@ class BrandService:
     ) -> None:
         """Không cho phép hai Brand có cùng tên, không phân biệt hoa thường."""
 
-        for brand in self._repository.list():
+        for brand in self._repository.get_all():
             if brand.id == exclude_brand_id:
                 continue
             if brand.name.casefold() == name.casefold():
