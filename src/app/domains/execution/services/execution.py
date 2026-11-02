@@ -1,6 +1,8 @@
 """Public service cho vòng đời Task và Operation."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+from app.core.config import get_settings
 
 from app.core.exceptions import (
     InvalidStateTransitionError,
@@ -246,9 +248,18 @@ class ExecutionService:
             commands,
             request_hash,
             datetime.now(UTC),
+            timeout_minutes=get_settings().approval_timeout_minutes,
         )
         self._repository.save_operation_device_approval(approval)
         return approval
+
+    def expire_due_approvals(self, now: datetime | None = None) -> list[str]:
+        """Atomically finalize overdue approvals, their Tasks and Benchmark Runs."""
+
+        return self._repository.expire_due_approvals(
+            now or datetime.now(UTC),
+            get_settings().approval_timeout_minutes,
+        )
 
     def expire_operation_approval(self, approval_id: str) -> None:
         """Đánh dấu Approval PENDING đã quá hạn."""
@@ -275,7 +286,12 @@ class ExecutionService:
             )
 
         now = datetime.now(UTC)
-        if approval.expires_at is not None and approval.expires_at <= now:
+        # Legacy rows may have NULL expires_at. Still apply the configured TTL.
+        deadline = approval.expires_at or (
+            approval.requested_at
+            + timedelta(minutes=get_settings().approval_timeout_minutes)
+        )
+        if deadline <= now:
             self._repository.expire_operation_approval(approval_id)
             raise ResourceConflictError(f"Approval '{approval_id}' đã hết hạn")
 

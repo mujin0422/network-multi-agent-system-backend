@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.utils import IdPrefix, generate_id
 from app.domains.execution.schemas import (
@@ -39,6 +39,7 @@ def build_operation_device_approval(
     commands: list[str],
     request_hash: str,
     requested_at: datetime,
+    timeout_minutes: int = 15,
 ) -> OperationDeviceApproval:
     """Tạo snapshot phê duyệt bất biến trước khi thực thi lệnh WRITE."""
 
@@ -55,6 +56,7 @@ def build_operation_device_approval(
         commands_snapshot=commands,
         request_hash=request_hash,
         requested_at=requested_at,
+        expires_at=requested_at + timedelta(minutes=timeout_minutes),
         created_at=requested_at,
     )
 
