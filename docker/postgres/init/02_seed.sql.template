@@ -2,7 +2,8 @@
 
 BEGIN;
 
--- Chỉ seed dữ liệu tham chiếu, tài khoản quản trị và network inventory.
+-- Chỉ seed dữ liệu tham chiếu, tài khoản quản trị, network inventory và
+-- benchmark scenario dùng cho môi trường development.
 -- Không seed dữ liệu runtime thuộc Conversation, AI Execution hoặc Evaluation.
 
 -- =============================================================================
@@ -150,6 +151,97 @@ INSERT INTO devices (
     ('devc-221026-00000011', 'cred-221026-00000001', 'brnd-221026-0001', 'catg-221026-00000002', 'user-221026-00000001', 'user-221026-00000001', 'Switch3', 'host.docker.internal', 5010, 'cisco_ios_telnet', 'GNS3 Lab'),
     ('devc-221026-00000012', 'cred-221026-00000001', 'brnd-221026-0001', 'catg-221026-00000002', 'user-221026-00000001', 'user-221026-00000001', 'Switch4', 'host.docker.internal', 5011, 'cisco_ios_telnet', 'GNS3 Lab'),
     ('devc-221026-00000013', 'cred-221026-00000001', 'brnd-221026-0001', 'catg-221026-00000001', 'user-221026-00000001', 'user-221026-00000001', 'P3',      'host.docker.internal', 5024, 'cisco_ios_telnet', 'GNS3 Lab')
+ON CONFLICT DO NOTHING;
+
+-- =============================================================================
+-- GROUP 3: GNS3 BENCHMARK SCENARIOS
+-- =============================================================================
+-- Mỗi scenario có fault injection và cleanup đối xứng để không làm bẩn lab.
+INSERT INTO benchmark_scenarios (
+    id, scenario_key, version, name, description, topology, initial_message,
+    definition, created_by, last_updated_by
+)
+VALUES
+    (
+        'benc-021126-10000001', 'p3-fa0-0-link-down', '1.0',
+        'P3 FastEthernet0/0 link-down diagnosis',
+        'Chẩn đoán FastEthernet0/0 trên P3 bị shutdown.', 'mpls-core',
+        'Hãy chẩn đoán nguyên nhân P3 mất kết nối trên FastEthernet0/0. Không khắc phục.',
+        '{"preconditions":[{"device":"P3","command":"show interfaces FastEthernet0/0 | include line protocol","assertion":{"contains":"FastEthernet0/0 is up, line protocol is up"}}],"injection":[{"device":"P3","action":"interface_shutdown","interface":"FastEthernet0/0"}],"fault_verification":[{"device":"P3","command":"show interfaces FastEthernet0/0 | include line protocol","assertion":{"contains":"administratively down"}}],"ground_truth":[{"fault_type":"link_down","device":"P3","interface":"FastEthernet0/0"}],"evaluation_required_terms":["P3","FastEthernet0/0","shutdown"],"cleanup":[{"device":"P3","action":"interface_no_shutdown","interface":"FastEthernet0/0"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000002', 'p3-fa2-0-link-down', '1.0',
+        'P3 FastEthernet2/0 link-down diagnosis',
+        'Chẩn đoán FastEthernet2/0 trên P3 bị shutdown.', 'mpls-core',
+        'Hãy chẩn đoán nguyên nhân P3 mất kết nối trên FastEthernet2/0. Không khắc phục.',
+        '{"preconditions":[{"device":"P3","command":"show interfaces FastEthernet2/0 | include line protocol","assertion":{"contains":"FastEthernet2/0 is up, line protocol is up"}}],"injection":[{"device":"P3","action":"interface_shutdown","interface":"FastEthernet2/0"}],"fault_verification":[{"device":"P3","command":"show interfaces FastEthernet2/0 | include line protocol","assertion":{"contains":"administratively down"}}],"ground_truth":[{"fault_type":"link_down","device":"P3","interface":"FastEthernet2/0"}],"evaluation_required_terms":["P3","FastEthernet2/0","shutdown"],"cleanup":[{"device":"P3","action":"interface_no_shutdown","interface":"FastEthernet2/0"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000003', 'p1-ospf-network-missing', '1.0',
+        'P1 missing OSPF network diagnosis',
+        'Gỡ OSPF network statement khỏi P1.', 'mpls-core',
+        'Hãy chẩn đoán vì sao P1 không còn hình thành OSPF adjacency. Không khắc phục.',
+        '{"preconditions":[{"device":"P1","command":"show running-config | section router ospf","assertion":{"contains":"network 10.0.0.0 0.255.255.255 area 0"}}],"injection":[{"device":"P1","action":"ospf_network_remove","process_id":1,"network":"10.0.0.0","wildcard":"0.255.255.255","area":0}],"fault_verification":[{"device":"P1","command":"show running-config | section router ospf","assertion":{"not_contains":"network 10.0.0.0 0.255.255.255 area 0"}}],"ground_truth":[{"fault_type":"ospf_network_missing","device":"P1"}],"evaluation_required_terms":["P1","OSPF","network statement"],"cleanup":[{"device":"P1","action":"ospf_network_add","process_id":1,"network":"10.0.0.0","wildcard":"0.255.255.255","area":0}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000004', 'p2-ospf-network-missing', '1.0',
+        'P2 missing OSPF network diagnosis',
+        'Gỡ OSPF network statement khỏi P2.', 'mpls-core',
+        'Hãy chẩn đoán vì sao P2 không còn hình thành OSPF adjacency. Không khắc phục.',
+        '{"preconditions":[{"device":"P2","command":"show running-config | section router ospf","assertion":{"contains":"network 10.0.0.0 0.255.255.255 area 0"}}],"injection":[{"device":"P2","action":"ospf_network_remove","process_id":1,"network":"10.0.0.0","wildcard":"0.255.255.255","area":0}],"fault_verification":[{"device":"P2","command":"show running-config | section router ospf","assertion":{"not_contains":"network 10.0.0.0 0.255.255.255 area 0"}}],"ground_truth":[{"fault_type":"ospf_network_missing","device":"P2"}],"evaluation_required_terms":["P2","OSPF","network statement"],"cleanup":[{"device":"P2","action":"ospf_network_add","process_id":1,"network":"10.0.0.0","wildcard":"0.255.255.255","area":0}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000005', 'p3-ospf-area-mismatch', '1.0',
+        'P3 OSPF area mismatch diagnosis',
+        'Chuyển mạng 10.0.34.0/24 trên P3 từ area 0 sang area 1.', 'mpls-core',
+        'Hãy chẩn đoán nguyên nhân OSPF adjacency trên mạng 10.0.34.0/24 bị mất. Không khắc phục.',
+        '{"preconditions":[{"device":"P3","command":"show running-config | section router ospf","assertion":{"contains":"network 10.0.34.0 0.0.0.255 area 0"}}],"injection":[{"device":"P3","action":"ospf_network_remove","process_id":1,"network":"10.0.34.0","wildcard":"0.0.0.255","area":0},{"device":"P3","action":"ospf_network_add","process_id":1,"network":"10.0.34.0","wildcard":"0.0.0.255","area":1}],"fault_verification":[{"device":"P3","command":"show running-config | section router ospf","assertion":{"contains":"network 10.0.34.0 0.0.0.255 area 1"}}],"ground_truth":[{"fault_type":"ospf_area_mismatch","device":"P3","interface":"FastEthernet0/0"}],"evaluation_required_terms":["P3","OSPF","area mismatch"],"cleanup":[{"device":"P3","action":"ospf_network_remove","process_id":1,"network":"10.0.34.0","wildcard":"0.0.0.255","area":1},{"device":"P3","action":"ospf_network_add","process_id":1,"network":"10.0.34.0","wildcard":"0.0.0.255","area":0}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000006', 'p1-fa0-0-mpls-disabled', '1.0',
+        'P1 MPLS disabled diagnosis',
+        'Tắt MPLS trên FastEthernet0/0 của P1.', 'mpls-core',
+        'Hãy chẩn đoán vì sao MPLS/LDP không hoạt động trên FastEthernet0/0 của P1. Không khắc phục.',
+        '{"preconditions":[{"device":"P1","command":"show running-config interface FastEthernet0/0 | include mpls ip","assertion":{"contains":"mpls ip"}}],"injection":[{"device":"P1","action":"mpls_disable","interface":"FastEthernet0/0"}],"fault_verification":[{"device":"P1","command":"show running-config interface FastEthernet0/0 | include mpls ip","assertion":{"not_contains":"mpls ip"}}],"ground_truth":[{"fault_type":"mpls_disabled","device":"P1","interface":"FastEthernet0/0"}],"evaluation_required_terms":["P1","FastEthernet0/0","MPLS"],"cleanup":[{"device":"P1","action":"mpls_enable","interface":"FastEthernet0/0"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000007', 'p2-fa1-0-mpls-disabled', '1.0',
+        'P2 MPLS disabled diagnosis',
+        'Tắt MPLS trên FastEthernet1/0 của P2.', 'mpls-core',
+        'Hãy chẩn đoán vì sao MPLS/LDP không hoạt động trên FastEthernet1/0 của P2. Không khắc phục.',
+        '{"preconditions":[{"device":"P2","command":"show running-config interface FastEthernet1/0 | include mpls ip","assertion":{"contains":"mpls ip"}}],"injection":[{"device":"P2","action":"mpls_disable","interface":"FastEthernet1/0"}],"fault_verification":[{"device":"P2","command":"show running-config interface FastEthernet1/0 | include mpls ip","assertion":{"not_contains":"mpls ip"}}],"ground_truth":[{"fault_type":"mpls_disabled","device":"P2","interface":"FastEthernet1/0"}],"evaluation_required_terms":["P2","FastEthernet1/0","MPLS"],"cleanup":[{"device":"P2","action":"mpls_enable","interface":"FastEthernet1/0"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000008', 'ce-1a-default-route-missing', '1.0',
+        'CE-1A missing default route diagnosis',
+        'Gỡ default route qua PE1 khỏi CE-1A.', 'mpls-core',
+        'Hãy chẩn đoán vì sao CE-1A không thể chuyển lưu lượng tới các mạng ngoài site. Không khắc phục.',
+        '{"preconditions":[{"device":"CE-1A","command":"show running-config | include ^ip route 0.0.0.0","assertion":{"contains":"ip route 0.0.0.0 0.0.0.0 192.168.1.1"}}],"injection":[{"device":"CE-1A","action":"default_route_remove","next_hop":"192.168.1.1"}],"fault_verification":[{"device":"CE-1A","command":"show running-config | include ^ip route 0.0.0.0","assertion":{"not_contains":"ip route 0.0.0.0 0.0.0.0 192.168.1.1"}}],"ground_truth":[{"fault_type":"default_route_missing","device":"CE-1A"}],"evaluation_required_terms":["CE-1A","default route","192.168.1.1"],"cleanup":[{"device":"CE-1A","action":"default_route_add","next_hop":"192.168.1.1"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-10000009', 'p1-fa0-0-wrong-subnet-mask', '1.0',
+        'P1 wrong subnet mask diagnosis',
+        'Đổi subnet mask FastEthernet0/0 của P1 từ /24 thành /25.', 'mpls-core',
+        'Hãy chẩn đoán lỗi kết nối trên FastEthernet0/0 của P1. Không khắc phục.',
+        '{"preconditions":[{"device":"P1","command":"show running-config interface FastEthernet0/0 | include ip address","assertion":{"contains":"ip address 10.0.10.1 255.255.255.0"}}],"injection":[{"device":"P1","action":"interface_ip_set","interface":"FastEthernet0/0","ip_address":"10.0.10.1","subnet_mask":"255.255.255.128"}],"fault_verification":[{"device":"P1","command":"show running-config interface FastEthernet0/0 | include ip address","assertion":{"contains":"ip address 10.0.10.1 255.255.255.128"}}],"ground_truth":[{"fault_type":"wrong_subnet_mask","device":"P1","interface":"FastEthernet0/0"}],"evaluation_required_terms":["P1","FastEthernet0/0","subnet mask"],"cleanup":[{"device":"P1","action":"interface_ip_set","interface":"FastEthernet0/0","ip_address":"10.0.10.1","subnet_mask":"255.255.255.0"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    ),
+    (
+        'benc-021126-1000000a', 'pe1-customer-acl-block', '1.0',
+        'PE1 customer traffic ACL diagnosis',
+        'Áp ACL 101 chặn mạng khách hàng 172.16.1.0/24 trên PE1.', 'mpls-core',
+        'Hãy chẩn đoán vì sao lưu lượng khách hàng 172.16.1.0/24 bị chặn tại PE1. Không khắc phục.',
+        '{"preconditions":[{"device":"PE1","command":"show running-config interface FastEthernet3/0 | include access-group","assertion":{"not_contains":"ip access-group 101 in"}}],"injection":[{"device":"PE1","action":"acl_block","interface":"FastEthernet3/0","acl_number":101,"direction":"in","source_network":"172.16.1.0","source_wildcard":"0.0.0.255"}],"fault_verification":[{"device":"PE1","command":"show running-config interface FastEthernet3/0 | include access-group","assertion":{"contains":"ip access-group 101 in"}}],"ground_truth":[{"fault_type":"acl_block","device":"PE1","interface":"FastEthernet3/0"}],"evaluation_required_terms":["PE1","ACL 101","172.16.1.0"],"cleanup":[{"device":"PE1","action":"acl_remove","interface":"FastEthernet3/0","acl_number":101,"direction":"in"}]}'::jsonb,
+        'user-221026-00000001', 'user-221026-00000001'
+    )
 ON CONFLICT DO NOTHING;
 
 COMMIT;

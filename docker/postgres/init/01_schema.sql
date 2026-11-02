@@ -719,16 +719,6 @@ CREATE INDEX idx_benchmark_runs_scenario_time
 CREATE INDEX idx_benchmark_runs_status_time
     ON benchmark_runs(status, started_at DESC);
 
-INSERT INTO benchmark_scenarios (
-    id, scenario_key, version, name, description, topology, initial_message, definition
-) VALUES (
-    'benc-221026-00000001', 'p3-interface-link-down', '1.0', 'P3 interface link-down diagnosis',
-    'Chẩn đoán liên kết FastEthernet0/0 trên P3 bị tắt trong topology MPLS GNS3.',
-    'mpls-core',
-    'Hãy chẩn đoán nguyên nhân khiến thiết bị P3 mất kết nối trên liên kết FastEthernet0/0. Chỉ thu thập dữ liệu và xác định nguyên nhân, không khắc phục.',
-    '{"preconditions":[{"device":"P3","command":"show interfaces FastEthernet0/0 | include line protocol","assertion":{"contains":"FastEthernet0/0 is up, line protocol is up"}}],"injection":[{"device":"P3","action":"interface_shutdown","interface":"FastEthernet0/0"}],"fault_verification":[{"device":"P3","command":"show interfaces FastEthernet0/0 | include line protocol","assertion":{"contains":"FastEthernet0/0 is administratively down"}}],"ground_truth":[{"fault_type":"link_down","device":"P3","interface":"FastEthernet0/0"}],"evaluation_required_terms":["P3","FastEthernet0/0","down"],"cleanup":[{"device":"P3","action":"interface_no_shutdown","interface":"FastEthernet0/0"}]}'::jsonb
-);
-
 -- =============================================================================
 -- 2.7 SYSTEM AUDIT
 -- =============================================================================

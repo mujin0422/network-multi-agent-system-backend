@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 SEED_PATH = Path("docker/postgres/init/02_seed.sql.template")
+SCHEMA_PATH = Path("docker/postgres/init/01_schema.sql")
 
 
 def test_seed_uses_database_design_id_formats() -> None:
@@ -51,3 +52,24 @@ def test_seed_contains_one_admin_and_no_runtime_group_data() -> None:
     )
     for table in runtime_tables:
         assert not re.search(rf"INSERT\s+INTO\s+{table}\b", seed, re.IGNORECASE)
+
+
+def test_seed_contains_ten_valid_benchmark_scenarios() -> None:
+    """Development seed phải cung cấp đúng 10 scenario với ID hợp lệ."""
+
+    seed = SEED_PATH.read_text(encoding="utf-8")
+    scenario_ids = re.findall(r"'benc-\d{6}-[0-9a-f]{8}'", seed)
+    scenario_keys = re.findall(
+        r"'benc-\d{6}-[0-9a-f]{8}'\s*,\s*'([a-z0-9][a-z0-9-]*)'",
+        seed,
+    )
+
+    assert len(set(scenario_ids)) == 10
+    assert len(set(scenario_keys)) == 10
+    assert "INSERT INTO benchmark_scenarios" in seed
+    assert {"ospf", "mpls", "default-route", "subnet-mask", "acl"}.issubset(
+        {fault for key in scenario_keys for fault in ("ospf", "mpls", "default-route", "subnet-mask", "acl") if fault in key}
+    )
+    assert "INSERT INTO benchmark_scenarios" not in SCHEMA_PATH.read_text(
+        encoding="utf-8"
+    )
