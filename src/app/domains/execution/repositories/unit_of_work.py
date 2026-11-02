@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from app.core.database import create_session_factory
+from app.domains.execution.repositories.approval_timeout import ApprovalTimeoutRepository
 from app.domains.execution.repositories.device_action_log import (
     DeviceActionLogRepository,
 )
@@ -35,6 +36,7 @@ class ExecutionRepository:
         # thao tác đơn bảng và mở transaction cho use case ghi nhiều bảng.
         """Khởi tạo ExecutionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
+        self._approval_timeout = ApprovalTimeoutRepository(database_url)
         self._tasks = TaskRepository(database_url)
         self._operations = OperationRepository(database_url)
         self._operation_devices = OperationDeviceRepository(database_url)
@@ -160,6 +162,11 @@ class ExecutionRepository:
         return self._operation_device_approvals.get_by_operation_device_id(
             operation_device_id
         )
+
+    def expire_due_approvals(
+        self, now: datetime, timeout_minutes: int
+    ) -> list[str]:
+        return self._approval_timeout.expire_due_approvals(now, timeout_minutes)
 
     def expire_operation_approval(self, approval_id: str) -> None:
         """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức expire_operation_approval."""

@@ -1,9 +1,12 @@
 """FastAPI application entry point and top-level router composition."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.approval_timeout_worker import run_approval_timeout_worker
 from app.core.exceptions.handlers import register_error_handlers
 from app.domains.audit.routers import router as audit_logs_router
 from app.domains.benchmark import router as benchmark_router
@@ -25,10 +28,34 @@ from app.domains.identity.routers import auth_router, role_router, user_router
 
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Worker starts with the API and reconciles overdue approvals on startup.
+    # All mutations are guarded by PostgreSQL row locks across worker processes.
+    import asyncio
+    from contextlib import suppress
+
+    sweep_task = (
+        asyncio.create_task(run_approval_timeout_worker(settings))
+        if settings.approval_sweep_enabled
+        else None
+    )
+    try:
+        yield
+    finally:
+        if sweep_task:
+            sweep_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sweep_task
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     debug=settings.app_debug,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
