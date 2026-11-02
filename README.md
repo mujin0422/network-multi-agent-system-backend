@@ -59,6 +59,7 @@ Các nhóm cấu hình chính trong `.env.example`:
 - GNS3
 - PostgreSQL device inventory
 - Network connection timeout
+- Human approval timeout and automatic Task finalization
 
 Không commit `.env` vì file này chứa secret.
 
@@ -221,6 +222,26 @@ GNS3_IP=127.0.0.1
 GNS3_PORT=3080
 GNS3_REQUEST_TIMEOUT=10
 ```
+
+## Timeout phê duyệt tự động
+
+Mặc định, yêu cầu phê duyệt WRITE sẽ hết hạn sau 15 phút. Khi timeout,
+FastAPI worker định kỳ (30 giây) tự chuyển Approval thành EXPIRED, kết thúc
+Task (FAILED hoặc PARTIAL_SUCCESS), lưu Activity Log có reason
+`APPROVAL_TIMEOUT` và đánh dấu Benchmark Run liên kết FAILED.
+Worker không phụ thuộc frontend đang mở; nếu backend tắt, các yêu cầu quá
+hạn sẽ được xử lý ở lần khởi động tiếp theo. Không chạy WRITE chưa duyệt.
+`cleanup_required` của benchmark được giữ nguyên.
+
+Cấu hình trong `.env`:
+
+```env
+APPROVAL_TIMEOUT_MINUTES=15
+APPROVAL_SWEEP_INTERVAL_SECONDS=30
+APPROVAL_SWEEP_ENABLED=true
+```
+
+Xem [quy trình approval timeout](docs/flows/langgraph-workflow.md).
 
 ## Chạy test
 

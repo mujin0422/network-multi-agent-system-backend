@@ -228,3 +228,63 @@ def test_missing_parent_resources_return_not_found() -> None:
             user_id="user-reviewer",
             decision=ApprovalDecision.APPROVED,
         )
+
+
+def test_new_approval_has_default_configured_deadline() -> None:
+    from app.domains.execution.schemas import DeviceRole, AccessMode, TaskOperationDevice
+    from app.domains.execution.utils import build_operation_device_approval
+
+    now = datetime.now(UTC)
+    operation = ApprovalRepositoryStub().operation
+    mapping = TaskOperationDevice(
+        id="opdv-test",
+        operation_id=operation.id,
+        device_id="devc-test",
+        operation_device_status="WAITING_APPROVAL",
+        device_role=DeviceRole.TARGET,
+        access_mode=AccessMode.WRITE,
+    )
+    approval = build_operation_device_approval(
+        operation,
+        mapping,
+        commands=["no shutdown"],
+        request_hash="sha256-digest",
+        requested_at=now,
+        timeout_minutes=15,
+    )
+    assert approval.expires_at == now + timedelta(minutes=15)
+    assert approval.approval_status == ApprovalStatus.PENDING
+
+
+def test_old_pending_approval_with_null_deadline_still_expires() -> None:
+    repository = ApprovalRepositoryStub()
+    repository.approval = repository.approval.model_copy(
+        update={
+            "requested_at": datetime.now(UTC) - timedelta(minutes=20),
+            "expires_at": None,
+        }
+    )
+    service = ExecutionService(repository)
+
+    with pytest.raises(ResourceConflictError, match="đã hết hạn"):
+        service.decide_operation_approval(
+            repository.approval.id,
+            user_id="user-reviewer",
+            decision=ApprovalDecision.APPROVED,
+        )
+
+    assert repository.approval.approval_status == ApprovalStatus.EXPIRED
+
+
+def test_timeout_sweep_delegates_to_repository() -> None:
+    repository = ApprovalRepositoryStub()
+    called = []
+    def expire_due_approvals(now, timeout_minutes):
+        called.append((now, timeout_minutes))
+        return ["task-test"]
+    repository.expire_due_approvals = expire_due_approvals
+
+    service = ExecutionService(repository)
+    now = datetime.now(UTC)
+    assert service.expire_due_approvals(now) == ["task-test"]
+    assert called == [(now, 15)]
