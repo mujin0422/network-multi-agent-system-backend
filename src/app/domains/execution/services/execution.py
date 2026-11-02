@@ -339,11 +339,12 @@ class ExecutionService:
 
         records = build_execution_plan_records(task, plan, datetime.now(UTC))
         self._repository.save_execution_plan(
-            planned_task,
-            operations=operations,
-            dependencies=dependencies,
-            operation_devices=operation_devices,
+            records.task,
+            operations=records.operations,
+            dependencies=records.dependencies,
+            operation_devices=records.operation_devices,
         )
+        return self.get_task(task_id)
 
     # =============================================================================
     # Xác minh tài nguyên và chuyển đổi response
