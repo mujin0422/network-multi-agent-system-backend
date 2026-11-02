@@ -76,7 +76,7 @@ class AnalysisOrchestrator:
             started_at=analysis_started_at,
             completed_at=datetime.now(UTC),
         )
-        message = self._conversation_service.add_message(
+        message = self._conversation_service.create_message(
             current_task.conversation_id,
             MessageCreate(
                 sender_by=MessageSender.AGENT,
@@ -154,7 +154,7 @@ class AnalysisOrchestrator:
     def _save_waiting_response(self, task: TaskDetail) -> Message:
         """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
 
-        return self._conversation_service.add_message(
+        return self._conversation_service.create_message(
             task.conversation_id,
             MessageCreate(
                 sender_by=MessageSender.AGENT,

@@ -1,28 +1,10 @@
-"""Persistence contract và PostgreSQL adapter của Conversation domain."""
-
-from typing import Protocol
+"""PostgreSQL repository của Conversation domain."""
 
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.conversation.models import ConversationModel, MessageModel
 from app.domains.conversation.schemas import Conversation, Message
-
-
-class ConversationRepositoryProtocol(Protocol):
-    """Contract persistence của bảng conversations dành cho service."""
-
-    def save_conversation(self, conversation: Conversation) -> None: ...
-
-    def create_with_first_message(
-        self,
-        conversation: Conversation,
-        message: Message,
-    ) -> None: ...
-
-    def get_conversation(self, conversation_id: str) -> Conversation | None: ...
-
-    def list_conversations(self, user_id: str | None = None) -> list[Conversation]: ...
 
 
 class ConversationRepository:
@@ -55,14 +37,12 @@ class ConversationRepository:
     ) -> None:
         """Tạo Conversation và USER_REQUEST đầu tiên trong cùng transaction."""
 
-        if message.conversation_id != conversation.id:
-            raise ValueError("Message đầu tiên không thuộc Conversation cần tạo")
         with self._sessions.begin() as session:
             session.add(ConversationModel(**conversation.model_dump()))
             session.add(MessageModel(**message.model_dump()))
 
 
-    def get_conversation(self, conversation_id: str) -> Conversation | None:
+    def get_by_id(self, conversation_id: str) -> Conversation | None:
         """Lấy một conversation; trả None để service quyết định lỗi nghiệp vụ."""
 
         with self._sessions() as session:
@@ -70,7 +50,7 @@ class ConversationRepository:
             return Conversation.model_validate(model, from_attributes=True) if model else None
 
 
-    def list_conversations(self, user_id: str | None = None) -> list[Conversation]:
+    def get_all(self, user_id: str | None = None) -> list[Conversation]:
         """Lấy toàn bộ conversation hoặc chỉ conversation của một user."""
 
         statement = select(ConversationModel)

@@ -13,6 +13,7 @@ from app.domains.conversation.schemas import (
     ConversationDetail,
     ConversationStart,
     ConversationStarted,
+    ConversationTitleUpdate,
     Message,
     MessageCreate,
     MessageSender,
@@ -159,6 +160,22 @@ async def get_conversation(
     return service.get(conversation_id)
 
 
+@router.patch(
+    "/{conversation_id}/title",
+    response_model=Conversation,
+    summary="Đổi tiêu đề conversation",
+)
+async def rename_conversation(
+    conversation_id: str,
+    payload: ConversationTitleUpdate,
+    service: Annotated[ConversationService, Depends(get_conversation_service)],
+    user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
+) -> Conversation:
+    """Đổi tiêu đề conversation thuộc người dùng đang đăng nhập."""
+
+    return service.rename(conversation_id, user.id, payload)
+
+
 # READ (Message) — Lấy danh sách message theo mã conversation.
 @router.get(
     "/{conversation_id}/messages",
@@ -181,7 +198,7 @@ async def list_messages(
     response_model=Message,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_message(
+async def create_message(
     conversation_id: str,
     payload: MessageCreate,
     background_tasks: BackgroundTasks,
@@ -201,7 +218,7 @@ async def add_message(
     conversation = service.get(conversation_id)
 
     # Bước 2: Lưu message trước. Nhờ vậy Task luôn có source_message_id hợp lệ & lịch sử hội thoại vẫn còn nếu bước gọi LLM gặp lỗi.
-    message = service.add_message(conversation_id, payload)
+    message = service.create_message(conversation_id, payload)
 
     # Bước 3: (CHECK) Chỉ USER message kích hoạt Planner. Message của ASSISTANT/SYSTEM được lưu như lịch sử nhưng không tạo task mới, tránh lặp vô hạn.
     if message.sender_by == MessageSender.USER:

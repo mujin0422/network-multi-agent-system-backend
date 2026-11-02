@@ -1,17 +1,9 @@
-"""Persistence ports and adapters for the Conversation domain."""
+"""Các repository công khai của Conversation domain."""
 
-from app.domains.conversation.repositories.conversation import (
-    ConversationRepository,
-    ConversationRepositoryProtocol,
-)
-from app.domains.conversation.repositories.message import (
-    MessageRepository,
-    MessageRepositoryProtocol,
-)
+from app.domains.conversation.repositories.conversation import ConversationRepository
+from app.domains.conversation.repositories.message import MessageRepository
 
 __all__ = [
     "ConversationRepository",
-    "ConversationRepositoryProtocol",
     "MessageRepository",
-    "MessageRepositoryProtocol",
 ]
