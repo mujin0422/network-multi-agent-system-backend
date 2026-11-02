@@ -177,7 +177,7 @@ class ExecutionService:
 
         self._require_operation(operation_id)
         return [
-            self._to_approval_response(approval)
+            to_approval_response(approval)
             for approval in self._repository.get_all_operation_approvals_by_operation_id(
                 operation_id
             )
