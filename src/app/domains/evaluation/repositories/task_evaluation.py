@@ -10,7 +10,11 @@ from app.domains.evaluation.models import (
     TaskEvaluationMetricModel,
     TaskEvaluationModel,
 )
-from app.domains.evaluation.schemas import TaskEvaluationDetail, TaskEvaluationMetric
+from app.domains.evaluation.schemas import (
+    TaskEvaluationDetail,
+    TaskEvaluationMetric,
+    TaskEvaluationSummary,
+)
 
 
 class TaskEvaluationRepositoryProtocol(Protocol):
@@ -22,6 +26,10 @@ class TaskEvaluationRepositoryProtocol(Protocol):
         ...
     def get_by_task_id(self, task_id: str) -> TaskEvaluationDetail | None:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_task_id."""
+        ...
+
+    def get_recent(self, limit: int = 50) -> list[TaskEvaluationSummary]:
+        """Danh sách Evaluation mới nhất kèm trạng thái các metric, không có evidence."""
         ...
 
 
@@ -56,6 +64,43 @@ class TaskEvaluationRepository:
                 )
             )
             return self._to_schema(session, model)
+
+    def get_recent(self, limit: int = 50) -> list[TaskEvaluationSummary]:
+        """Nạp Evaluation và metric bằng hai truy vấn, không lộ evidence."""
+
+        with self._sessions() as session:
+            rows = session.scalars(
+                select(TaskEvaluationModel)
+                .order_by(TaskEvaluationModel.created_at.desc(), TaskEvaluationModel.id)
+                .limit(min(max(limit, 1), 100))
+            ).all()
+            if not rows:
+                return []
+            metric_rows = session.scalars(
+                select(TaskEvaluationMetricModel).where(
+                    TaskEvaluationMetricModel.evaluation_id.in_(
+                        [item.id for item in rows]
+                    )
+                )
+            ).all()
+            results_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
+            for metric in metric_rows:
+                results_by_id[metric.evaluation_id][metric.metric_type] = metric.result
+            return [
+                TaskEvaluationSummary.model_validate(
+                    {
+                        "id": row.id,
+                        "task_id": row.task_id,
+                        "evaluation_status": row.evaluation_status,
+                        "evaluator_type": row.evaluator_type,
+                        "evaluator_version": row.evaluator_version,
+                        "created_at": row.created_at,
+                        "evaluated_at": row.evaluated_at,
+                        "results": results_by_id[row.id],
+                    }
+                )
+                for row in rows
+            ]
 
     @staticmethod
     def _to_schema(
