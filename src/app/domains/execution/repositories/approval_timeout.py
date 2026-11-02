@@ -79,10 +79,21 @@ class ApprovalTimeoutRepository:
         with self._sessions.begin() as session:
             candidates = session.scalars(
                 select(OperationDeviceApprovalModel.id)
+                .join(
+                    TaskOperationDeviceModel,
+                    TaskOperationDeviceModel.id
+                    == OperationDeviceApprovalModel.operation_device_id,
+                )
+                .join(
+                    OperationModel,
+                    OperationModel.id == TaskOperationDeviceModel.operation_id,
+                )
+                .join(TaskModel, TaskModel.id == OperationModel.task_id)
                 .where(
                     OperationDeviceApprovalModel.approval_status.in_(
                         (ApprovalStatus.PENDING, ApprovalStatus.EXPIRED)
                     ),
+                    TaskModel.task_status.not_in(_TERMINAL_TASKS),
                     due,
                 )
                 .order_by(OperationDeviceApprovalModel.requested_at)
