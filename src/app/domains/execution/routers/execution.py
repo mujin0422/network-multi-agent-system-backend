@@ -20,6 +20,7 @@ from app.domains.execution.schemas import (
     TaskActivityEvent,
     TaskCreate,
     TaskDetail,
+    TaskRecords,
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.execution.routers.dependencies import get_execution_service
@@ -40,6 +41,20 @@ async def list_device_action_logs(
     """Trả nhật ký command bất biến, mới nhất trước."""
 
     return service.list_device_action_logs(limit)
+
+
+@device_action_logs_router.get(
+    "/by-task/{task_id}",
+    response_model=list[DeviceActionLog],
+)
+async def list_device_action_logs_by_task(
+    task_id: str,
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
+) -> list[DeviceActionLog]:
+    """Chỉ trả command logs của Task cho người có quyền Audit Log View."""
+
+    return service.list_device_action_logs_by_task(task_id)
 
 
 async def _resume_approved_workflow(
@@ -75,6 +90,17 @@ async def get_task(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> TaskDetail:
     return service.get_task(task_id)
+
+
+@router.get("/{task_id}/records", response_model=TaskRecords)
+async def get_task_records(
+    task_id: str,
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+) -> TaskRecords:
+    """Đọc GROUP 3: plan, operation devices, dependency, Agent executions, timeline, approvals."""
+
+    return service.get_task_records(task_id)
 
 
 @router.get("/{task_id}/activity-events", response_model=list[TaskActivityEvent])

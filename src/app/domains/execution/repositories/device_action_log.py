@@ -33,3 +33,21 @@ class DeviceActionLogRepository:
                 DeviceActionLog.model_validate(row, from_attributes=True)
                 for row in rows
             ]
+
+    def get_all_by_task_id(self, task_id: str) -> list[DeviceActionLog]:
+        """Lấy command log của đúng Task, không lấy lẫn log từ Task khác."""
+
+        statement = (
+            select(DeviceActionLogModel)
+            .where(DeviceActionLogModel.task_id == task_id)
+            .order_by(
+                DeviceActionLogModel.executed_at,
+                DeviceActionLogModel.sequence_number,
+                DeviceActionLogModel.id,
+            )
+        )
+        with self._sessions() as session:
+            return [
+                DeviceActionLog.model_validate(row, from_attributes=True)
+                for row in session.scalars(statement).all()
+            ]

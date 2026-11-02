@@ -27,6 +27,7 @@ from app.domains.execution.schemas import (
     TaskActivityEvent,
     TaskCreate,
     TaskDetail,
+    TaskRecords,
     TaskStatus,
     TaskOperationDevice,
     TaskExecution,
@@ -72,6 +73,38 @@ class ExecutionService:
         return TaskDetail(
             **task.model_dump(),
             operations=self._repository.get_all_operations_by_task_id(task_id),
+        )
+
+    def get_task_records(self, task_id: str) -> TaskRecords:
+        """Đọc các bản ghi GROUP 3 của Task; không trả command logs ở đây."""
+
+        task = self.get_task(task_id)
+        operation_ids = [operation.id for operation in task.operations]
+        return TaskRecords(
+            task=task,
+            operation_devices=[
+                mapping
+                for operation_id in operation_ids
+                for mapping in self._repository.get_all_operation_devices_by_operation_id(
+                    operation_id
+                )
+            ],
+            dependencies=[
+                dependency
+                for operation_id in operation_ids
+                for dependency in self._repository.get_all_dependencies_by_operation_id(
+                    operation_id
+                )
+            ],
+            executions=self._repository.get_all_task_executions_by_task_id(task_id),
+            activity_events=self._repository.get_all_task_activity_events_by_task_id(task_id),
+            approvals=[
+                to_approval_response(approval)
+                for operation_id in operation_ids
+                for approval in self._repository.get_all_operation_approvals_by_operation_id(
+                    operation_id
+                )
+            ],
         )
 
     # =============================================================================
@@ -291,6 +324,10 @@ class ExecutionService:
 
     def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
         return self._repository.get_recent_device_action_logs(limit)
+
+    def list_device_action_logs_by_task(self, task_id: str) -> list[DeviceActionLog]:
+        self._require_task(task_id)
+        return self._repository.get_all_device_action_logs_by_task_id(task_id)
 
     # =============================================================================
     # Execution Plan — tạo operation và lưu kế hoạch nguyên tử

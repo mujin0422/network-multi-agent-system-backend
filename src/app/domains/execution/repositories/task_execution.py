@@ -1,5 +1,7 @@
 """Repository cho metadata mỗi lần Agent/Tool thực thi."""
 
+from sqlalchemy import select
+
 from app.core.database import create_session_factory
 from app.domains.execution.models import TaskExecutionModel
 from app.domains.execution.schemas import TaskExecution
@@ -19,3 +21,21 @@ class TaskExecutionRepository:
                 return
             for field, value in execution.model_dump().items():
                 setattr(model, field, value)
+
+    def get_all_by_task_id(self, task_id: str) -> list[TaskExecution]:
+        """Lấy mọi lượt Agent/Tool thực thi thuộc một Task theo thứ tự bước."""
+
+        statement = (
+            select(TaskExecutionModel)
+            .where(TaskExecutionModel.task_id == task_id)
+            .order_by(
+                TaskExecutionModel.step_order,
+                TaskExecutionModel.created_at,
+                TaskExecutionModel.id,
+            )
+        )
+        with self._sessions() as session:
+            return [
+                TaskExecution.model_validate(row, from_attributes=True)
+                for row in session.scalars(statement).all()
+            ]

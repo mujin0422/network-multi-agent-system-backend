@@ -105,6 +105,12 @@ class ExecutionRepository:
     ) -> list[OperationDependency]:
         return self._operation_dependencies.get_all_by_operation_id(operation_id)
 
+    def get_all_task_executions_by_task_id(self, task_id: str) -> list[TaskExecution]:
+        return self._task_executions.get_all_by_task_id(task_id)
+
+    def get_all_device_action_logs_by_task_id(self, task_id: str) -> list[DeviceActionLog]:
+        return self._device_action_logs.get_all_by_task_id(task_id)
+
     def save_task_execution(self, execution: TaskExecution) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_execution."""
         self._task_executions.save(execution)

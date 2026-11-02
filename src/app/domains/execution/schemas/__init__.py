@@ -43,6 +43,7 @@ from app.domains.execution.schemas.task import (
     TaskType,
 )
 from app.domains.execution.schemas.task_execution import ExecutionStatus, TaskExecution
+from app.domains.execution.schemas.task_records import TaskRecords
 from app.domains.execution.schemas.task_activity_event import (
     ActivityActorType,
     ActivityEventStatus,
@@ -80,6 +81,7 @@ __all__ = [
     "Task",
     "TaskCreate",
     "TaskDetail",
+    "TaskRecords",
     "TaskStatus",
     "TaskExecution",
     "TaskActivityEvent",
