@@ -34,12 +34,11 @@ class TaskRepository:
         if model is None:
             session.add(TaskModel(**task.model_dump()))
             return
-        # A delayed approval callback must never revive a finalized Task.
+        # Terminal tasks are immutable: reject even a stale SUCCESS callback
+        # after timeout was committed as FAILED or PARTIAL_SUCCESS.
         if model.task_status in {
             TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
             TaskStatus.FAILED, TaskStatus.REJECTED,
-        } and task.task_status in {
-            TaskStatus.PENDING, TaskStatus.PLANNING, TaskStatus.RUNNING,
         }:
             return
         model.conversation_id = task.conversation_id

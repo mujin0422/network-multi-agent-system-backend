@@ -103,6 +103,13 @@ class ExecutionOrchestrator:
             self._fail_task(running_task, started_at, exc)
             raise
 
+        if task.task_status == TaskStatus.RUNNING and (
+            self._execution_service.get_task(task.id).task_status in {
+                TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+                TaskStatus.FAILED, TaskStatus.REJECTED,
+            }
+        ):
+            return results
         self._complete_task(running_task, started_at, statuses)
         return results
 
