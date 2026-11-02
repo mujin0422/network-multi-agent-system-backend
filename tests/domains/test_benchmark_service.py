@@ -95,6 +95,19 @@ def test_start_run_injects_fault_without_exposing_ground_truth() -> None:
     )
 
 
+def test_scenario_detail_includes_complete_definition_for_editing() -> None:
+    repository = FakeScenarioRepository()
+    scenario = BenchmarkScenarioService(repository).get(repository.scenario.id)
+
+    assert scenario.id == repository.scenario.id
+    assert scenario.scenario_key == repository.scenario.scenario_key
+    assert scenario.injection[0].action == "interface_shutdown"
+    assert scenario.fault_verification[0].command == "show interface"
+    assert scenario.ground_truth[0].fault_type == "link_down"
+    assert scenario.cleanup[0].action == "interface_no_shutdown"
+    assert scenario.evaluation_required_terms == ["P3", "FastEthernet2/0", "down"]
+
+
 def test_create_scenario_generates_id_and_preserves_business_key() -> None:
     repository = FakeScenarioRepository()
     payload = BenchmarkScenario.model_validate(
