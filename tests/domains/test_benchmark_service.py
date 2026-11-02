@@ -8,6 +8,8 @@ from app.domains.benchmark.schemas import (
     BenchmarkScenarioRecord,
 )
 from app.domains.benchmark.services import BenchmarkRunService, BenchmarkScenarioService
+from app.domains.benchmark.schemas import BenchmarkAction
+from app.domains.benchmark.utils import build_benchmark_action_commands
 from app.domains.execution.schemas import AccessMode
 from app.tools.network.schemas import CommandResult
 
@@ -105,3 +107,23 @@ def test_create_scenario_generates_id_and_preserves_business_key() -> None:
 
     assert re.fullmatch(r"benc-\d{6}-[0-9a-f]{8}", created.id)
     assert created.scenario_key == "new-link-down"
+
+
+def test_builds_typed_configuration_fault_commands() -> None:
+    """Các fault không phải link-down phải sinh đúng lệnh và không nhận raw command."""
+
+    ospf = BenchmarkAction(
+        device="P1", action="ospf_network_remove", process_id=1,
+        network="10.0.0.0", wildcard="0.255.255.255", area=0,
+    )
+    acl = BenchmarkAction(
+        device="PE1", action="acl_block", interface="FastEthernet3/0",
+        acl_number=101, direction="in", source_network="172.16.1.0",
+        source_wildcard="0.0.0.255",
+    )
+
+    assert build_benchmark_action_commands(ospf) == [
+        "router ospf 1",
+        "no network 10.0.0.0 0.255.255.255 area 0",
+    ]
+    assert build_benchmark_action_commands(acl)[-1] == "ip access-group 101 in"
