@@ -16,6 +16,7 @@ from app.domains.benchmark.schemas import (
     BenchmarkScenario,
 )
 from app.domains.benchmark.utils import (
+    build_benchmark_action_commands,
     build_benchmark_evaluation,
     to_public_benchmark_run,
 )
@@ -185,20 +186,24 @@ class BenchmarkRunService:
                 [check.command],
             )
             output = "\n".join(result.output for result in results)
-            if check.assertion.contains.casefold() not in output.casefold():
+            expected = check.assertion.contains
+            unexpected = check.assertion.not_contains
+            if expected is not None and expected.casefold() not in output.casefold():
                 raise RuntimeError(
                     f"Verification thất bại trên {check.device}: output không chứa "
-                    f"'{check.assertion.contains}'"
+                    f"'{expected}'"
+                )
+            if unexpected is not None and unexpected.casefold() in output.casefold():
+                raise RuntimeError(
+                    f"Verification thất bại trên {check.device}: output vẫn chứa "
+                    f"'{unexpected}'"
                 )
 
     def _execute_actions(self, actions: list[BenchmarkAction]) -> None:
         """Thực thi tác vụ nội bộ của phương thức _execute_actions."""
         for action in actions:
-            command = (
-                "shutdown" if action.action == "interface_shutdown" else "no shutdown"
-            )
             self._network_tool.execute(
                 action.device,
                 AccessMode.WRITE,
-                [f"interface {action.interface}", command],
+                build_benchmark_action_commands(action),
             )
