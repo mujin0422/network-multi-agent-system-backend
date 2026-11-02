@@ -13,6 +13,7 @@ class TaskRepository:
     """Quản lý vòng đời record thuộc bảng tasks."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo TaskRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_task(self, task: Task) -> None:

@@ -2,10 +2,11 @@
 
 from datetime import UTC, datetime
 
-from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import CredentialRepository
 from app.domains.inventory.schemas import Credential, CredentialCreate, CredentialUpdate
+from app.domains.inventory.utils import ensure_unique_name
 
 
 class CredentialService:
@@ -25,7 +26,11 @@ class CredentialService:
     ) -> Credential:
         """Tạo metadata và chuyển secret cho repository mã hóa."""
 
-        self._ensure_unique_name(payload.name)
+        ensure_unique_name(
+            self._repository.get_all(),
+            payload.name,
+            resource_label="credential",
+        )
         now = datetime.now(UTC)
         credential = Credential(
             id=generate_id(IdPrefix.CREDENTIAL),
@@ -82,7 +87,12 @@ class CredentialService:
         candidate = current.model_copy(
             update={**changes, "last_updated_at": datetime.now(UTC)}
         )
-        self._ensure_unique_name(candidate.name, exclude_credential_id=credential_id)
+        ensure_unique_name(
+            self._repository.get_all(),
+            candidate.name,
+            resource_label="credential",
+            exclude_id=credential_id,
+        )
         self._repository.update(
             candidate,
             password=payload.password,

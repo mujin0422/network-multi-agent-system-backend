@@ -3,7 +3,7 @@
 from app.domains.audit.models import AuditLogModel
 from app.core.database import Base
 from app.domains.conversation.models import ConversationModel, MessageModel
-from app.domains.evaluation.models import TaskEvaluationModel
+from app.domains.evaluation.models import TaskEvaluationMetricModel, TaskEvaluationModel
 from app.domains.execution.models import (
     DeviceActionLogModel,
     OperationDependencyModel,
@@ -55,6 +55,7 @@ ORM_MODELS = [
     TaskActivityEventModel,
     OperationDeviceApprovalModel,
     TaskEvaluationModel,
+    TaskEvaluationMetricModel,
     AuditLogModel,
 ]
 
@@ -83,6 +84,7 @@ def test_orm_covers_all_domain_tables() -> None:
         "task_activity_events",
         "operation_device_approvals",
         "task_evaluations",
+        "task_evaluation_metrics",
         "audit_logs",
     }
 

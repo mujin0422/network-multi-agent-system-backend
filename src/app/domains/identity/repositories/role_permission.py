@@ -25,6 +25,7 @@ class RolePermissionRepository:
     """Sở hữu query và transaction cho Role Permission — tra cứu quyền được gán cho role."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo RolePermissionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def get_all_permission_pairs_by_role_id(
@@ -88,6 +89,7 @@ class RolePermissionRepository:
     def replace_role_permissions(
         self, role_id: str, permission_ids: set[str]
     ) -> list[RolePermission]:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         with self._sessions.begin() as session:
             session.execute(
                 delete(RolePermissionModel).where(

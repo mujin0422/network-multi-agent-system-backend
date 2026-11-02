@@ -13,6 +13,7 @@ class OperationDeviceRepository:
     """Quản lý thiết bị, role và access mode được gán cho operation."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationDeviceRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def get_all_by_operation_id(

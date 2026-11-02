@@ -9,6 +9,7 @@ from app.domains.execution.schemas import DeviceActionLog
 
 class DeviceActionLogRepository:
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo DeviceActionLogRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_all(self, action_logs: list[DeviceActionLog]) -> None:

@@ -14,6 +14,7 @@ class AuditLogRepository:
     """Đọc và ghi append-only đối với bảng audit_logs."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo AuditLogRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save(self, audit_log: AuditLog) -> None:

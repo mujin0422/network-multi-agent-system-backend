@@ -17,6 +17,7 @@ class DeviceRepository:
     """
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo DeviceRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save(self, device: Device) -> None:

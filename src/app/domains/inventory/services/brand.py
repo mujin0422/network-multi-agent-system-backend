@@ -1,9 +1,10 @@
 """Use cases cho resource Brand."""
 
-from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import BrandRepository
 from app.domains.inventory.schemas import Brand, BrandCreate, BrandUpdate
+from app.domains.inventory.utils import ensure_unique_name
 
 
 class BrandService:
@@ -19,7 +20,11 @@ class BrandService:
     def create_brand(self, payload: BrandCreate) -> Brand:
         """Kiểm tra tên duy nhất, sinh ID và lưu Brand mới."""
 
-        self._ensure_unique_name(payload.name)
+        ensure_unique_name(
+            self._repository.get_all(),
+            payload.name,
+            resource_label="brand",
+        )
         brand = Brand(id=generate_id(IdPrefix.BRAND), **payload.model_dump())
         self._repository.save(brand)
         return brand
@@ -44,7 +49,12 @@ class BrandService:
 
         changes = payload.model_dump(exclude_unset=True, exclude_none=True)
         candidate = current.model_copy(update=changes)
-        self._ensure_unique_name(candidate.name, exclude_brand_id=brand_id)
+        ensure_unique_name(
+            self._repository.get_all(),
+            candidate.name,
+            resource_label="brand",
+            exclude_id=brand_id,
+        )
         self._repository.save(candidate)
         return candidate
 

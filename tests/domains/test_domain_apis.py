@@ -157,7 +157,7 @@ class StubDeviceRepository:
     def save(self, device: Device) -> None:
         self._devices[device.id] = device.model_copy(deep=True)
 
-    def get(self, device_id: str) -> Device | None:
+    def get_by_id(self, device_id: str) -> Device | None:
         device = self._devices.get(device_id)
         return device.model_copy(deep=True) if device else None
 
@@ -167,7 +167,7 @@ class StubDeviceRepository:
                 return device.model_copy(deep=True)
         return None
 
-    def list(self) -> list[Device]:
+    def get_all(self) -> list[Device]:
         return [device.model_copy(deep=True) for device in self._devices.values()]
 
 

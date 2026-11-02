@@ -28,6 +28,8 @@ from app.domains.conversation.services import (
 )
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
+from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
+from app.domains.benchmark.services import BenchmarkRunService
 
 
 router = APIRouter()
@@ -68,14 +70,26 @@ async def _run_first_message_workflow(
     conversation: Conversation,
     message: Message,
     workflow: NetworkAutomationWorkflow,
+    benchmark_service: BenchmarkRunService,
+    benchmark_run_id: str | None,
 ) -> None:
     """Ưu tiên workflow; sinh title sau để không gọi hai LLM đồng thời."""
 
-    await _run_ai_workflow(
-        conversation,
-        message,
-        workflow,
-    )
+    try:
+        state = await workflow.run_message(conversation, message)
+        if benchmark_run_id is not None:
+            task = state.get("task")
+            if task is None:
+                raise RuntimeError("Workflow benchmark không trả về Task")
+            benchmark_service.complete(
+                benchmark_run_id,
+                task,
+                state.get("response"),
+            )
+    except Exception as exc:
+        if benchmark_run_id is not None:
+            benchmark_service.fail(benchmark_run_id, exc)
+        logger.exception("AI workflow thất bại cho message %s", message.id)
     await _generate_conversation_title(
         service,
         title_generator,
@@ -103,12 +117,23 @@ async def start_conversation(
         NetworkAutomationWorkflow,
         Depends(get_network_automation_workflow),
     ],
+    benchmark_service: Annotated[
+        BenchmarkRunService,
+        Depends(get_benchmark_run_service),
+    ],
     user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
 ) -> ConversationStarted:
     """Tạo Conversation, lưu Message đầu tiên, sinh title và chạy AI workflow."""
 
     # Bước 1: Transaction ngắn tạo Conversation và USER_REQUEST đầu tiên.
     started = service.start(user.id, payload)
+
+    if payload.benchmark_run_id is not None:
+        benchmark_service.bind_message(
+            payload.benchmark_run_id,
+            started.conversation,
+            started.message,
+        )
 
     # Bước 2: Sinh title và chạy AI workflow đồng thời trong background.
     # task_activity_events và hiển thị từng bước khi chúng vừa được lưu.
@@ -119,6 +144,8 @@ async def start_conversation(
         started.conversation,
         started.message,
         workflow,
+        benchmark_service,
+        payload.benchmark_run_id,
     )
 
     return ConversationStarted(

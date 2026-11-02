@@ -15,6 +15,7 @@ class RoleRepository:
     """Sở hữu query và transaction cho Role — bảng roles."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo RoleRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def get_by_id(self, role_id: str) -> Role | None:
@@ -36,6 +37,7 @@ class RoleRepository:
             return Role.model_validate(model, from_attributes=True) if model else None
 
     def save_role(self, record: Role) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
         with self._sessions.begin() as session:
             model = session.get(RoleModel, record.id)
             if model is None:

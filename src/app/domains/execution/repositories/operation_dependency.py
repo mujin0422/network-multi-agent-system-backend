@@ -13,6 +13,7 @@ class OperationDependencyRepository:
     """Ghi dependency graph giữa các operation của cùng một Task."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationDependencyRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def get_all_by_operation_id(

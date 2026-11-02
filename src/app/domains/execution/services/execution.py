@@ -22,9 +22,7 @@ from app.domains.execution.schemas import (
     OperationDependency,
     OperationDeviceApproval,
     OperationDeviceApprovalResponse,
-    OperationDeviceStatus,
     OperationStatus,
-    RiskLevel,
     Task,
     TaskActivityEvent,
     TaskCreate,
@@ -33,6 +31,11 @@ from app.domains.execution.schemas import (
     TaskOperationDevice,
     TaskExecution,
     TaskType,
+)
+from app.domains.execution.utils import (
+    build_execution_plan_records,
+    build_operation_device_approval,
+    to_approval_response,
 )
 
 
@@ -64,6 +67,7 @@ class ExecutionService:
         return self._repository.get_all_tasks()
 
     def get_task(self, task_id: str) -> TaskDetail:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_task."""
         task = self._require_task(task_id)
         return TaskDetail(
             **task.model_dump(),
@@ -104,6 +108,7 @@ class ExecutionService:
         return mapping
 
     def list_dependencies(self, operation_id: str) -> list[OperationDependency]:
+        """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_dependencies."""
         self._require_operation(operation_id)
         return self._repository.get_all_dependencies_by_operation_id(operation_id)
 
@@ -202,21 +207,12 @@ class ExecutionService:
         if existing is not None:
             return existing
 
-        now = datetime.now(UTC)
-        approval = OperationDeviceApproval(
-            id=generate_id(IdPrefix.OPERATION_DEVICE_APPROVAL),
-            operation_device_id=mapping.id,
-            approval_status=ApprovalStatus.PENDING,
-            risk_level=RiskLevel.HIGH,
-            requested_by="execution-orchestrator",
-            reason=(
-                f"Operation {operation.operation_intent} sẽ thay đổi cấu hình "
-                f"trên thiết bị {mapping.device_id}."
-            ),
-            commands_snapshot=commands,
-            request_hash=request_hash,
-            requested_at=now,
-            created_at=now,
+        approval = build_operation_device_approval(
+            operation,
+            mapping,
+            commands,
+            request_hash,
+            datetime.now(UTC),
         )
         self._repository.save_operation_device_approval(approval)
         return approval
@@ -263,19 +259,22 @@ class ExecutionService:
             if current is not None and current.approval_status == ApprovalStatus.EXPIRED:
                 raise ResourceConflictError(f"Approval '{approval_id}' đã hết hạn")
             raise ResourceConflictError(f"Approval '{approval_id}' đã được xử lý")
-        return self._to_approval_response(decided)
+        return to_approval_response(decided)
 
     # =============================================================================
     # Task, Operation và Device — cập nhật trạng thái thực thi
     # =============================================================================
 
     def update_task(self, task: Task) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_task."""
         self._repository.save_task(task)
 
     def update_operation(self, operation: Operation) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_operation."""
         self._repository.save_operation(operation)
 
     def update_operation_device(self, mapping: TaskOperationDevice) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_operation_device."""
         self._repository.save_operation_device(mapping)
 
     # =============================================================================
@@ -283,9 +282,11 @@ class ExecutionService:
     # =============================================================================
 
     def save_task_execution(self, execution: TaskExecution) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_execution."""
         self._repository.save_task_execution(execution)
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_device_action_logs."""
         self._repository.save_device_action_logs(logs)
 
     def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
@@ -336,62 +337,13 @@ class ExecutionService:
                 f"Task '{task_id}' không còn ở trạng thái PENDING"
             )
 
-        now = datetime.now(UTC)
-        operations: list[Operation] = []
-        dependencies: list[OperationDependency] = []
-        operation_devices: list[TaskOperationDevice] = []
-
-        for display_order, planned_operation in enumerate(plan.operations, start=1):
-            operation = Operation(
-                id=generate_id(IdPrefix.OPERATION),
-                task_id=task_id,
-                operation_intent=planned_operation.operation_intent,
-                display_order=display_order,
-                operation_status=OperationStatus.PENDING,
-                operation_parameters=planned_operation.operation_parameters,
-                created_at=now,
-            )
-            operations.append(operation)
-
-            for planned_dependency in planned_operation.dependencies:
-                dependencies.append(
-                    OperationDependency(
-                        id=generate_id(IdPrefix.OPERATION_DEPENDENCY),
-                        operation_id=operation.id,
-                        depends_on_operation_id=operations[
-                            planned_dependency.depends_on_order - 1
-                        ].id,
-                        dependency_type=planned_dependency.dependency_type,
-                        created_at=now,
-                    )
-                )
-
-            for planned_device in planned_operation.devices:
-                operation_devices.append(
-                    TaskOperationDevice(
-                        id=generate_id(IdPrefix.OPERATION_DEVICE),
-                        operation_id=operation.id,
-                        device_id=planned_device.device_id,
-                        operation_device_status=OperationDeviceStatus.PENDING,
-                        device_role=planned_device.device_role,
-                        access_mode=planned_device.access_mode,
-                    )
-                )
-
-        planned_task = task.model_copy(
-            update={
-                "task_status": TaskStatus.PLANNING,
-                "task_type": plan.task_type,
-                "started_at": now,
-            }
-        )
+        records = build_execution_plan_records(task, plan, datetime.now(UTC))
         self._repository.save_execution_plan(
             planned_task,
             operations=operations,
             dependencies=dependencies,
             operation_devices=operation_devices,
         )
-        return TaskDetail(**planned_task.model_dump(), operations=operations)
 
     # =============================================================================
     # Xác minh tài nguyên và chuyển đổi response
@@ -408,11 +360,3 @@ class ExecutionService:
         if operation is None:
             raise ResourceNotFoundError(f"Không tìm thấy Operation '{operation_id}'")
         return operation
-
-    @staticmethod
-    def _to_approval_response(
-        approval: OperationDeviceApproval,
-    ) -> OperationDeviceApprovalResponse:
-        return OperationDeviceApprovalResponse.model_validate(
-            approval.model_dump(exclude={"request_hash"})
-        )

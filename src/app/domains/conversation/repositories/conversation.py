@@ -12,6 +12,7 @@ class ConversationRepository:
 
     def __init__(self, database_url: str) -> None:
         # Session factory tạo session mới cho từng thao tác và không giữ kết nối database như state lâu dài bên trong repository.
+        """Khởi tạo ConversationRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
 

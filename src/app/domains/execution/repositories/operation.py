@@ -13,6 +13,7 @@ class OperationRepository:
     """Quản lý các operation logic do Planner tạo."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_operation(self, operation: Operation) -> None:

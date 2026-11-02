@@ -33,6 +33,7 @@ class ExecutionRepository:
     def __init__(self, database_url: str) -> None:
         # Các repository con sở hữu query của đúng bảng. Facade chỉ chuyển tiếp
         # thao tác đơn bảng và mở transaction cho use case ghi nhiều bảng.
+        """Khởi tạo ExecutionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._tasks = TaskRepository(database_url)
         self._operations = OperationRepository(database_url)
@@ -95,6 +96,7 @@ class ExecutionRepository:
         return self._operation_devices.get_by_id(operation_device_id)
 
     def save_operation_device(self, mapping: TaskOperationDevice) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device."""
         self._operation_devices.save_operation_device(mapping)
 
     def get_all_dependencies_by_operation_id(
@@ -104,6 +106,7 @@ class ExecutionRepository:
         return self._operation_dependencies.get_all_by_operation_id(operation_id)
 
     def save_task_execution(self, execution: TaskExecution) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_execution."""
         self._task_executions.save(execution)
 
     def save_device_action_logs(self, logs: list[DeviceActionLog]) -> None:
@@ -122,6 +125,7 @@ class ExecutionRepository:
         return self._task_activity_events.get_all_by_task_id(task_id)
 
     def save_task_activity_event(self, event: TaskActivityEvent) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_task_activity_event."""
         self._task_activity_events.save_task_activity_event(event)
 
     def get_all_operation_approvals_by_operation_id(
@@ -134,6 +138,7 @@ class ExecutionRepository:
         self,
         approval: OperationDeviceApproval,
     ) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_operation_device_approval."""
         self._operation_device_approvals.save_operation_device_approval(approval)
 
     def get_operation_approval_by_id(
@@ -151,6 +156,7 @@ class ExecutionRepository:
         )
 
     def expire_operation_approval(self, approval_id: str) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức expire_operation_approval."""
         self._operation_device_approvals.expire_operation_approval(approval_id)
 
     def decide_operation_approval(
@@ -161,6 +167,7 @@ class ExecutionRepository:
         decision: ApprovalDecision,
         decided_at: datetime,
     ) -> OperationDeviceApproval | None:
+        """Xử lý trạng thái nghiệp vụ trong phương thức decide_operation_approval."""
         return self._operation_device_approvals.decide_operation_approval(
             approval_id,
             user_id=user_id,

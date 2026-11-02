@@ -16,10 +16,12 @@ class UserRepository:
     """Sở hữu query và transaction cho User — bảng users."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo UserRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     @staticmethod
     def _user_record(model: UserModel | None) -> UserRecord | None:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _user_record."""
         return UserRecord.model_validate(model, from_attributes=True) if model else None
 
     def get_by_email(self, email: str) -> UserRecord | None:
@@ -47,6 +49,7 @@ class UserRepository:
             return self._user_record(session.get(UserModel, user_id))
 
     def save_user(self, record: UserRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         with self._sessions.begin() as session:
             model = session.get(UserModel, record.id)
             if model is None:
@@ -73,6 +76,7 @@ class UserRepository:
             model.last_login_at = record.last_login_at
 
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
         statement = (
             update(UserModel)
             .where(UserModel.id == user_id)

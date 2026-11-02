@@ -18,6 +18,7 @@ from app.domains.execution.schemas import (
 
 class OperationDeviceApprovalRepository:
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo OperationDeviceApprovalRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save_operation_device_approval(
@@ -58,6 +59,7 @@ class OperationDeviceApprovalRepository:
         self,
         approval_id: str,
     ) -> OperationDeviceApproval | None:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(OperationDeviceApprovalModel, approval_id)
             return (

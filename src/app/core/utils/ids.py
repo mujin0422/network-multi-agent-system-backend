@@ -26,6 +26,8 @@ class IdPrefix(StrEnum):
     TASK_EXECUTION = "exec"
     TASK_ACTIVITY = "task-acti"
     OPERATION_DEVICE_APPROVAL = "aprv-devs"
+    BENCHMARK_SCENARIO = "benc"
+    BENCHMARK_RUN = "benr"
 
 
 def generate_id(prefix: IdPrefix) -> str:

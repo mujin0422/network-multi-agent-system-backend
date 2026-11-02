@@ -10,6 +10,8 @@ nhóm nghiệp vụ độc lập, bao gồm dữ liệu, quy tắc xử lý và 
 | `conversation` | Cuộc hội thoại và tin nhắn                          |
 | `execution`    | Task, operation và quá trình thực thi trên thiết bị |
 | `evaluation`   | Đánh giá kết quả task, RCA, remediation và safety   |
+| `benchmark`    | Kịch bản kiểm thử GNS3 và lịch sử benchmark run     |
+| `audit`        | Nhật ký kiểm toán các hành động trong hệ thống      |
 
 ## Cấu trúc một domain
 

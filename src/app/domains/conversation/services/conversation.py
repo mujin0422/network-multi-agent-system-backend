@@ -33,6 +33,7 @@ class ConversationService:
         conversation_repository: ConversationRepository,
         message_repository: MessageRepository,
     ) -> None:
+        """Khởi tạo ConversationService cùng các phụ thuộc cần thiết."""
         self._conversation_repository = conversation_repository
         self._message_repository = message_repository
 
@@ -115,6 +116,7 @@ class ConversationService:
 
     # READ (Conversation) — Lấy chi tiết conversation theo mã, bao gồm danh sách message.
     def get(self, conversation_id: str) -> ConversationDetail:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get."""
         conversation = self._require_conversation(conversation_id)
         return ConversationDetail(
             **conversation.model_dump(),
@@ -129,6 +131,7 @@ class ConversationService:
 
     # READ (Message) — Lấy danh sách message của một conversation đã tồn tại.
     def list_messages(self, conversation_id: str) -> list[Message]:
+        """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_messages."""
         self._require_conversation(conversation_id)
         return self._message_repository.get_all_by_conversation_id(conversation_id)
 

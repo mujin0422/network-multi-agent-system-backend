@@ -1,7 +1,6 @@
 """Services xác thực, phân quyền, quản lý user và role của Identity domain."""
 
-import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 import jwt
@@ -27,12 +26,12 @@ from app.domains.identity.schemas import (
     UserCreate,
     UserRecord,
     UserUpdate,
-    UserSessionRecord,
     UserStatus,
 )
 from app.domains.identity.utils import (
     hash_password,
     hash_refresh_token,
+    issue_token_bundle,
     verify_password,
 )
 
@@ -48,6 +47,7 @@ class IdentityService:
         repository: IdentityRepository,
         settings: Settings,
     ) -> None:
+        """Khởi tạo IdentityService cùng các phụ thuộc cần thiết."""
         self._repository = repository
         self._settings = settings
 
@@ -56,6 +56,7 @@ class IdentityService:
     # =============================================================================
 
     def login(self, email: str, password: str) -> TokenResponse:
+        """Xử lý xác thực theo nghiệp vụ của phương thức login."""
         user = self._repository.get_user_by_email(email)
         if not user or not verify_password(password, user.password_hash):
             raise AuthenticationError("Email hoặc mật khẩu không đúng")
@@ -78,6 +79,7 @@ class IdentityService:
         return self._rotate_session(user, session.id, now)
 
     def logout(self, session_id: UUID) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức logout."""
         self._repository.revoke_session(session_id, datetime.now(UTC))
 
     # =============================================================================
@@ -85,6 +87,7 @@ class IdentityService:
     # =============================================================================
 
     def authenticate(self, token: str) -> tuple[User, UUID]:
+        """Xử lý xác thực theo nghiệp vụ của phương thức authenticate."""
         try:
             data = jwt.decode(
                 token,
@@ -118,49 +121,23 @@ class IdentityService:
     # =============================================================================
 
     def _new_session(self, user: User, now: datetime) -> TokenResponse:
-        return self._issue_tokens(user, now, generate_uuid(), save_session=True)
+        """Phát hành token và lưu session mới."""
+
+        bundle = issue_token_bundle(user, now, generate_uuid(), self._settings)
+        self._repository.save_session(bundle.session)
+        return bundle.response
 
     def _rotate_session(self, user: User, old_session_id: UUID, now: datetime) -> TokenResponse:
-        response = self._issue_tokens(user, now, generate_uuid(), save_session=False)
-        new_session = self._session_record(user.id, response.refresh_token, response.access_token, now)
-        if not self._repository.rotate_session(old_session_id, now, new_session):
+        """Phát hành token mới và xoay session theo transaction."""
+
+        bundle = issue_token_bundle(user, now, generate_uuid(), self._settings)
+        if not self._repository.rotate_session(
+            old_session_id,
+            now,
+            bundle.session,
+        ):
             raise AuthenticationError("Refresh token đã được sử dụng")
-        return response
-
-    def _session_record(self, user_id: str, refresh: str, access: str, now: datetime) -> UserSessionRecord:
-        claims = jwt.decode(access, self._settings.auth_jwt_secret, algorithms=["HS256"])
-        return UserSessionRecord(
-            id=UUID(claims["sid"]),
-            user_id=user_id,
-            refresh_token_hash=hash_refresh_token(refresh),
-            expires_at=now + timedelta(days=self._settings.auth_refresh_token_days),
-            created_at=now,
-        )
-
-    def _issue_tokens(self, user: User, now: datetime, session_id: UUID, *, save_session: bool) -> TokenResponse:
-        raw_refresh = secrets.token_urlsafe(48)
-        expires = now + timedelta(days=self._settings.auth_refresh_token_days)
-        session = UserSessionRecord(
-            id=session_id,
-            user_id=user.id,
-            refresh_token_hash=hash_refresh_token(raw_refresh),
-            expires_at=expires,
-            created_at=now,
-        )
-        if save_session:
-            self._repository.save_session(session)
-        access_expires = now + timedelta(minutes=self._settings.auth_access_token_minutes)
-        access = jwt.encode(
-            {"sub": user.id, "sid": str(session_id), "iat": now, "exp": access_expires, "jti": secrets.token_urlsafe(12)},
-            self._settings.auth_jwt_secret,
-            algorithm="HS256",
-        )
-        return TokenResponse(
-            access_token=access,
-            refresh_token=raw_refresh,
-            expires_in=self._settings.auth_access_token_minutes * 60,
-            user=User.model_validate(user.model_dump()),
-        )
+        return bundle.response
 
 
 # =============================================================================
@@ -175,6 +152,7 @@ class UserService:
         self._repository = repository
 
     def create_user(self, payload: UserCreate) -> User:
+        """Tạo mới dữ liệu theo nghiệp vụ của phương thức create_user."""
         self._ensure_role_exists(payload.role_id)
         self._ensure_unique_email(payload.email)
         record = UserRecord(
@@ -235,6 +213,7 @@ class UserService:
         email: str,
         exclude_user_id: str | None = None,
     ) -> None:
+        """Kiểm tra điều kiện nghiệp vụ trong phương thức _ensure_unique_email."""
         existing = self._repository.get_user_by_email(email)
         if existing is not None and existing.id != exclude_user_id:
             raise ResourceConflictError(f"Email '{email}' đã được sử dụng")
@@ -252,6 +231,7 @@ class RoleService:
         self._repository = repository
 
     def create_role(self, payload: RoleCreate, actor_id: str) -> Role:
+        """Tạo mới dữ liệu theo nghiệp vụ của phương thức create_role."""
         self._ensure_unique_name(payload.name)
         now = datetime.now(UTC)
         role = Role(
@@ -284,6 +264,7 @@ class RoleService:
         payload: RoleUpdate,
         actor_id: str,
     ) -> Role:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_role."""
         current = self.get_role(role_id)
 
         changes = payload.model_dump(exclude_unset=True, exclude_none=True)
@@ -304,6 +285,7 @@ class RoleService:
         name: str,
         exclude_role_id: str | None = None,
     ) -> None:
+        """Kiểm tra điều kiện nghiệp vụ trong phương thức _ensure_unique_name."""
         existing = self._repository.get_role_by_name(name)
         if existing is not None and existing.id != exclude_role_id:
             raise ResourceConflictError(f"Tên role '{name}' đã được sử dụng")
@@ -316,6 +298,7 @@ class AccessControlService:
         self._repository = repository
 
     def get_catalog(self) -> PermissionCatalog:
+        """Truy vấn dữ liệu theo phạm vi của phương thức get_catalog."""
         return PermissionCatalog(
             functions=self._repository.get_all_management_functions(),
             actions=self._repository.get_all_actions(),
@@ -323,12 +306,14 @@ class AccessControlService:
         )
 
     def list_role_permissions(self, role_id: str) -> list[RolePermission]:
+        """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_role_permissions."""
         self._require_role(role_id, require_mutable=False)
         return self._repository.get_all_role_permissions_by_role_id(role_id)
 
     def replace_role_permissions(
         self, role_id: str, permission_ids: list[str]
     ) -> list[RolePermission]:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         self._require_role(role_id, require_mutable=True)
         requested = set(permission_ids)
         valid = {item.id for item in self._repository.get_all_permissions()}

@@ -18,10 +18,12 @@ class UserSessionRepository:
     """Sở hữu query và transaction cho User Session — quản lý phiên và rotate refresh token nguyên tử."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo UserSessionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     @staticmethod
     def _session_record(model: UserSessionModel | None) -> UserSessionRecord | None:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _session_record."""
         return (
             UserSessionRecord.model_validate(model, from_attributes=True)
             if model
@@ -29,11 +31,13 @@ class UserSessionRepository:
         )
 
     def save_session(self, record: UserSessionRecord) -> None:
+        """Lưu dữ liệu theo nghiệp vụ của phương thức save_session."""
         with self._sessions.begin() as session:
             session.add(self._to_session_model(record))
 
     @staticmethod
     def _to_session_model(record: UserSessionRecord) -> UserSessionModel:
+        """Chuyển đổi dữ liệu nội bộ trong phương thức _to_session_model."""
         return UserSessionModel(
             id=record.id,
             user_id=record.user_id,
@@ -53,6 +57,7 @@ class UserSessionRepository:
             return self._session_record(model)
 
     def revoke_session(self, session_id: UUID, revoked_at: datetime) -> None:
+        """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức revoke_session."""
         statement = (
             update(UserSessionModel)
             .where(
@@ -78,6 +83,7 @@ class UserSessionRepository:
     def rotate_session(
         self, session_id: UUID, revoked_at: datetime, replacement: UserSessionRecord
     ) -> bool:
+        """Cập nhật dữ liệu theo nghiệp vụ của phương thức rotate_session."""
         statement = (
             update(UserSessionModel)
             .where(

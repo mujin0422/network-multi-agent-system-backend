@@ -14,6 +14,7 @@ class CredentialRepository:
     """Lưu metadata và ciphertext Credential trong PostgreSQL."""
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
+        """Khởi tạo CredentialRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
 

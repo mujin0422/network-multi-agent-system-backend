@@ -11,6 +11,7 @@ class MessageRepository:
     """Đọc và ghi duy nhất bảng messages."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo MessageRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
 

@@ -9,6 +9,7 @@ from app.domains.execution.schemas import TaskActivityEvent
 
 class TaskActivityEventRepository:
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo TaskActivityEventRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def get_all_by_task_id(self, task_id: str) -> list[TaskActivityEvent]:

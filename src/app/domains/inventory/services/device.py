@@ -3,10 +3,11 @@
 from datetime import UTC, datetime
 from math import ceil
 
-from app.core.exceptions import ResourceConflictError, ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import DeviceRepository
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
+from app.domains.inventory.utils import ensure_unique_device
 
 
 class DeviceService:
@@ -21,7 +22,12 @@ class DeviceService:
 
     def create_device(self, payload: DeviceCreate) -> Device:
         """Kiểm tra uniqueness, sinh ID/timestamp rồi lưu thiết bị mới."""
-        self._ensure_unique_device(payload.hostname, payload.host, payload.port)
+        ensure_unique_device(
+            self._repository.get_all(),
+            payload.hostname,
+            payload.host,
+            payload.port,
+        )
         # Dùng UTC để timestamp nhất quán giữa local, Docker và production.
         now = datetime.now(UTC)
         device = Device(
@@ -86,7 +92,8 @@ class DeviceService:
         # exclude_unset phân biệt trường không gửi với trường chủ động gửi null.
         changes = payload.model_dump(exclude_unset=True)
         candidate = current.model_copy(update=changes)
-        self._ensure_unique_device(
+        ensure_unique_device(
+            self._repository.get_all(),
             candidate.hostname,
             candidate.host,
             candidate.port,

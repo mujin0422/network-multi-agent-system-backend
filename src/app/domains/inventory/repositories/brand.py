@@ -13,6 +13,7 @@ class BrandRepository:
     """Đọc brand và supported driver từ bảng ``brands``."""
 
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo BrandRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
     def save(self, brand: Brand) -> None:
