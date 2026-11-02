@@ -204,8 +204,16 @@ class ApprovalTimeoutRepository:
                         id=generate_id(IdPrefix.TASK_ACTIVITY),
                         task_id=task.id,
                         actor_type=ActivityActorType.ORCHESTRATOR,
-                        event_type=ActivityEventType.TASK_FAILED,
-                        event_status=ActivityEventStatus.FAILED,
+                        event_type=(
+                            ActivityEventType.TASK_COMPLETED
+                            if any_success
+                            else ActivityEventType.TASK_FAILED
+                        ),
+                        event_status=(
+                            ActivityEventStatus.SUCCESS
+                            if any_success
+                            else ActivityEventStatus.FAILED
+                        ),
                         sequence_number=next_seq,
                         event_data={
                             "reason": _TIMEOUT_REASON,
