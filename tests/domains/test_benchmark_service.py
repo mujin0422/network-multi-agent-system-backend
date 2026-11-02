@@ -6,6 +6,7 @@ from app.domains.benchmark.schemas import (
     BenchmarkRunStatus,
     BenchmarkScenario,
     BenchmarkScenarioRecord,
+    BenchmarkScenarioUpdate,
 )
 from app.domains.benchmark.services import BenchmarkRunService, BenchmarkScenarioService
 from app.domains.benchmark.schemas import BenchmarkAction
@@ -120,6 +121,33 @@ def test_create_scenario_generates_id_and_preserves_business_key() -> None:
 
     assert re.fullmatch(r"benc-\d{6}-[0-9a-f]{8}", created.id)
     assert created.scenario_key == "new-link-down"
+
+
+def test_update_scenario_edits_typed_default_route_fault_without_changing_key() -> None:
+    repository = FakeScenarioRepository()
+    scenario_id = repository.scenario.id
+    payload = BenchmarkScenarioUpdate.model_validate({
+        "name": "CE-1A missing default route diagnosis",
+        "injection": [
+            {"device": "PE1", "action": "default_route_remove", "next_hop": "10.0.0.1"}
+        ],
+        "cleanup": [
+            {"device": "PE1", "action": "default_route_add", "next_hop": "10.0.0.1"}
+        ],
+    })
+
+    updated = BenchmarkScenarioService(repository).update(
+        scenario_id, payload, "user-editor"
+    )
+
+    assert updated.scenario_key == "link-down"
+    assert updated.name == "CE-1A missing default route diagnosis"
+    assert updated.injection[0].action == "default_route_remove"
+    assert updated.injection[0].next_hop == "10.0.0.1"
+    assert updated.cleanup[0].action == "default_route_add"
+    assert updated.cleanup[0].next_hop == "10.0.0.1"
+    assert updated.last_updated_by == "user-editor"
+    assert updated.ground_truth == repository.scenario.ground_truth
 
 
 def test_builds_typed_configuration_fault_commands() -> None:
