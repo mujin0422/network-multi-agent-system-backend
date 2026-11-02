@@ -125,6 +125,56 @@ def test_lists_activity_and_safe_approval_response() -> None:
     assert "request_hash" not in response.model_dump()
 
 
+class TaskRecordsRepositoryStub(ApprovalRepositoryStub):
+    """Read-only repository stub for the Group 3 Task records endpoint."""
+
+    def get_all_operations_by_task_id(self, task_id: str):
+        return [self.operation] if task_id == self.task.id else []
+
+    def get_all_operation_devices_by_operation_id(self, operation_id: str):
+        return []
+
+    def get_all_dependencies_by_operation_id(self, operation_id: str):
+        return []
+
+    def get_all_task_executions_by_task_id(self, task_id: str):
+        return []
+
+    def get_all_device_action_logs_by_task_id(self, task_id: str):
+        return []
+
+
+def test_task_records_include_operation_timeline_and_safe_approvals() -> None:
+    repository = TaskRecordsRepositoryStub()
+    service = ExecutionService(repository)
+
+    records = service.get_task_records(repository.task.id)
+
+    assert records.task.id == repository.task.id
+    assert [operation.id for operation in records.task.operations] == [
+        repository.operation.id
+    ]
+    assert records.activity_events[0].actor_type == ActivityActorType.PLANNER
+    assert records.approvals[0].approval_status == ApprovalStatus.PENDING
+    assert records.approvals[0].commands_snapshot == [
+        "interface Ethernet0/0", "no shutdown"
+    ]
+    assert "request_hash" not in records.model_dump_json()
+    assert records.operation_devices == []
+    assert records.dependencies == []
+    assert records.executions == []
+
+
+def test_task_scoped_logs_require_valid_task() -> None:
+    service = ExecutionService(TaskRecordsRepositoryStub())
+
+    assert service.list_device_action_logs_by_task("task-test") == []
+    with pytest.raises(ResourceNotFoundError):
+        service.list_device_action_logs_by_task("task-missing")
+    with pytest.raises(ResourceNotFoundError):
+        service.get_task_records("task-missing")
+
+
 def test_approval_decision_uses_authenticated_user_and_is_final() -> None:
     repository = ApprovalRepositoryStub()
     service = ExecutionService(repository)
