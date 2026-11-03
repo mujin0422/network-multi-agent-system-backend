@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, select
 
 from app.core.database import create_session_factory
-from app.core.utils import IdPrefix, generate_id
+from app.core.utils import IdPrefix, generate_id, generate_uuid
+from app.domains.audit.models import AuditLogModel
+from app.domains.audit.schemas import AuditActorType, AuditEventStatus
 from app.domains.benchmark.models import BenchmarkRunModel
 from app.domains.execution.models import (
     OperationDeviceApprovalModel,
@@ -240,6 +242,27 @@ class ApprovalTimeoutRepository:
                         started_at=now,
                         completed_at=now,
                         created_at=now,
+                    )
+                )
+
+                # The system audit event commits with the Task status transition.
+                session.add(
+                    AuditLogModel(
+                        id=generate_uuid(),
+                        actor_user_id=None,
+                        actor_display_name="Approval timeout worker",
+                        actor_type=AuditActorType.SYSTEM,
+                        action="APPROVAL_TIMEOUT",
+                        resource_type="TASK",
+                        resource_id=task.id,
+                        event_status=AuditEventStatus.FAILED,
+                        summary="Task ended because approval was not given before deadline",
+                        event_data={
+                            "approval_id": approval.id,
+                            "timeout_minutes": timeout_minutes,
+                            "task_status": task.task_status.value,
+                        },
+                        occurred_at=now,
                     )
                 )
 
