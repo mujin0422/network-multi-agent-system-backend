@@ -166,3 +166,63 @@ def test_service_owned_uow_rolls_back_business_when_audit_insert_fails(
         assert session.scalar(
             select(func.count()).select_from(AuditLogModel)
         ) == 1
+
+
+def test_actual_role_service_uses_one_uow_and_records_authenticated_actor(tmp_path):
+    """Dependency-injected UoW is used by the real RoleService, not only helpers."""
+    from app.core.database import DatabaseUnitOfWork
+    from app.domains.audit.transaction import (
+        reset_request_audit_actor,
+        set_request_audit_actor,
+    )
+    from app.domains.identity.repositories import IdentityRepository
+    from app.domains.identity.schemas import RoleCreate
+    from app.domains.identity.services import RoleService
+    from app.domains.identity.schemas import UserStatus
+
+    database_url = f"sqlite:///{tmp_path / 'role-service-uow.db'}"
+    sessions = create_session_factory(database_url)
+    Base.metadata.create_all(
+        sessions.kw["bind"],
+        tables=[
+            RoleModel.__table__,
+            UserModel.__table__,
+            AuditLogModel.__table__,
+        ],
+    )
+    with sessions.begin() as session:
+        session.add(
+            RoleModel(
+                id="role-admin", name="Super Admin",
+                created_at=datetime.now(UTC),
+            )
+        )
+        session.add(
+            UserModel(
+                id="user-admin", role_id="role-admin",
+                email="admin@example.test", password_hash="not-a-real-password",
+                full_name="Admin", user_status=UserStatus.ACTIVE,
+                created_at=datetime.now(UTC),
+            )
+        )
+
+    service = RoleService(
+        IdentityRepository(database_url),
+        uow=DatabaseUnitOfWork.from_url(database_url),
+    )
+    token = set_request_audit_actor("user-admin", "Admin")
+    try:
+        result = service.create_role(
+            RoleCreate(name="Operator"), actor_id="user-admin"
+        )
+    finally:
+        reset_request_audit_actor(token)
+
+    with sessions() as session:
+        assert session.get(RoleModel, result.id).name == "Operator"
+        event = session.scalar(
+            select(AuditLogModel).where(AuditLogModel.action == "ROLE_CREATE")
+        )
+        assert event is not None
+        assert event.actor_user_id == "user-admin"
+        assert event.resource_id == result.id
