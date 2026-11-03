@@ -48,8 +48,9 @@ class AnalystAgent:
                             f"Lỗi: {exc.__cause__ or exc}\n"
                             "Giới hạn: summary <= 600 ký tự; mỗi danh sách <= 4 ý; "
                             "mỗi ý <= 240 ký tự. Không lặp dữ kiện giữa các phần.\n"
-                            "Dùng đúng 5 key summary, findings, likely_causes, "
-                            "recommendations, requires_more_data và luôn đặt mọi "
+                            "Dùng đủ 7 key summary, findings, likely_causes, "
+                            "recommendations, requires_more_data, is_anomaly, "
+                            "root_causes và luôn đặt mọi "
                             "key trong dấu ngoặc kép. Escape dấu ngoặc kép bên trong "
                             "chuỗi và không đặt dấu phẩy sau phần tử cuối.\n"
                             f"Phần đầu nội dung sai để đối chiếu: {invalid_content[:600]}"
@@ -68,25 +69,37 @@ class AnalystAgent:
                 additional_kwargs = getattr(result, "additional_kwargs", {})
                 content = additional_kwargs.get("reasoning_content", "")
             if isinstance(content, dict):
-                return AnalysisResult.model_validate(content)
+                return AnalystAgent._validate_submission(content)
             if not isinstance(content, str):
                 raise ValueError("Analyst Agent không trả JSON dạng text")
             raw_json = AnalystAgent._extract_json_object(content)
             try:
-                return AnalysisResult.model_validate_json(raw_json)
+                return AnalystAgent._validate_submission(json.loads(raw_json))
             except (ValidationError, ValueError):
                 # Một số model local/NIM đôi khi bỏ dấu ngoặc kép ở key hoặc
                 # thêm dấu phẩy cuối dù prompt đã yêu cầu JSON nghiêm ngặt.
                 # Chỉ sửa các key thuộc schema để không thay đổi nội dung lệnh.
                 repaired_json = re.sub(
-                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data)(\s*:)',
+                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|is_anomaly|root_causes|device|interface|fault_type)(\s*:)',
                     r'\1"\2"\3',
                     raw_json,
                 )
                 repaired_json = re.sub(r",(\s*[}\]])", r"\1", repaired_json)
-                return AnalysisResult.model_validate_json(repaired_json)
+                return AnalystAgent._validate_submission(json.loads(repaired_json))
         except (ValidationError, ValueError) as exc:
             raise ValueError("Analyst Agent trả JSON không đúng AnalysisResult") from exc
+
+    @staticmethod
+    def _validate_submission(payload: Any) -> AnalysisResult:
+        """Require explicit Agent-provided RCA fields, never silently default [].
+
+        The Pydantic defaults remain for older non-LLM callers and safe fallbacks.
+        """
+        if not isinstance(payload, dict):
+            raise ValueError("Analyst submission must be a JSON object")
+        if not {"is_anomaly", "root_causes"}.issubset(payload):
+            raise ValueError("Analyst must explicitly submit is_anomaly and root_causes")
+        return AnalysisResult.model_validate(payload)
 
     @staticmethod
     def _extract_json_object(content: str) -> str:

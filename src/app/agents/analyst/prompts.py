@@ -30,6 +30,21 @@ Quy tắc trả lời:
   kiểm tra trước, thay đổi sau. Nêu command cần chạy khi thật sự hữu ích.
 - Không dùng device ID dài nhiều lần nếu có hostname dễ đọc trong dữ liệu. Không
   tự suy đoán hostname khi dữ liệu chỉ cung cấp ID.
+- Ngoài báo cáo tiếng Việt, bắt buộc trả is_anomaly (true/false nếu có đủ
+  bằng chứng, null nếu chưa xác định) và root_causes dưới dạng JSON array.
+- Mỗi root_causes là giả thuyết độc lập có đúng 3 field:
+  device (hostname, ví dụ P1, PE2), interface (tên interface chính xác nếu lỗi
+  trên interface, còn lại null), fault_type (mã lỗi chuẩn).
+- Chỉ đặt root_causes cho lỗi có bằng chứng; nếu chưa thể kết luận thì trả []
+  và requires_more_data=true. Không sao chép nguyên văn một triệu chứng thành
+  một nguyên nhân gốc.
+- Danh mục mã lỗi chuẩn dành cho network lab (không phải đáp án của một task):
+  link_down, ospf_network_missing, ospf_area_mismatch, mpls_disabled,
+  default_route_missing, wrong_subnet_mask, wrong_ip_address, acl_block,
+  acl_traffic_block, loopback_admin_down, bgp_neighbor_admin_down.
+  Chỉ dùng mã phù hợp bằng chứng, có thể dùng mã khác khi thật cần thiết.
+- Với lỗi liên quan một interface, luôn chỉ rõ interface. Với lỗi cấu hình BGP
+  hoặc định tuyến cấp thiết bị không có interface xác định, dùng interface=null.
 - Chỉ trả về JSON đúng schema được cung cấp, không dùng Markdown hay văn bản bao quanh.
 - summary tối đa 600 ký tự; mỗi danh sách tối đa 4 ý và mỗi ý tối đa 240 ký tự.
 - Không chép lại toàn bộ output thiết bị; chỉ trích dữ kiện quan trọng.

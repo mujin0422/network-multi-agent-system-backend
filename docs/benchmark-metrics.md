@@ -1,4 +1,4 @@
-# Benchmark Evaluation metrics (db-benchmark-v3)
+# Benchmark Evaluation metrics (db-benchmark-v4)
 
 ## AI workflow active time (LATENCY)
 
@@ -97,3 +97,118 @@ Check that the new evaluation reports `db-benchmark-v3` and
 - REMEDIATION/SAFETY remain NOT_APPLICABLE.
 - A run that is CLEANED after an evaluation-write exception may remain
   unscored until a separate re-evaluation workflow is developed.
+
+
+## NIKA 0.2-inspired structured diagnosis scoring (db-benchmark-v4)
+
+NIKA 0.2 uses **set-based (resource_id, fault_type) pairs**. For each level,
+the primary diagnostic measures are precision, recall and F1; RCA
+`*_accuracy` is a backwards-compatible **recall alias**, not a
+true-negative-inclusive confusion-matrix accuracy. Its implementation is
+available at:
+https://github.com/sands-lab/nika/blob/main/src/nika/evaluator/scoring.py
+
+### Agent submission (not extracted from keywords)
+
+Analyst produces the usual Vietnamese report **and** these JSON fields:
+
+```json
+{
+  "is_anomaly": true,
+  "root_causes": [
+    {
+      "device": "P1",
+      "interface": "FastEthernet0/0",
+      "fault_type": "link_down"
+    }
+  ]
+}
+```
+
+`is_anomaly` must be explicitly submitted (true/false/null);
+`root_causes` must be an explicit list. The Analyst sees only observed
+network CLI execution results and a **general failure-type vocabulary**,
+never the incident's `ground_truth` or `evaluation_required_terms`.
+
+`AnalysisOrchestrator` persists this submission under
+`task_activity_events.event_data.diagnosis_submission` in its
+`ANALYSIS_COMPLETED` activity, before creating `FINAL_RESPONSE`.
+The benchmark evaluation reads this persisted submission, **not the
+natural-language response**, and never reconstructs predictions from GT.
+When the Analyst falls back due to a model or JSON error, there is no
+valid submission and RCA scores zero, not PASS.
+
+### Resource normalization and scoring
+
+Existing GNS3 scenario `ground_truth` requires
+`device`, `fault_type`, and optional `interface`.
+Both the prediction and ground truth map to pairs:
+
+- Interface-specific: `interface/{device}/{interface}`, including Cisco
+  interface names with slashes (e.g. `interface/p1/fastethernet0/0`).
+- Device-level (OSPF/BGP settings without an interface): `node/{device}`.
+- `fault_type` is the canonical failure ID (e.g. `link_down`,
+  `ospf_area_mismatch`, `bgp_neighbor_admin_down`).
+
+Identifiers are trimmed and case-folded, but **no substring matching or
+inference from keyword presence** occurs. A device, interface or failure ID
+mismatch is a different pair.
+
+Let `P` be the set of predicted pairs and `G` the set of ground-truth pairs:
+
+```text
+TP = |P ∩ G|        FP = |P - G|        FN = |G - P|
+Precision = TP / (TP + FP)
+Recall    = TP / (TP + FN)
+F1        = 2 * Precision * Recall / (Precision + Recall)
+```
+
+Localization uses only the set of resource IDs. Fault-type scoring uses
+only the set of failure IDs. The RCA metric has
+`rca_precision`, `rca_recall`, `rca_f1`,
+`localization_f1`, `fault_type_f1`, detection score and
+TP/FP/FN evidence. **RCA PASS** means exact equality of the predicted and
+expected pair sets, not merely positive recall. **GOAL PASS** requires RCA
+exact match **and** `is_anomaly == true` for these fault-injection scenarios.
+
+Invalid/missing Analyst submissions score 0 rather than receiving a
+spurious keyword-based PASS; corrupt/missing GT is an evaluator error
+rather than silently receiving a prediction.
+
+### Historical scores and comparison limitations
+
+- Evaluations **v1/v2/v3** remain unchanged and use keyword scoring.
+- Evaluations **v4** score structured diagnoses; their numeric RCA F1 is
+  exposed in `GET /api/v1/evaluations` via an optional `scores` object.
+- No database migration is required: the Analyst submission is saved in
+  existing Task Activity JSONB; numeric scores are saved in existing
+  Evaluation JSONB.
+- Existing scenarios/seeds are compatible, because they already have
+  `ground_truth` device/interface/fault_type.
+- The existing all-runs TSR still spans historical evaluation versions;
+  **do not compare or pool legacy keyword-based rates with v4 RCA results
+  in a scientific report without stratifying by version**. A clean
+  NIKA-inspired comparison requires rerunning the same scenario set under
+  the same v4 evaluator.
+- Unlike NIKA's full platform, this implementation keeps the project's
+  existing GNS3 topology and Agent orchestration and does **not** reproduce
+  NIKA's Kathará/Containerlab environments, official benchmark cases,
+  release-level scoring or agent extraction callbacks. It ports the
+  structured diagnosis *scoring method*, not the entire NIKA system.
+
+### Verification
+
+After merging backend/frontend code, rebuild the API and run a fresh
+Benchmark Scenario. Verify:
+
+1. `ANALYSIS_COMPLETED` has a JSON `diagnosis_submission`.
+2. The saved Evaluation is `db-benchmark-v4`.
+3. RCA includes `rca_f1`, `localization_f1`, `fault_type_f1`,
+   and FP/FN evidence; GOAL is based on detection + exact pairs.
+4. The frontend displays old runs as historical keyword rubric and new
+   runs with v4 RCA scores.
+5. Run `pytest tests/domains/test_nika_style_rca.py tests/domains/test_benchmark_observations.py tests/domains/test_benchmark_service.py tests/agents/test_analyst_agent.py`.
+
+NVIDIA NIM model responses may require additional JSON retries. This change
+does not benchmark the model's ability to generate structured diagnoses; run
+a representative GNS3 scenario for end-to-end verification.

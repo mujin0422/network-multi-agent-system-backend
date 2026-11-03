@@ -57,6 +57,17 @@ class BenchmarkObservationRepository:
                     TaskExecutionModel.tool_name.is_not(None),
                 )
             )
+            # Read the structured submission emitted by Analyst, not its
+            # natural-language FINAL_RESPONSE or protected benchmark ground truth.
+            analysis_event = session.scalar(
+                select(TaskActivityEventModel.event_data)
+                .where(
+                    TaskActivityEventModel.task_id == task_id,
+                    TaskActivityEventModel.event_type == ActivityEventType.ANALYSIS_COMPLETED,
+                )
+                .order_by(TaskActivityEventModel.sequence_number.desc())
+                .limit(1)
+            )
             events = session.execute(
                 select(
                     TaskActivityEventModel.event_type,
@@ -80,4 +91,11 @@ class BenchmarkObservationRepository:
             agent_tool_calls=int(tool_calls) if tool_calls is not None else None,
             approval_wait_intervals=pauses,
             approval_wait_open=open_wait,
+            diagnosis_submission=(
+                analysis_event.get("diagnosis_submission")
+                if isinstance(analysis_event, dict)
+                and isinstance(analysis_event.get("diagnosis_submission"), dict)
+                and not analysis_event.get("used_fallback", False)
+                else None
+            ),
         )

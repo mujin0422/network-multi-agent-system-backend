@@ -44,7 +44,8 @@ def test_analyst_recreates_truncated_json_on_retry() -> None:
                 '{"summary":"P1 và P2 hoạt động bình thường.",'
                 '"findings":["OSPF đã hội tụ"],'
                 '"likely_causes":[],"recommendations":[],'
-                '"requires_more_data":false}'
+                '"requires_more_data":false,'
+                '"is_anomaly":false,"root_causes":[]}'
             ),
         ]
     )
@@ -64,7 +65,7 @@ def test_analyst_repairs_unquoted_schema_key_and_trailing_comma() -> None:
                 'Phân tích:\n```json\n{"summary":"OSPF đã hội tụ",'
                 '"findings":["P1 và P2 có route OSPF"],'
                 'likely_causes:[],"recommendations":[],'
-                'requires_more_data:false,}\n```'
+                'requires_more_data:false,is_anomaly:false,root_causes:[],}\n```'
             )
         ]
     )
@@ -150,3 +151,20 @@ def test_analysis_fallback_uses_device_names_without_guessing_root_cause() -> No
     ]
     assert result.likely_causes == []
     assert result.requires_more_data is True
+
+
+def test_analyst_retries_until_structured_submission_is_present() -> None:
+    model = StubChatModel([
+        '{"summary":"P1 interface down","findings":[],"likely_causes":[],"recommendations":[],"requires_more_data":false}',
+        '{"summary":"P1 interface down","findings":[],"likely_causes":["P1 FastEthernet0/0 shutdown"],'
+        '"recommendations":[],"requires_more_data":false,"is_anomaly":true,'
+        '"root_causes":[{"device":"P1","interface":"FastEthernet0/0","fault_type":"link_down"}]}',
+    ])
+
+    result = asyncio.run(AnalystAgent(model).analyze([{"status": "SUCCESS"}]))
+
+    assert len(model.calls) == 2
+    assert result.is_anomaly is True
+    assert result.root_causes[0].device == "P1"
+    assert result.root_causes[0].interface == "FastEthernet0/0"
+    assert result.root_causes[0].fault_type == "link_down"

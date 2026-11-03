@@ -16,3 +16,5 @@ class BenchmarkObservation(BaseModel):
     agent_tool_calls: int | None = Field(default=None, ge=0)
     approval_wait_intervals: list[ApprovalWaitInterval] = Field(default_factory=list)
     approval_wait_open: bool = False
+    # Agent's submission comes from ANALYSIS_COMPLETED, never from benchmark GT.
+    diagnosis_submission: dict | None = None

@@ -4,9 +4,10 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
+from app.domains.evaluation.schemas.diagnosis import PredictedRootCause
+
 
 AnalysisItem = Annotated[str, Field(min_length=1, max_length=240)]
-
 
 # Kết quả phân tích của Analyst Agent, bao gồm tóm tắt, phát hiện, nguyên nhân có khả năng, khuyến nghị và yêu cầu thêm dữ liệu nếu cần.
 class AnalysisResult(BaseModel):
@@ -18,3 +19,8 @@ class AnalysisResult(BaseModel):
     likely_causes: list[AnalysisItem] = Field(default_factory=list, max_length=4)
     recommendations: list[AnalysisItem] = Field(default_factory=list, max_length=4)
     requires_more_data: bool = False
+    # The same diagnosis report also produces the machine-readable submission.
+    # Defaults preserve older non-benchmark Agent callers.
+    is_anomaly: bool | None = None
+    root_causes: list[PredictedRootCause] = Field(default_factory=list, max_length=8)
+

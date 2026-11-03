@@ -71,6 +71,14 @@ class AnalysisOrchestrator:
             event_data={
                 "requires_more_data": analysis.requires_more_data,
                 "used_fallback": fallback_error is not None,
+                # Persist only the Agent's submission, never benchmark ground truth.
+                "diagnosis_submission": {
+                    "is_anomaly": analysis.is_anomaly,
+                    "root_causes": [
+                        cause.model_dump(mode="json")
+                        for cause in analysis.root_causes
+                    ],
+                },
                 **({"fallback_reason": fallback_error} if fallback_error else {}),
             },
             started_at=analysis_started_at,

@@ -13,6 +13,7 @@ from app.domains.benchmark.schemas import (
 )
 from app.domains.benchmark.services import BenchmarkRunService, BenchmarkScenarioService
 from app.domains.benchmark.schemas import BenchmarkAction
+from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
 from app.domains.benchmark.utils import build_benchmark_action_commands
 from app.domains.conversation.schemas import Message, MessageSender, MessageType
 from app.domains.evaluation.schemas import EvaluationMetricType, EvaluationResult
@@ -26,6 +27,18 @@ class FakeEvaluationRepository:
 
     def save(self, evaluation):
         self.saved.append(evaluation)
+
+
+class FakeObservationReader:
+    """The test passes an independent Analyst submission to the evaluator."""
+
+    def get_for_task(self, _task_id, _source_message_id):
+        return BenchmarkObservation(diagnosis_submission={
+            "is_anomaly": True,
+            "root_causes": [
+                {"device": "P3", "interface": "FastEthernet2/0", "fault_type": "link_down"}
+            ],
+        })
 
 
 class FakeNetworkTool:
@@ -203,7 +216,7 @@ def test_benchmark_evaluation_waits_for_final_response_after_approval() -> None:
     scenario = FakeScenarioRepository().scenario
     runs = FakeRunRepository()
     evaluations = FakeEvaluationRepository()
-    service = BenchmarkRunService(runs, FakeScenarioRepository(), evaluations, FakeNetworkTool())
+    service = BenchmarkRunService(runs, FakeScenarioRepository(), evaluations, FakeNetworkTool(), FakeObservationReader())
     run = BenchmarkRunRecord.model_validate({
         "id": "benr-021126-1234abcd",
         "scenario_id": scenario.id,
