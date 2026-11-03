@@ -92,3 +92,38 @@ def append_audit_in_session(session: Session) -> None:
             event_data={},
         ),
     )
+
+
+def record_audit_in_session(
+    session: Session,
+    *,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    actor_user_id: str | None = None,
+    actor_display_name: str | None = None,
+) -> None:
+    """Explicit audit append for a service-owned Unit of Work.
+
+    Call once after the business repository write and before the UoW exits.
+    No commit here. A failed audit insert rolls back the business write too.
+    """
+    verified = _request_actor.get()
+    effective_id = verified[0] if verified else actor_user_id
+    effective_name = verified[1] if verified else actor_display_name
+    AuditLogService.record_in_session(
+        session,
+        AuditLogCreate(
+            actor_user_id=effective_id,
+            actor_type=AuditActorType.USER if effective_id else AuditActorType.SYSTEM,
+            actor_display_name=effective_name or (
+                "Authenticated user" if effective_id else "System"
+            ),
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            event_status=AuditEventStatus.SUCCESS,
+            summary=action.replace("_", " ").title(),
+            event_data={},
+        ),
+    )
