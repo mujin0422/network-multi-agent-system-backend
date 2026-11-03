@@ -38,6 +38,8 @@ class EvaluationMetricType(StrEnum):
     RCA = "RCA"
     REMEDIATION = "REMEDIATION"
     SAFETY = "SAFETY"
+    LATENCY = "LATENCY"
+    INTERACTION_TURNS = "INTERACTION_TURNS"
 
 
 class TaskEvaluation(BaseModel):
@@ -89,7 +91,7 @@ class TaskEvaluationDetail(TaskEvaluation):
 
     metrics: list[TaskEvaluationMetric] = Field(
         default_factory=list,
-        description="Các kết quả GOAL, RCA, REMEDIATION và SAFETY.",
+        description="Kết quả phân loại và các số đo benchmark.",
     )
 
 
@@ -98,5 +100,9 @@ class TaskEvaluationSummary(TaskEvaluation):
 
     results: dict[EvaluationMetricType, EvaluationResult] = Field(
         default_factory=dict,
-        description="Chỉ trạng thái từng metric; dữ liệu chi tiết lấy từ API theo Task.",
+        description="Trạng thái từng tiêu chí định tính.",
+    )
+    measurements: dict[EvaluationMetricType, int] = Field(
+        default_factory=dict,
+        description="Số đo định lượng LATENCY (ms) và INTERACTION_TURNS (lượt gọi tool).",
     )
