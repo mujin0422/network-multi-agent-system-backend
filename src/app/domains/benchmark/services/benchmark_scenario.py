@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+from app.domains.audit.transaction import audit_mutation
+
 from app.core.exceptions import ResourceConflictError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import BenchmarkScenarioRepositoryProtocol
@@ -48,7 +50,8 @@ class BenchmarkScenarioService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.save(record)
+        with audit_mutation("BENCHMARK_SCENARIO_CREATE", "BENCHMARK_SCENARIO", record.id, actor_user_id=user_id):
+            self._repository.save(record)
         return record
 
     def update(
@@ -64,5 +67,6 @@ class BenchmarkScenarioService:
             }
         )
         validated = BenchmarkScenarioRecord.model_validate(updated.model_dump())
-        self._repository.save(validated)
+        with audit_mutation("BENCHMARK_SCENARIO_UPDATE", "BENCHMARK_SCENARIO", validated.id, actor_user_id=user_id):
+            self._repository.save(validated)
         return validated

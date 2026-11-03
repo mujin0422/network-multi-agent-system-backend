@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from math import ceil
 
+from app.domains.audit.transaction import audit_mutation
+
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import DeviceRepository
@@ -37,7 +39,8 @@ class DeviceService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.save(device)
+        with audit_mutation("DEVICE_CREATE", "DEVICE", device.id):
+            self._repository.save(device)
         return device
 
     def list_devices(
@@ -102,7 +105,8 @@ class DeviceService:
         updated = candidate.model_copy(
             update={"last_updated_at": datetime.now(UTC)}
         )
-        self._repository.save(updated)
+        with audit_mutation("DEVICE_UPDATE", "DEVICE", updated.id):
+            self._repository.save(updated)
         return updated
 
     # =============================================================================

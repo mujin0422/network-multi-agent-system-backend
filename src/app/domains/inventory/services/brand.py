@@ -1,5 +1,7 @@
 """Use cases cho resource Brand."""
 
+from app.domains.audit.transaction import audit_mutation
+
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import BrandRepository
@@ -26,7 +28,8 @@ class BrandService:
             resource_label="brand",
         )
         brand = Brand(id=generate_id(IdPrefix.BRAND), **payload.model_dump())
-        self._repository.save(brand)
+        with audit_mutation("BRAND_CREATE", "BRAND", brand.id):
+            self._repository.save(brand)
         return brand
 
     def list_brands(self) -> list[Brand]:
@@ -55,7 +58,8 @@ class BrandService:
             resource_label="brand",
             exclude_id=brand_id,
         )
-        self._repository.save(candidate)
+        with audit_mutation("BRAND_UPDATE", "BRAND", candidate.id):
+            self._repository.save(candidate)
         return candidate
 
     # =============================================================================

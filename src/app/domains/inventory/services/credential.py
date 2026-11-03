@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+from app.domains.audit.transaction import audit_mutation
+
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.inventory.repositories import CredentialRepository
@@ -43,11 +45,15 @@ class CredentialService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.create(
-            credential,
-            password=payload.password,
-            secret=payload.secret,
-        )
+        with audit_mutation(
+            "CREDENTIAL_CREATE", "CREDENTIAL", credential.id,
+            actor_user_id=actor_user_id,
+        ):
+            self._repository.create(
+                credential,
+                password=payload.password,
+                secret=payload.secret,
+            )
         return credential
 
     def list_credentials(self) -> list[Credential]:
@@ -93,13 +99,17 @@ class CredentialService:
             resource_label="credential",
             exclude_id=credential_id,
         )
-        self._repository.update(
-            candidate,
-            password=payload.password,
-            secret=payload.secret,
-            update_password="password" in fields_set and payload.password is not None,
-            update_secret="secret" in fields_set,
-        )
+        with audit_mutation(
+            "CREDENTIAL_UPDATE", "CREDENTIAL", candidate.id,
+            actor_user_id=actor_user_id,
+        ):
+            self._repository.update(
+                candidate,
+                password=payload.password,
+                secret=payload.secret,
+                update_password="password" in fields_set and payload.password is not None,
+                update_secret="secret" in fields_set,
+            )
         return candidate
 
     # =============================================================================

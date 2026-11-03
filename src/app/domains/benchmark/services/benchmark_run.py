@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from app.domains.audit.transaction import audit_mutation
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import (
     BenchmarkRunRepositoryProtocol,
@@ -98,7 +99,8 @@ class BenchmarkRunService:
                     "completed_at": datetime.now(UTC),
                 }
             )
-        self._runs.save(run)
+        with audit_mutation("BENCHMARK_RUN_START", "BENCHMARK_RUN", run.id, actor_user_id=user_id):
+            self._runs.save(run)
         return to_public_benchmark_run(run)
 
     def bind_message(
@@ -195,7 +197,8 @@ class BenchmarkRunService:
                 "cleaned_at": datetime.now(UTC),
             }
         )
-        self._runs.save(cleaned)
+        with audit_mutation("BENCHMARK_RUN_CLEANUP", "BENCHMARK_RUN", cleaned.id):
+            self._runs.save(cleaned)
         return to_public_benchmark_run(cleaned)
 
     def _execute_checks(self, checks: list[BenchmarkCheck]) -> None:

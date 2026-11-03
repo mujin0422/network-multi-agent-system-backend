@@ -6,6 +6,8 @@ from uuid import UUID
 import jwt
 
 from app.core.config import Settings
+from app.domains.audit.transaction import audit_mutation
+
 from app.core.exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -166,7 +168,8 @@ class UserService:
             last_updated_at=None,
             last_login_at=None,
         )
-        self._repository.save_user(record)
+        with audit_mutation("USER_CREATE", "USER", record.id):
+            self._repository.save_user(record)
         return User.model_validate(record.model_dump())
 
     def list_users(self) -> list[User]:
@@ -201,7 +204,8 @@ class UserService:
         changes["last_updated_at"] = datetime.now(UTC)
 
         updated = current.model_copy(update=changes)
-        self._repository.save_user(updated)
+        with audit_mutation("USER_UPDATE", "USER", updated.id):
+            self._repository.save_user(updated)
         return User.model_validate(updated.model_dump())
 
     def _ensure_role_exists(self, role_id: str) -> None:
@@ -242,7 +246,8 @@ class RoleService:
             created_at=now,
             last_updated_at=now,
         )
-        self._repository.save_role(role)
+        with audit_mutation("ROLE_CREATE", "ROLE", role.id, actor_user_id=actor_id):
+            self._repository.save_role(role)
         return role
 
     def list_roles(self) -> list[Role]:
@@ -277,7 +282,8 @@ class RoleService:
             last_updated_at=datetime.now(UTC),
         )
         updated = current.model_copy(update=changes)
-        self._repository.save_role(updated)
+        with audit_mutation("ROLE_UPDATE", "ROLE", updated.id, actor_user_id=actor_id):
+            self._repository.save_role(updated)
         return updated
 
     def _ensure_unique_name(
@@ -322,7 +328,8 @@ class AccessControlService:
             raise ResourceNotFoundError(
                 f"Không tìm thấy permission: {', '.join(unknown)}"
             )
-        return self._repository.replace_role_permissions(role_id, requested)
+        with audit_mutation("ROLE_PERMISSIONS_REPLACE", "ROLE", role_id):
+            return self._repository.replace_role_permissions(role_id, requested)
 
     def _require_role(self, role_id: str, *, require_mutable: bool) -> Role:
         role = self._repository.get_role_by_id(role_id)
