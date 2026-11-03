@@ -41,3 +41,17 @@ def test_distinct_repositories_reuse_the_same_process_pool(tmp_path):
         assert roles._sessions.kw["bind"] is devices._sessions.kw["bind"]
     finally:
         dispose_session_factories()
+
+
+def test_lifespan_disposal_reuses_factory_for_cached_services(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'restarted.sqlite3'}"
+    try:
+        service_factory = create_session_factory(database_url)
+        dispose_session_factories(clear_registry=False)
+        next_lifespan_factory = create_session_factory(database_url)
+        assert next_lifespan_factory is service_factory
+        # The previously disposed Engine can establish new connections on demand.
+        with next_lifespan_factory() as session:
+            assert session.execute(__import__("sqlalchemy").text("SELECT 1")).scalar() == 1
+    finally:
+        dispose_session_factories()

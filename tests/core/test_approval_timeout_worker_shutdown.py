@@ -30,8 +30,10 @@ def test_approval_worker_can_stop_without_waiting_for_poll_interval(monkeypatch)
         )
         worker = asyncio.create_task(run_approval_timeout_worker(settings, event))
         # Let the first sweep run, then wake the long sleep by setting the flag.
-        while not calls:
-            await asyncio.sleep(0.01)
+        async def first_sweep():
+            while not calls:
+                await asyncio.sleep(0.01)
+        await asyncio.wait_for(first_sweep(), timeout=2.0)
         event.set()
         await asyncio.wait_for(worker, timeout=2.0)
 
