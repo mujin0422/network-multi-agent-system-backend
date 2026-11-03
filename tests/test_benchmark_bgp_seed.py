@@ -72,7 +72,7 @@ def test_all_bgp_peers_match_reference_configuration() -> None:
         assert f"router bgp {local_as}" in lab
         assert f"neighbor {ip} remote-as {remote_as}" in lab
 
-        assert len(case.preconditions) == 2
+        assert len(case.preconditions) == 3
         assert len(case.injection) == len(case.cleanup) == 1
         assert case.fault_verification
         assert case.ground_truth[0].fault_type == "bgp_neighbor_admin_down"
@@ -80,6 +80,8 @@ def test_all_bgp_peers_match_reference_configuration() -> None:
         check = case.preconditions
         assert check[0].assertion.contains == f"neighbor {ip} remote-as {remote_as}"
         assert check[1].assertion.not_contains == f"neighbor {ip} shutdown"
+        assert check[2].command == f"show ip bgp neighbors {ip} | include BGP state"
+        assert check[2].assertion.contains == "Established"
 
         injected = case.injection[0]
         restored = case.cleanup[0]
