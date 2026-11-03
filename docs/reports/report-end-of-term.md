@@ -40,6 +40,8 @@ Mô hình ReAct cho thấy việc xen kẽ suy luận và hành động giúp m�
 
 Các nghiên cứu gần đây tập trung vào việc chuyển chính sách hoặc yêu cầu ngôn ngữ tự nhiên thành cấu hình mức thấp. NETBUDDY sử dụng LLM để biến yêu cầu cấp cao thành cấu hình P4 và BGP, đồng thời chia quá trình sinh cấu hình thành các bước nhỏ và sử dụng cơ chế tự sửa nhằm cải thiện kết quả [6]. LLM-NetCFG đề xuất các tác tử cấu hình trong định hướng Zero-touch Network and Service Management, kết hợp sinh, xác minh và triển khai cấu hình từ intent ngôn ngữ tự nhiên [7]. Một hướng khác sử dụng các LLM Agent để dịch cấu hình giữa các nền tảng nhà cung cấp, kết hợp phân rã cấu hình theo intent và xác minh hai giai đoạn về cú pháp và ngữ nghĩa [8].
 
+NetConfArena [17] đề xuất môi trường thực thi để đánh giá agent cấu hình theo chu trình quan sát–hành động–phản hồi, thay vì chỉ chấm câu lệnh được sinh ra. Đây là cơ sở tham khảo khi xây dựng hệ thống thử nghiệm trên GNS3.
+
 Các công trình này cho thấy ba xu hướng. Thứ nhất, yêu cầu cấp cao cần được phân rã thành đơn vị nhỏ để giảm độ phức tạp của từng lần sinh. Thứ hai, kết quả sinh bởi LLM cần qua lớp xác minh độc lập. Thứ ba, đánh giá phải xem xét cả tính đúng cú pháp và tính đúng ngữ nghĩa; một cấu hình được thiết bị chấp nhận chưa chắc đã đạt mục tiêu vận hành.
 
 Đề tài kế thừa tư tưởng phân rã bằng cách biểu diễn yêu cầu thành các operation có thứ tự và dependency. Tuy nhiên, phiên bản hiện tại chưa có bộ kiểm tra cú pháp theo nền tảng, mô phỏng cấu hình trước khi áp dụng hoặc xác minh hình thức đối với trạng thái đích. Do đó, phạm vi hiện tại là nguyên mẫu có kiểm soát, chưa phải hệ thống cấu hình tự trị hoàn toàn.
@@ -50,11 +52,15 @@ Network troubleshooting là quá trình phát hiện triệu chứng, thu thập
 
 RFC 9232 mô tả mức trưởng thành của telemetry từ thu thập dữ liệu tới vòng điều khiển khép kín, trong đó hệ thống thông minh tự động yêu cầu dữ liệu, phân tích và cập nhật hoạt động mạng [9]. Các nghiên cứu LLM cho Root Cause Analysis gần đây nhấn mạnh rằng LLM thuần túy dễ tạo suy luận không ổn định; kết quả cần được ràng buộc bởi bằng chứng có cấu trúc và tri thức miền [10].
 
+NIKA [14, 15] chia bài toán troubleshooting thành Detection, Localization và RCA; mã nguồn NIKA 0.2 đánh giá theo các cặp tài nguyên–loại lỗi, tính Precision, Recall và F1. NETARENA [16] nhấn mạnh hiệu quả, độ an toàn và thời gian thực thi trong môi trường có trạng thái. Các phương pháp này là căn cứ thiết kế phép đo trong đề tài.
+
 Trong đề tài, Planner Agent tạo các bước thu thập bằng lệnh quan sát, Network Agent lấy kết quả thực tế và Analyst Agent tổng hợp phát hiện, nguyên nhân có khả năng cùng khuyến nghị. Đặc biệt, nhóm đã bổ sung các kịch bản sự cố GNS3 có Ground Truth và bộ chấm phiên bản v4 dựa trên cặp tài nguyên–loại lỗi, tham khảo NIKA [14, 15]. Việc chấm có cấu trúc giúp tách đánh giá đúng vị trí khỏi đúng loại nguyên nhân và tránh việc câu trả lời chỉ chứa đủ từ khóa vẫn được tính đúng. Tuy nhiên, đây là đánh giá đối chiếu nhãn kịch bản, không phải tự động kiểm chứng lại tính đúng đắn của mọi nhận định từ trạng thái mạng; telemetry liên tục và knowledge graph chưa được triển khai.
 
 ## 1.5. Multi-Agent trong quản trị và xử lý sự cố hệ thống
 
 Multi-Agent System (MAS) phân chia một nhiệm vụ phức tạp cho nhiều tác tử có vai trò và giao diện rõ ràng. Trong ứng dụng LLM, AutoGen minh họa khả năng tổ chức các tác tử hội thoại để phối hợp hoàn thành nhiệm vụ [5]. Lợi ích của cách tiếp cận nhiều tác tử không nằm ở số lượng tác tử, mà ở khả năng cô lập trách nhiệm và quyền hạn: tác tử lập kế hoạch không cần quyền truy cập credential; tác tử thực thi không cần tự suy luận mục tiêu; tác tử phân tích không được tự thay đổi thiết bị.
+
+OpsAgent [18] minh họa cách tổ chức nhiều agent chuyên trách cho bài toán sự cố trong hệ thống microservice, cung cấp ý tưởng về cơ chế phối hợp và phân chia trách nhiệm. Đề tài không sao chép thuật toán OpsAgent.
 
 Đối với quản trị mạng, phân tách này giúp giảm phạm vi ảnh hưởng khi một thành phần trả kết quả sai. Planner tạo kế hoạch nhưng không kết nối thiết bị. Network Agent chỉ nhận operation và mapping đã được kiểm tra. Analyst chỉ xử lý output sau thực thi. Orchestrator, thay vì LLM, quản lý trạng thái, dependency, phê duyệt và ghi audit. Đây là mô hình “AI đề xuất — phần mềm xác minh và thực thi” phù hợp hơn với yêu cầu kiểm soát thay đổi.
 
@@ -157,6 +163,18 @@ Hệ thống biên dịch hai graph. Graph message mới thực hiện đầy đ
 GNS3 là nền tảng mô phỏng/emulation mạng cho phép xây dựng topology gồm router, switch, máy ảo và các liên kết. Kiến trúc GNS3 có controller quản lý project, compute và cung cấp REST API cho backend [13]. Đây là môi trường phù hợp để kiểm thử thay đổi mạng mà không tác động hạ tầng sản xuất.
 
 Trong đề tài, các node Cisco IOS trong GNS3 được tiếp cận qua các cổng console/Telnet được ánh xạ tới máy host. Cấu hình có `GNS3_IP`, `GNS3_PORT` và `GNS3_PROJECT_ID`. Tuy nhiên, provider hiện chỉ gọi `GET /v2/version` để xác nhận GNS3 Server khả dụng trước khi chạy workflow. Hệ thống chưa sử dụng API để đọc node/link, mở project, bật/tắt node hoặc đồng bộ topology. Inventory vận hành hiện được quản lý trong PostgreSQL.
+
+## 2.10. Đánh giá RCA theo Ground Truth và nghiên cứu NIKA
+
+Ground Truth là nhãn sự cố đã được xác định cho một kịch bản. Để chấm chính xác, dự đoán của Agent phải thể hiện thành dữ liệu có cấu trúc, không thể dựa vào việc một câu trả lời chỉ nhắc đến các từ khóa đúng. NIKA 0.2 [14, 15] dùng RootCause là cặp `resource_id` và `fault_type`. Các cặp dự đoán và Ground Truth tạo thành hai tập; bộ chấm tính TP/FP/FN, Precision, Recall, F1 và phân tích riêng Localization cũng như Fault Type.
+
+Đề tài ánh xạ các trường đó thành device/interface/fault_type của Cisco IOS. Scorer có thể xác nhận đồng thời đúng tài nguyên và đúng loại lỗi, nhưng vẫn phụ thuộc chất lượng nhãn kịch bản. Phương pháp này là đánh giá kết quả chẩn đoán có cấu trúc, không phải bằng chứng nhân quả hoặc tự kiểm chứng lại mọi trạng thái thiết bị. Công thức và minh chứng được trình bày chi tiết ở Chương 4.
+
+## 2.11. FastAPI, PostgreSQL, kiến trúc domain và kiểm thử
+
+Backend sử dụng FastAPI và Pydantic cho HTTP contract, SQLAlchemy cho ánh xạ persistence, PostgreSQL cho dữ liệu nghiệp vụ, JSONB cho snapshot/evidence. Kiến trúc domain chia router, service, repository và provider; các agent không truy cập trực tiếp ORM hoặc thông tin xác thực thiết bị. Migration SQL có version, checksum và cơ chế tránh chạy đồng thời. Pytest phục vụ kiểm tra tính đúng của tác tử, approval và bộ chấm.
+
+Cần phân biệt **unit test** kiểm tra công thức, luồng và hợp đồng phần mềm với **integration test** chạy trên lab GNS3. Số lượng unit test PASS không thể suy ra tỷ lệ chẩn đoán đúng của mô hình trên tất cả scenario.
 
 ---
 
