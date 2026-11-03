@@ -1,8 +1,8 @@
 """Repository facade giữ transaction nguyên tử khi lưu execution plan."""
 
 from datetime import datetime
-from app.core.database import create_session_factory
-from app.domains.audit.transaction import append_audit_in_session
+from app.core.database import DatabaseUnitOfWork, create_session_factory
+from app.domains.audit.transaction import record_audit_in_session
 from app.domains.execution.repositories.approval_timeout import ApprovalTimeoutRepository
 from app.domains.execution.repositories.device_action_log import (
     DeviceActionLogRepository,
@@ -37,6 +37,7 @@ class ExecutionRepository:
         # thao tác đơn bảng và mở transaction cho use case ghi nhiều bảng.
         """Khởi tạo ExecutionRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
+        self._uow = DatabaseUnitOfWork(self._sessions)
         self._approval_timeout = ApprovalTimeoutRepository(database_url)
         self._tasks = TaskRepository(database_url)
         self._operations = OperationRepository(database_url)
@@ -189,6 +190,15 @@ class ExecutionRepository:
             decided_at=decided_at,
         )
 
+    def create_task_atomic(self, task: Task) -> None:
+        """Insert Task plus its successful audit event atomically."""
+        with self._uow.begin() as session:
+            TaskRepository.save_in_session(session, task)
+            record_audit_in_session(
+                session, action="TASK_CREATE", resource_type="TASK",
+                resource_id=task.id, actor_user_id=task.user_id,
+            )
+
     def create_operation_atomic(
         self,
         operation: Operation,
@@ -199,11 +209,14 @@ class ExecutionRepository:
         No commits from child repositories. The service declares the audit
         intent; this UoW owns commit and rollback for all three records.
         """
-        with self._sessions.begin() as session:
+        with self._uow.begin() as session:
             if updated_task is not None:
                 TaskRepository.save_in_session(session, updated_task)
             OperationRepository.save_all_in_session(session, [operation])
-            append_audit_in_session(session)
+            record_audit_in_session(
+                session, action="OPERATION_CREATE", resource_type="OPERATION",
+                resource_id=operation.id,
+            )
 
     def save_execution_plan(
         self,
@@ -217,7 +230,7 @@ class ExecutionRepository:
 
         # Nếu bất kỳ bước nào lỗi, context manager rollback cả bốn bảng; không
         # để lại Task PLANNING nhưng thiếu operation/dependency/device mapping.
-        with self._sessions.begin() as session:
+        with self._uow.begin() as session:
             TaskRepository.save_in_session(session, task)
             OperationRepository.save_all_in_session(session, operations)
             # Các dependency và device mapping đều tham chiếu operation mới.

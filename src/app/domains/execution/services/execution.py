@@ -64,8 +64,15 @@ class ExecutionService:
             task_type=TaskType.UNCLASSIFIED,
             created_at=datetime.now(UTC),
         )
-        with audit_mutation("TASK_CREATE", "TASK", task.id, actor_user_id=task.user_id):
-            self._repository.save_task(task)
+        atomic_create = getattr(self._repository, "create_task_atomic", None)
+        if atomic_create is not None:
+            atomic_create(task)
+        else:
+            # Legacy in-memory repository used by unit tests.
+            with audit_mutation(
+                "TASK_CREATE", "TASK", task.id, actor_user_id=task.user_id
+            ):
+                self._repository.save_task(task)
         return task
 
     def list_tasks(self) -> list[Task]:
@@ -369,8 +376,7 @@ class ExecutionService:
             operation_status=OperationStatus.PENDING,
             created_at=datetime.now(UTC),
         )
-        with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
-            updated_task = (
+        updated_task = (
             task.model_copy(
                 update={
                     "task_status": TaskStatus.PLANNING,
@@ -380,12 +386,11 @@ class ExecutionService:
             if task.task_status == TaskStatus.PENDING
             else None
         )
-        with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
-            atomic_create = getattr(self._repository, "create_operation_atomic", None)
-            if atomic_create is not None:
-                atomic_create(operation, updated_task)
-            else:
-                # Compatibility for existing in-memory test repositories.
+        atomic_create = getattr(self._repository, "create_operation_atomic", None)
+        if atomic_create is not None:
+            atomic_create(operation, updated_task)
+        else:
+            with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
                 self._repository.save_operation(operation)
                 if updated_task is not None:
                     self._repository.save_task(updated_task)
