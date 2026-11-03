@@ -20,6 +20,12 @@ evaluation results. The baseline lab reference is
 | Loopback administration | `p1-loopback0-admin-down` | 1 |
 | **Total** | | **17** |
 
+The separate `04_benchmark_bgp.sql` seed adds **6 BGP cases** (2 iBGP VPNv4
+PE-to-PE and 4 eBGP CE-to-PE), taking the combined reference set to **33**
+(10 base + 17 expansion + 6 BGP). They use `bgp_neighbor_shutdown` and
+`bgp_neighbor_no_shutdown`, which do not delete the neighbor definition.
+These cases require backend BGP action support to be deployed before running.
+
 Each scenario contains `preconditions`, `injection`,
 `fault_verification`, `ground_truth`, `evaluation_required_terms`,
 and a cleanup plan intended to restore the **reference configuration**.
@@ -40,6 +46,8 @@ docker compose up -d db
 docker compose run --rm migrate
 docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
   < docker/postgres/seed/03_benchmark_expansion.sql
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \\
+  < docker/postgres/seed/04_benchmark_bgp.sql
 ```
 
 The insert uses `ON CONFLICT (scenario_key) DO NOTHING`; reapplying it
@@ -71,11 +79,15 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SEL
 - Some older seed cases refer to P3 interfaces or default routes not configured
   in the checked-in reference. These remain untouched; their suitability
   depends on your current lab state.
+- BGP cases assume the peer is defined and is not already shut down. The
+  preconditions verify both, then injection shuts down that BGP neighbor.
+  Shutdown may affect production VPNv4/eBGP connectivity: use an isolated lab.
+  Cleanup undoes the administrative shutdown; reconvergence can take time.
 - Cisco images, IOS versions, topology links, and actual CLI output can
   differ. These are *candidate executable scenarios*, **not** cases confirmed
   by a live GNS3 end-to-end run in this change.
 
-Unsupported families such as BGP neighbor changes, VRF leaks, VLAN tagging,
+Unsupported families such as BGP policy/remote-AS changes, VRF leaks, VLAN tagging,
 MTU manipulation, DHCP/DNS faults, and congestion **were intentionally not
 seeded** because the current typed `BenchmarkAction` and network command
 builder do not implement safe injection/cleanup for those mechanisms.
