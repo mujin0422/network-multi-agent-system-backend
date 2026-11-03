@@ -10,9 +10,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, select
 
 from app.core.database import create_session_factory
-from app.core.utils import IdPrefix, generate_id, generate_uuid
-from app.domains.audit.models import AuditLogModel
-from app.domains.audit.schemas import AuditActorType, AuditEventStatus
+from app.core.utils import IdPrefix, generate_id
+from app.domains.audit.schemas import AuditActorType, AuditEventStatus, AuditLogCreate
+from app.domains.audit.services.audit_log import AuditLogService
 from app.domains.benchmark.models import BenchmarkRunModel
 from app.domains.execution.models import (
     OperationDeviceApprovalModel,
@@ -246,9 +246,9 @@ class ApprovalTimeoutRepository:
                 )
 
                 # The system audit event commits with the Task status transition.
-                session.add(
-                    AuditLogModel(
-                        id=generate_uuid(),
+                AuditLogService.record_in_session(
+                    session,
+                    AuditLogCreate(
                         actor_user_id=None,
                         actor_display_name="Approval timeout worker",
                         actor_type=AuditActorType.SYSTEM,
@@ -262,8 +262,7 @@ class ApprovalTimeoutRepository:
                             "timeout_minutes": timeout_minutes,
                             "task_status": task.task_status.value,
                         },
-                        occurred_at=now,
-                    )
+                    ),
                 )
 
                 # Keep the benchmark's cleanup flag intact; fault injection may
