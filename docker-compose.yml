@@ -21,6 +21,7 @@ services:
       - ./docker/postgres/init/02_seed.sql.template:/docker-entrypoint-initdb.d/02_seed.sql.template:ro
       # Bổ sung scenario mẫu khi PostgreSQL bootstrap database mới.
       - ./docker/postgres/seed/03_benchmark_expansion.sql:/docker-entrypoint-initdb.d/03_benchmark_expansion.sql:ro
+      - ./docker/postgres/seed/04_benchmark_bgp.sql:/docker-entrypoint-initdb.d/04_benchmark_bgp.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
