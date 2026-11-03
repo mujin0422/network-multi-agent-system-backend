@@ -69,12 +69,12 @@ class AnalystAgent:
                 additional_kwargs = getattr(result, "additional_kwargs", {})
                 content = additional_kwargs.get("reasoning_content", "")
             if isinstance(content, dict):
-                return AnalysisResult.model_validate(content)
+                return AnalystAgent._validate_submission(content)
             if not isinstance(content, str):
                 raise ValueError("Analyst Agent không trả JSON dạng text")
             raw_json = AnalystAgent._extract_json_object(content)
             try:
-                return AnalysisResult.model_validate_json(raw_json)
+                return AnalystAgent._validate_submission(json.loads(raw_json))
             except (ValidationError, ValueError):
                 # Một số model local/NIM đôi khi bỏ dấu ngoặc kép ở key hoặc
                 # thêm dấu phẩy cuối dù prompt đã yêu cầu JSON nghiêm ngặt.
@@ -85,9 +85,21 @@ class AnalystAgent:
                     raw_json,
                 )
                 repaired_json = re.sub(r",(\s*[}\]])", r"\1", repaired_json)
-                return AnalysisResult.model_validate_json(repaired_json)
+                return AnalystAgent._validate_submission(json.loads(repaired_json))
         except (ValidationError, ValueError) as exc:
             raise ValueError("Analyst Agent trả JSON không đúng AnalysisResult") from exc
+
+    @staticmethod
+    def _validate_submission(payload: Any) -> AnalysisResult:
+        """Require explicit Agent-provided RCA fields, never silently default [].
+
+        The Pydantic defaults remain for older non-LLM callers and safe fallbacks.
+        """
+        if not isinstance(payload, dict):
+            raise ValueError("Analyst submission must be a JSON object")
+        if not {"is_anomaly", "root_causes"}.issubset(payload):
+            raise ValueError("Analyst must explicitly submit is_anomaly and root_causes")
+        return AnalysisResult.model_validate(payload)
 
     @staticmethod
     def _extract_json_object(content: str) -> str:
