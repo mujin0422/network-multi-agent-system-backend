@@ -1,6 +1,7 @@
 """Use cases cho resource Brand."""
 
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
@@ -12,8 +13,11 @@ from app.domains.inventory.utils import ensure_unique_name
 class BrandService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới hãng thiết bị."""
 
-    def __init__(self, repository: BrandRepository) -> None:
+    def __init__(
+        self, repository: BrandRepository, uow: DatabaseUnitOfWork | None = None
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     # =============================================================================
     # Brand — tạo, lấy và cập nhật hãng thiết bị
@@ -28,8 +32,16 @@ class BrandService:
             resource_label="brand",
         )
         brand = Brand(id=generate_id(IdPrefix.BRAND), **payload.model_dump())
-        with audit_mutation("BRAND_CREATE", "BRAND", brand.id):
-            self._repository.save(brand)
+        if self._uow is None:
+            with audit_mutation("BRAND_CREATE", "BRAND", brand.id):
+                self._repository.save(brand)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, brand)
+                record_audit_in_session(
+                    session, action="BRAND_CREATE", resource_type="BRAND",
+                    resource_id=brand.id,
+                )
         return brand
 
     def list_brands(self) -> list[Brand]:
@@ -58,8 +70,16 @@ class BrandService:
             resource_label="brand",
             exclude_id=brand_id,
         )
-        with audit_mutation("BRAND_UPDATE", "BRAND", candidate.id):
-            self._repository.save(candidate)
+        if self._uow is None:
+            with audit_mutation("BRAND_UPDATE", "BRAND", candidate.id):
+                self._repository.save(candidate)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, candidate)
+                record_audit_in_session(
+                    session, action="BRAND_UPDATE", resource_type="BRAND",
+                    resource_id=candidate.id,
+                )
         return candidate
 
     # =============================================================================

@@ -2,7 +2,8 @@
 
 from datetime import UTC, datetime
 
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
@@ -14,8 +15,11 @@ from app.domains.inventory.utils import ensure_unique_name
 class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
-    def __init__(self, repository: CredentialRepository) -> None:
+    def __init__(
+        self, repository: CredentialRepository, uow: DatabaseUnitOfWork | None = None
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     # =============================================================================
     # Credential — tạo, lấy và cập nhật thông tin đăng nhập
@@ -45,15 +49,25 @@ class CredentialService:
             created_at=now,
             last_updated_at=now,
         )
-        with audit_mutation(
-            "CREDENTIAL_CREATE", "CREDENTIAL", credential.id,
-            actor_user_id=actor_user_id,
-        ):
-            self._repository.create(
-                credential,
-                password=payload.password,
-                secret=payload.secret,
-            )
+        if self._uow is None:
+            with audit_mutation(
+                "CREDENTIAL_CREATE", "CREDENTIAL", credential.id,
+                actor_user_id=actor_user_id,
+            ):
+                self._repository.create(
+                    credential, password=payload.password, secret=payload.secret,
+                )
+        else:
+            with self._uow.begin() as session:
+                self._repository.create_in_session(
+                    session, credential,
+                    password=payload.password, secret=payload.secret,
+                )
+                record_audit_in_session(
+                    session, action="CREDENTIAL_CREATE",
+                    resource_type="CREDENTIAL", resource_id=credential.id,
+                    actor_user_id=actor_user_id,
+                )
         return credential
 
     def list_credentials(self) -> list[Credential]:
@@ -99,17 +113,29 @@ class CredentialService:
             resource_label="credential",
             exclude_id=credential_id,
         )
-        with audit_mutation(
-            "CREDENTIAL_UPDATE", "CREDENTIAL", candidate.id,
-            actor_user_id=actor_user_id,
-        ):
-            self._repository.update(
-                candidate,
-                password=payload.password,
-                secret=payload.secret,
-                update_password="password" in fields_set and payload.password is not None,
-                update_secret="secret" in fields_set,
-            )
+        update_password = "password" in fields_set and payload.password is not None
+        update_secret = "secret" in fields_set
+        if self._uow is None:
+            with audit_mutation(
+                "CREDENTIAL_UPDATE", "CREDENTIAL", candidate.id,
+                actor_user_id=actor_user_id,
+            ):
+                self._repository.update(
+                    candidate, password=payload.password, secret=payload.secret,
+                    update_password=update_password, update_secret=update_secret,
+                )
+        else:
+            with self._uow.begin() as session:
+                self._repository.update_in_session(
+                    session, candidate,
+                    password=payload.password, secret=payload.secret,
+                    update_password=update_password, update_secret=update_secret,
+                )
+                record_audit_in_session(
+                    session, action="CREDENTIAL_UPDATE",
+                    resource_type="CREDENTIAL", resource_id=candidate.id,
+                    actor_user_id=actor_user_id,
+                )
         return candidate
 
     # =============================================================================

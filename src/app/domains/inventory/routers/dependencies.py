@@ -3,6 +3,7 @@
 from functools import lru_cache
 
 from app.core.config import get_settings
+from app.core.database import DatabaseUnitOfWork
 from app.domains.inventory import (
     BrandService,
     CategoryService,
@@ -21,7 +22,10 @@ from app.domains.inventory import (
 @lru_cache
 def _build_brand_service() -> BrandService:
     settings = get_settings()
-    return BrandService(BrandRepository(settings.database_url))
+    return BrandService(
+        BrandRepository(settings.database_url),
+        uow=DatabaseUnitOfWork.from_url(settings.database_url),
+    )
 
 
 async def get_brand_service() -> BrandService:
@@ -45,7 +49,9 @@ def _build_credential_service() -> CredentialService:
         database_url=settings.database_url,
         encryption_key=settings.device_credential_encryption_key,
     )
-    return CredentialService(repository)
+    return CredentialService(
+        repository, uow=DatabaseUnitOfWork.from_url(settings.database_url)
+    )
 
 
 async def get_credential_service() -> CredentialService:
@@ -55,7 +61,10 @@ async def get_credential_service() -> CredentialService:
 @lru_cache
 def _build_device_service() -> DeviceService:
     settings = get_settings()
-    return DeviceService(DeviceRepository(settings.database_url))
+    return DeviceService(
+        DeviceRepository(settings.database_url),
+        uow=DatabaseUnitOfWork.from_url(settings.database_url),
+    )
 
 
 async def get_device_service() -> DeviceService:

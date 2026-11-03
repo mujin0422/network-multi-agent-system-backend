@@ -3,7 +3,8 @@
 from datetime import UTC, datetime
 from math import ceil
 
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import IdPrefix, generate_id
@@ -15,8 +16,11 @@ from app.domains.inventory.utils import ensure_unique_device
 class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
-    def __init__(self, repository: DeviceRepository) -> None:
+    def __init__(
+        self, repository: DeviceRepository, uow: DatabaseUnitOfWork | None = None
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     # =============================================================================
     # Device — tạo, lấy và cập nhật thiết bị
@@ -39,8 +43,17 @@ class DeviceService:
             created_at=now,
             last_updated_at=now,
         )
-        with audit_mutation("DEVICE_CREATE", "DEVICE", device.id):
-            self._repository.save(device)
+        if self._uow is None:
+            # Existing in-memory test repositories still use the legacy API.
+            with audit_mutation("DEVICE_CREATE", "DEVICE", device.id):
+                self._repository.save(device)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, device)
+                record_audit_in_session(
+                    session, action="DEVICE_CREATE", resource_type="DEVICE",
+                    resource_id=device.id,
+                )
         return device
 
     def list_devices(
@@ -105,8 +118,17 @@ class DeviceService:
         updated = candidate.model_copy(
             update={"last_updated_at": datetime.now(UTC)}
         )
-        with audit_mutation("DEVICE_UPDATE", "DEVICE", updated.id):
-            self._repository.save(updated)
+        if self._uow is None:
+            # Existing in-memory test repositories still use the legacy API.
+            with audit_mutation("DEVICE_UPDATE", "DEVICE", updated.id):
+                self._repository.save(updated)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, updated)
+                record_audit_in_session(
+                    session, action="DEVICE_UPDATE", resource_type="DEVICE",
+                    resource_id=updated.id,
+                )
         return updated
 
     # =============================================================================
