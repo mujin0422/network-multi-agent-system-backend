@@ -54,7 +54,7 @@ async def lifespan(_app: FastAPI):
                 await sweep_task
         finally:
             # Background jobs must be stopped before closing pooled connections.
-            dispose_session_factories()
+            dispose_session_factories(clear_registry=False)
 
 
 app = FastAPI(

@@ -35,14 +35,17 @@ def create_session_factory(database_url: str) -> sessionmaker[Session]:
         return factory
 
 
-def dispose_session_factories() -> None:
-    """Dispose every managed Engine at app shutdown (or test teardown).
+def dispose_session_factories(*, clear_registry: bool = True) -> None:
+    """Dispose all managed connection pools after active sessions have stopped.
 
-    Only call after active sessions and background workers have stopped.
+    Keep registry entries during a lifespan restart: cached services still
+    hold their sessionmaker, so new services must reuse the same Engine.
+    Tests may use clear_registry=True (the default) to isolate databases.
     """
     with _lock:
         factories = list(_factories.values())
-        _factories.clear()
+        if clear_registry:
+            _factories.clear()
     for factory in factories:
         engine = factory.kw.get("bind")
         if engine is not None:
