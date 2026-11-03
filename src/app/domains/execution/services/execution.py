@@ -370,16 +370,25 @@ class ExecutionService:
             created_at=datetime.now(UTC),
         )
         with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
-            self._repository.save_operation(operation)
-        if task.task_status == TaskStatus.PENDING:
-            self._repository.save_task(
-                task.model_copy(
-                    update={
-                        "task_status": TaskStatus.PLANNING,
-                        "started_at": datetime.now(UTC),
-                    }
-                )
+            updated_task = (
+            task.model_copy(
+                update={
+                    "task_status": TaskStatus.PLANNING,
+                    "started_at": datetime.now(UTC),
+                }
             )
+            if task.task_status == TaskStatus.PENDING
+            else None
+        )
+        with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
+            atomic_create = getattr(self._repository, "create_operation_atomic", None)
+            if atomic_create is not None:
+                atomic_create(operation, updated_task)
+            else:
+                # Compatibility for existing in-memory test repositories.
+                self._repository.save_operation(operation)
+                if updated_task is not None:
+                    self._repository.save_task(updated_task)
         return operation
 
     def create_execution_plan(

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.execution.repositories.approval_timeout import ApprovalTimeoutRepository
 from app.domains.execution.repositories.device_action_log import (
     DeviceActionLogRepository,
@@ -187,6 +188,22 @@ class ExecutionRepository:
             decision=decision,
             decided_at=decided_at,
         )
+
+    def create_operation_atomic(
+        self,
+        operation: Operation,
+        updated_task: Task | None,
+    ) -> None:
+        """Create operation, transition Task, and append Audit in ONE transaction.
+
+        No commits from child repositories. The service declares the audit
+        intent; this UoW owns commit and rollback for all three records.
+        """
+        with self._sessions.begin() as session:
+            if updated_task is not None:
+                TaskRepository.save_in_session(session, updated_task)
+            OperationRepository.save_all_in_session(session, [operation])
+            append_audit_in_session(session)
 
     def save_execution_plan(
         self,
