@@ -6,6 +6,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.database import dispose_session_factories
 from app.core.approval_timeout_worker import run_approval_timeout_worker
 from app.core.exceptions.handlers import register_error_handlers
 from app.domains.audit.http_capture import AuditCaptureMiddleware
@@ -46,10 +47,14 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        if sweep_task:
-            sweep_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await sweep_task
+        try:
+            if sweep_task:
+                sweep_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await sweep_task
+        finally:
+            # Background jobs must be stopped before closing pooled connections.
+            dispose_session_factories()
 
 
 app = FastAPI(
