@@ -3,6 +3,9 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+from app.domains.audit.models import AuditLogModel
+
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import generate_uuid
 from app.domains.audit.repositories import AuditLogRepository
@@ -24,6 +27,21 @@ class AuditLogService:
             **payload.model_dump(),
         )
         self._repository.save(audit_log)
+        return audit_log
+
+    @staticmethod
+    def record_in_session(session: Session, payload: AuditLogCreate) -> AuditLog:
+        """Insert using the business UoW's session; never commit here.
+
+        The enclosing repository transaction owns commit/rollback. Raising on
+        audit failure rolls back the actual business mutation as well.
+        """
+        audit_log = AuditLog(
+            id=generate_uuid(),
+            occurred_at=datetime.now(UTC),
+            **payload.model_dump(),
+        )
+        session.add(AuditLogModel(**audit_log.model_dump()))
         return audit_log
 
     def get(self, audit_log_id: UUID) -> AuditLog:

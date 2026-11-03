@@ -8,14 +8,12 @@ No ambient request body, token, credential or command data is captured.
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Iterator
 
 from sqlalchemy.orm import Session
 
-from app.core.utils import generate_uuid
-from app.domains.audit.models import AuditLogModel
-from app.domains.audit.schemas import AuditActorType, AuditEventStatus
+from app.domains.audit.schemas import AuditActorType, AuditEventStatus, AuditLogCreate
+from app.domains.audit.services.audit_log import AuditLogService
 
 
 @dataclass(frozen=True)
@@ -77,9 +75,9 @@ def append_audit_in_session(session: Session) -> None:
     intent = _active_audit.get()
     if intent is None:
         return
-    session.add(
-        AuditLogModel(
-            id=generate_uuid(),
+    AuditLogService.record_in_session(
+        session,
+        AuditLogCreate(
             actor_user_id=intent.actor_user_id,
             actor_type=AuditActorType.USER if intent.actor_user_id else AuditActorType.SYSTEM,
             actor_display_name=(
@@ -92,6 +90,5 @@ def append_audit_in_session(session: Session) -> None:
             event_status=AuditEventStatus.SUCCESS,
             summary=f"{intent.action.replace('_', ' ').title()}",
             event_data={},
-            occurred_at=datetime.now(UTC),
-        )
+        ),
     )
