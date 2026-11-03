@@ -612,47 +612,76 @@ Các bài test không yêu cầu đưa dữ liệu credential vào báo cáo. Kh
 
 ## 5.1. Kết quả đạt được
 
-Đề tài đã xây dựng được nền tảng nguyên mẫu có các thành phần chính sau:
+### 5.1.1. Kết quả về kiến trúc và chức năng
 
-1. Backend theo miền nghiệp vụ với API xác thực, RBAC, inventory, conversation, task, operation và approval.
-2. Kiến trúc nhiều tác tử gồm Planner, Network và Analyst Agent, cùng ba Orchestrator tách biệt.
-3. Luồng chuyển yêu cầu tiếng Việt thành execution plan có schema, DAG dependency và device mapping.
-4. Hai backend thực thi Netmiko và Nornir sử dụng chung `NetworkTool` contract.
-5. Cơ chế bảo vệ thao tác ghi bằng approval, snapshot và request hash.
-6. Cơ chế mã hóa credential, giải mã theo nhu cầu và không truyền bí mật cho LLM.
-7. Hệ thống trạng thái và audit gồm activity event, task execution và device action log.
-8. Giao diện web theo feature cho các chức năng quản trị và hội thoại; một số luồng đã kết nối backend.
-9. Môi trường GNS3 cùng inventory 13 thiết bị phục vụ phát triển và kiểm thử.
+Đề tài đã hiện thực một nguyên mẫu ứng dụng Multi-Agent trong quản trị mạng. Các thành phần Planner, Network và Analyst có hợp đồng đầu vào/đầu ra riêng; LangGraph cùng Orchestrator điều phối các bước. Dữ liệu nghiệp vụ được duy trì trong PostgreSQL, giúp có thể truy nguyên từ một message của người dùng tới Task, kế hoạch, từng lần thực thi, lệnh gửi tới thiết bị và Evaluation.
 
-Các kết quả trên chứng minh tính khả thi về mặt kiến trúc của việc kết hợp LLM với công cụ tự động hóa mạng trong một quy trình có ranh giới kiểm soát. Tuy nhiên, do chưa có dữ liệu thực nghiệm định lượng, báo cáo không kết luận về độ chính xác, độ an toàn thực tế hoặc hiệu năng end-to-end.
+Những phần đã có mã nguồn chức năng gồm:
+
+1. **Xác thực và phân quyền:** hệ thống tài khoản, access token/refresh token, user session, vai trò và permission theo chức năng/hành động.
+2. **Inventory:** quản lý brand, category, device và credential; mã hóa secret thiết bị, giải mã tại backend theo nhu cầu.
+3. **Conversation:** tạo hội thoại khi gửi tin nhắn đầu tiên, lưu message, tạo/đổi title và cung cấp lịch sử cho giao diện chat.
+4. **Planner và lưu kế hoạch:** chuyển yêu cầu ngôn ngữ tự nhiên thành Task, operations, quan hệ phụ thuộc và mapping thiết bị có schema.
+5. **Network execution:** hỗ trợ READ/WRITE với hai adapter Netmiko/Nornir, kết nối Cisco IOS trên GNS3; ghi nhận output và trạng thái.
+6. **Analyst:** tạo báo cáo tiếng Việt từ output và xuất `is_anomaly`, `root_causes` có cấu trúc để đánh giá khách quan hơn.
+7. **Human-in-the-loop:** Approval Gate với PENDING/APPROVED/REJECTED/EXPIRED, kiểm tra snapshot và SHA-256 hash trước lệnh WRITE, workflow resume sau quyết định.
+8. **Truy vết:** activity event, task execution, device action log và Audit Log có chức năng tra cứu/bộ lọc.
+9. **Benchmark Engine:** CRUD scenario, preconditions, fault injection, fault verification, Ground Truth, cleanup, lưu lịch sử và liên kết run với Task/Conversation.
+10. **Evaluation:** hệ metric GOAL/RCA/REMEDIATION/SAFETY/LATENCY/INTERACTION_TURNS; v4 sử dụng Precision/Recall/F1 theo tập cặp tài nguyên–loại lỗi dựa trên NIKA 0.2.
+11. **Task Success Rate:** tổng hợp có phân loại run đủ điều kiện, chưa bắt đầu, đang chạy, lỗi setup và chưa có điểm.
+12. **Frontend:** các trang quản lý người dùng, vai trò, thiết bị, credential, chat, task, audit, benchmark và evaluation; có lịch sử/chi tiết kết quả.
+
+### 5.1.2. Kết quả kiểm tra và thử nghiệm
+
+Theo output nhóm cung cấp ngày 03/11/2026, việc build Docker image API và khởi động container thành công. Bộ pytest được chạy riêng cho bốn tệp kiểm thử Analyst/Benchmark/NIKA-style RCA cho kết quả **42/42 test PASS, 1 cảnh báo Pydantic**. Một lượt Benchmark Evaluation v4 trên giao diện cho thấy GOAL/RCA PASS, RCA F1/Precision/Recall, Localization F1, Fault Type F1 và Detection bằng 100%, thời gian workflow AI **22,40 giây**, Interaction Turns **4 tool calls**; Remediation và Safety đều NOT_APPLICABLE.
+
+Những kết quả này xác nhận logic phần mềm trong phạm vi bộ test và một đường đi thực nghiệm có thể hoàn tất, **không đủ để suy ra độ chính xác trung bình, tỷ lệ thành công chung hoặc khả năng an toàn trên nhiều cấu hình mạng**. Trong ảnh một lượt v4, phần Expected/Actual/Evidence chưa được mở rộng nên không có bằng chứng ảnh để liệt kê chính xác từng cặp TP/FP/FN của lần chạy.
+
+### 5.1.3. Đối chiếu yêu cầu trong đề cương giữa kỳ
+
+| Mục tiêu nghiên cứu | Đánh giá mức hoàn thành |
+| --- | --- |
+| Khảo sát ứng dụng LLM/Multi-Agent/Network Automation | Đã xây dựng nền tảng lý thuyết và tổng quan công trình liên quan |
+| Kiến trúc Orchestrator, Planner, Network, Analyst | Đã có mã nguồn và luồng thực thi theo module |
+| Tương tác thiết bị và lab GNS3 | Đã hỗ trợ qua NetworkTool; chưa đồng bộ graph topology |
+| Cơ chế Human-in-the-loop | Đã có Approval Gate, quyết định, timeout và kiểm tra nội dung duyệt |
+| Kịch bản có Ground Truth | Đã có Benchmark Scenario/Run, injection/verification/cleanup |
+| Đánh giá Task Success Rate | Có API tổng hợp và giao diện hiển thị với số mẫu |
+| Detection, Localization, RCA | Có bộ chấm v4 tham khảo NIKA 0.2 |
+| Latency và Interaction Turns | Có số đo lưu vào Evaluation và hiển thị trên UI |
+| Remediation Success Rate | Chưa có scorer kiểm tra kết quả sửa lỗi bởi Agent; NOT_APPLICABLE |
+| Safety score | Chưa có scorer độc lập; NOT_APPLICABLE |
+| Thực nghiệm quy mô lớn hoặc so sánh nhiều mô hình | Chưa có bảng kết quả lặp nhiều lần được xác nhận |
 
 ## 5.2. Hạn chế của đề tài
 
-- LangGraph đã điều phối luồng cấp cao nhưng chưa dùng persistent checkpointer; việc resume dựa trên business state trong PostgreSQL.
-- GNS3 API mới chỉ dùng để kiểm tra `/v2/version`, chưa đồng bộ node, link và trạng thái topology.
-- Planner không nhận đồ thị topology, telemetry liên tục hoặc cơ sở tri thức cấu hình.
-- Validation hiện chủ yếu ở mức schema, inventory, dependency và approval; chưa có parser cú pháp theo vendor, dry-run, candidate datastore, confirmed commit hoặc rollback tự động.
-- Analyst tạo nguyên nhân có khả năng nhưng chưa được grounding bằng knowledge base và chưa được đánh giá trên tập RCA có ground truth.
-- Quy trình chưa tự lặp sau phân tích và chưa phải closed-loop self-healing.
-- Nornir được triển khai nhưng lợi ích chạy song song nhiều thiết bị chưa được khai thác đầy đủ do Orchestrator xử lý mapping tuần tự.
-- Frontend còn kết hợp dữ liệu thật và mock data; một số màn hình quản trị chưa phản ánh hoàn toàn trạng thái backend.
-- Chưa có evaluator service và chưa có kết quả trong các mục thực nghiệm 4.4–4.9.
-- Sau khi tích hợp LangGraph, nhóm kiểm thử nhanh `tests/agents`, `tests/core` và `tests/test_api.py` có 20 ca đạt. Bộ kiểm thử tích hợp đầy đủ còn phụ thuộc hạ tầng và chưa được xác nhận hoàn tất trong lần lập báo cáo này.
+**Giới hạn tự động hóa.** Phần khắc phục chỉ có thể diễn ra khi operation WRITE được Planner đưa vào kế hoạch và được người dùng phê duyệt. Chưa có vòng Analyst tự lập kế hoạch sửa lại, xác minh hậu điều kiện cho mọi loại cấu hình, rollback đa thiết bị hoặc self-healing thực sự. Approval không thể bảo đảm rằng một command hợp lệ là command an toàn về ngữ nghĩa mạng.
+
+**Giới hạn quan sát.** Planner và Analyst chưa được cung cấp đầy đủ graph node–link từ GNS3 hoặc telemetry liên tục; các nhận định RCA có thể thiếu bằng chứng do phạm vi quan sát hẹp. Ground Truth của từng scenario có thể chứa lỗi gán nhãn và phải được người thiết kế lab kiểm tra.
+
+**Giới hạn đánh giá.** V4 chấm sự trùng khớp giữa submission và nhãn nguyên nhân. Đây không phải phương pháp độc lập chứng minh kết luận ngoài môi trường giả lập. Detection hiện được ghi nhận chủ yếu cho các case chủ động tiêm lỗi, chưa kiểm tra đầy đủ mạng khỏe hoặc false positive. Remediation/Safety chưa có số đo định lượng được triển khai.
+
+**Giới hạn thống kê.** TSR hiện tổng hợp cả v1–v3 theo từ khóa và v4 theo nhãn cấu trúc; không thể dùng một tỷ lệ gộp để so sánh khoa học nếu không phân nhóm theo evaluator. Các số liệu 100%, 22,40 giây và bốn tool calls mới được quan sát từ một lượt chạy do nhóm cung cấp. Chưa có thí nghiệm lặp nhiều lần, sai số/độ lệch, baseline và kiểm định thống kê.
+
+**Giới hạn công nghệ.** GNS3 API mới dùng cho kiểm tra server; công việc xử lý node/link, đảm bảo SLA, chia tải nhiều thiết bị đồng thời và kiểm thử bảo mật chuyên sâu chưa hoàn thiện. Một số frontend feature vẫn có mock/fixture, và bộ test được xác nhận không bao phủ toàn bộ repository.
 
 ## 5.3. Hướng phát triển trong tương lai
 
-Các hướng phát triển ưu tiên gồm:
+Những phần dưới đây là **đề xuất**, không được tính là chức năng đã hoàn thành:
 
-1. Xây dựng bộ kịch bản thực nghiệm có ground truth cho cấu hình, chẩn đoán, RCA và remediation; tự động ghi `task_evaluations`.
-2. Bổ sung bộ kiểm tra command theo vendor, pre-check/post-check bắt buộc, backup cấu hình, rollback và cơ chế giao dịch khi nền tảng hỗ trợ.
-3. Đồng bộ topology từ GNS3 API, biểu diễn node-link trong database và cung cấp topology tối thiểu cho Planner/Analyst.
-4. Thu thập telemetry, syslog và trạng thái giao thức; xây dựng kho bằng chứng để giảm hallucination trong RCA.
-5. Thiết kế vòng lặp có giới hạn cho phép Analyst yêu cầu thêm dữ liệu nhưng không tự mở rộng quyền ghi.
-6. Khai thác Nornir cho thực thi song song có kiểm soát, giới hạn concurrency và chính sách dừng theo miền lỗi.
-7. Hoàn thiện tích hợp frontend-backend, thay mock data bằng API và hiển thị đầy đủ approval, timeline cùng bằng chứng đánh giá.
-8. Khắc phục test double, tách unit/integration/end-to-end test và chạy pipeline kiểm thử tái lập trong CI.
-9. Mở rộng LangGraph bằng nhánh thu thập bổ sung và vòng chẩn đoán có giới hạn; chỉ bổ sung persistent checkpointer khi đã xác định rõ cơ chế đồng bộ với business state.
-10. Đánh giá bảo mật chuyên sâu: phân quyền theo phạm vi thiết bị, quản lý secret bằng secret manager, giới hạn command, chống prompt injection và kiểm thử khả năng lạm dụng approval.
+1. Tạo tập scenario chuẩn hóa có cả mạng khỏe và mạng lỗi, phân nhóm loại lỗi, lặp nhiều lần và báo cáo phân bố điểm RCA, TSR, Latency, Interaction Turns.
+2. Bổ sung Remediation Evaluator dựa trên lệnh kiểm tra trạng thái sau cấu hình, có so sánh trước/sau độc lập với kết quả cleanup của Benchmark Engine.
+3. Phát triển Safety Evaluator dựa trên approval/action log và chính sách cấm, thử nghiệm các tình huống vượt quyền hoặc command có nguy cơ cao.
+4. Đồng bộ topology từ GNS3 API, thu thập telemetry và phát triển kho tri thức bằng chứng để giảm hallucination.
+5. Nghiên cứu luồng Analyst yêu cầu thêm dữ liệu hoặc phát sinh đề xuất khắc phục với giới hạn và cơ chế rollback kiểm chứng được.
+6. Hoàn thiện CI, test tích hợp GNS3, xử lý warning Pydantic còn lại và kiểm tra bảo mật/hiệu năng.
+7. So sánh nhiều model và chiến lược hoạch định trên cùng bộ scenario, cùng evaluator_version và cùng thông số môi trường; không trộn bộ chấm cũ với v4.
+
+## 5.4. Kết luận
+
+Đề tài đã đạt được mục tiêu xây dựng nguyên mẫu Multi-Agent hỗ trợ cấu hình và chẩn đoán trong môi trường mô phỏng, với các cơ chế kiểm soát thao tác và truy vết. Việc tích hợp Benchmark Engine và bộ chấm RCA có cấu trúc theo công thức NIKA 0.2 giúp đánh giá phân tách đúng vị trí, đúng loại lỗi và đúng toàn bộ nguyên nhân, khắc phục điểm yếu của cách so khớp từ khóa.
+
+Nhóm hiện có bằng chứng kiểm thử phần mềm đạt và một lần chẩn đoán v4 thành công, song **chưa có cơ sở để công bố mức độ thành công tổng thể của Agent hay khẳng định vượt các nghiên cứu trước**. Báo cáo vì vậy tập trung làm rõ kiến trúc, những thành phần đã hiện thực và cách chấm có thể tái lập; các tiêu chí chưa đủ số liệu được trình bày đúng giới hạn.
 
 ---
 
