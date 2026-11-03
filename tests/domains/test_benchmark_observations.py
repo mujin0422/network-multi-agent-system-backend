@@ -12,7 +12,7 @@ from app.domains.evaluation.schemas import EvaluationMetricType, EvaluationResul
 from app.domains.execution.schemas import TaskDetail, TaskStatus, TaskType
 
 
-def make_evaluation(observation: BenchmarkObservation, response_time: datetime):
+def make_evaluation(observation: BenchmarkObservation, response_time: datetime, *, task_created_at: datetime | None = None):
     source = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
     scenario = BenchmarkScenario.model_validate({
         "scenario_key": "latency-test",
@@ -48,7 +48,7 @@ def make_evaluation(observation: BenchmarkObservation, response_time: datetime):
         "input_message": "Diagnose",
         "task_status": TaskStatus.SUCCESS,
         "task_type": TaskType.DIAGNOSIS,
-        "created_at": source,
+        "created_at": task_created_at or source,
     })
     response = Message.model_validate({
         "id": "mesg-response",
@@ -95,11 +95,9 @@ def test_missing_request_timestamp_does_not_break_task_based_measurement() -> No
 def test_negative_duration_is_unknown_instead_of_clamped_to_zero() -> None:
     now = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
     metrics = make_evaluation(
-        BenchmarkObservation(
-            source_message_created_at=now + timedelta(seconds=10),
-            agent_tool_calls=1,
-        ),
+        BenchmarkObservation(agent_tool_calls=1),
         now,
+        task_created_at=now + timedelta(seconds=10),
     )
     assert metrics[EvaluationMetricType.LATENCY].actual_value is None
 
