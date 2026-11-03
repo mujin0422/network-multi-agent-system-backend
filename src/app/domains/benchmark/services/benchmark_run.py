@@ -67,7 +67,12 @@ class BenchmarkRunService:
             started_at=now,
             scenario_snapshot=snapshot,
         )
-        self._runs.save(run)
+        # Record the start request atomically BEFORE any network side effect.
+        # SQL rollback cannot undo commands sent to physical network devices.
+        with audit_mutation(
+            "BENCHMARK_RUN_START", "BENCHMARK_RUN", run.id, actor_user_id=user_id
+        ):
+            self._runs.save(run)
         injection_started = False
         try:
             self._execute_checks(scenario.preconditions)
@@ -99,8 +104,8 @@ class BenchmarkRunService:
                     "completed_at": datetime.now(UTC),
                 }
             )
-        with audit_mutation("BENCHMARK_RUN_START", "BENCHMARK_RUN", run.id, actor_user_id=user_id):
-            self._runs.save(run)
+        # Runtime status is persisted separately after network execution.
+        self._runs.save(run)
         return to_public_benchmark_run(run)
 
     def bind_message(
