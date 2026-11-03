@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.domains.identity.routers.dependencies import (
     get_user_service,
@@ -26,10 +26,13 @@ async def create_user(
     payload: UserCreate,
     service: Annotated[UserService, Depends(get_user_service)],
     _: Annotated[User, Depends(require_permission("User Management", "Add"))],
+    request: Request,
 ) -> User:
     """Tạo user sau khi kiểm tra role và email không trùng."""
 
-    return service.create_user(payload)
+    created = service.create_user(payload)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 # READ — Lấy danh sách người dùng.

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
 from app.domains.benchmark.schemas import BenchmarkRun, BenchmarkStartRequest
@@ -19,8 +19,11 @@ async def start_run(
     payload: BenchmarkStartRequest,
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
+    request: Request,
 ) -> BenchmarkRun:
-    return service.start(payload.scenario_id, user.id)
+    started = service.start(payload.scenario_id, user.id)
+    request.state.audit_resource_id = started.id
+    return started
 
 
 @router.get("", response_model=list[BenchmarkRun])

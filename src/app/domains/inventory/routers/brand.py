@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.domains.inventory.routers.dependencies import get_brand_service
 from app.domains.inventory.schemas import Brand, BrandCreate, BrandUpdate
@@ -22,10 +22,13 @@ router = APIRouter()
 async def create_brand(
     payload: BrandCreate,
     service: Annotated[BrandService, Depends(get_brand_service)],
+    request: Request,
 ) -> Brand:
     """Tạo Brand mới sau khi kiểm tra tên không bị trùng."""
 
-    return service.create_brand(payload)
+    created = service.create_brand(payload)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 # READ — Lấy danh sách hãng thiết bị và các driver được hỗ trợ.

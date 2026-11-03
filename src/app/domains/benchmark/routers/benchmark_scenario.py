@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.domains.benchmark.routers.dependencies import get_benchmark_scenario_service
 from app.domains.benchmark.schemas import (
@@ -36,8 +36,11 @@ async def create_scenario(
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
     ],
     user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
+    request: Request,
 ) -> BenchmarkScenarioRecord:
-    return service.create(payload, user.id)
+    created = service.create(payload, user.id)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 @router.get("/{scenario_id}", response_model=BenchmarkScenarioRecord)

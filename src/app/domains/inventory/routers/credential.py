@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
@@ -25,8 +25,11 @@ async def create_credential(
     payload: CredentialCreate,
     service: Annotated[CredentialService, Depends(get_credential_service)],
     user: Annotated[User, Depends(require_permission("Device Management", "Add"))],
+    request: Request,
 ) -> Credential:
-    return service.create_credential(payload, user.id)
+    created = service.create_credential(payload, user.id)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 # READ — Lấy danh sách metadata Credential, không chứa password/secret.

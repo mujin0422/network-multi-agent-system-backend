@@ -4,7 +4,7 @@ from typing import Annotated
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
@@ -123,11 +123,13 @@ async def start_conversation(
         Depends(get_benchmark_run_service),
     ],
     user: Annotated[User, Depends(require_permission("Chatbot", "Add"))],
+    request: Request,
 ) -> ConversationStarted:
     """Tạo Conversation, lưu Message đầu tiên, sinh title và chạy AI workflow."""
 
     # Bước 1: Transaction ngắn tạo Conversation và USER_REQUEST đầu tiên.
     started = service.start(user.id, payload)
+    request.state.audit_resource_id = started.conversation.id
 
     if payload.benchmark_run_id is not None:
         benchmark_service.bind_message(

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.domains.identity.routers.dependencies import (
     get_access_control_service,
@@ -86,10 +86,13 @@ async def create_role(
         User,
         Depends(require_permission("Role-Based Access", "Add")),
     ],
+    request: Request,
 ) -> Role:
     """Tạo role và ghi nhận user thực hiện vào dữ liệu audit."""
 
-    return service.create_role(payload, current_user.id)
+    created = service.create_role(payload, current_user.id)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 # READ — Lấy danh sách vai trò.

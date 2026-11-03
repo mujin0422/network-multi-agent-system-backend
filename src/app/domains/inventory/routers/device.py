@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from app.domains.inventory.schemas import Device, DeviceCreate, DevicePage, DeviceUpdate
 from app.domains.inventory.routers.dependencies import get_device_service
 from app.domains.inventory.services import DeviceService
@@ -21,10 +21,13 @@ router = APIRouter()
 async def create_device(
     payload: DeviceCreate,
     service: Annotated[DeviceService, Depends(get_device_service)],
+    request: Request,
 ) -> Device:
     """Tạo device mới sau khi kiểm tra hostname và host/port không bị trùng."""
 
-    return service.create_device(payload)
+    created = service.create_device(payload)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 # READ — Lọc và lấy danh sách thiết bị theo từng trang.

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
@@ -77,8 +77,11 @@ async def create_task(
     payload: TaskCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
+    request: Request,
 ) -> Task:
-    return service.create_task(payload)
+    created = service.create_task(payload)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 @router.get("/", response_model=list[Task])
@@ -130,8 +133,11 @@ async def create_operation(
     payload: OperationCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
+    request: Request,
 ) -> Operation:
-    return service.create_operation(task_id, payload)
+    created = service.create_operation(task_id, payload)
+    request.state.audit_resource_id = created.id
+    return created
 
 
 @operations_router.get(
@@ -166,6 +172,7 @@ async def decide_operation_device_approval(
         Depends(get_benchmark_run_service),
     ],
     user: Annotated[User, Depends(require_permission("Task Management", "Approve"))],
+    request: Request,
 ) -> OperationDeviceApprovalResponse:
     """Phê duyệt hoặc từ chối một lần bằng User trong access token."""
 
@@ -173,6 +180,10 @@ async def decide_operation_device_approval(
         approval_id,
         user_id=user.id,
         decision=payload.decision,
+    )
+    request.state.audit_action = (
+        "APPROVAL_APPROVE" if payload.decision.value == "APPROVED"
+        else "APPROVAL_REJECT"
     )
     mapping = service.get_operation_device(approval.operation_device_id)
     operation = service.get_operation(mapping.operation_id)
