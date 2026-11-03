@@ -177,7 +177,10 @@ Docker bootstrap tạo schema rồi chèn reference/development seed từ
 
 ### Mở rộng Benchmark Scenarios cho GNS3
 
-Bộ seed mặc định có 10 kịch bản. Tệp
+Bộ seed mặc định có 10 kịch bản. Ngoài 17 kịch bản mở rộng, file
+`docker/postgres/seed/04_benchmark_bgp.sql` bổ sung 6 kịch bản BGP
+(2 iBGP VPNv4 và 4 eBGP CE–PE). Tổng cộng có **33 kịch bản** khi nạp đủ.
+Tệp
 `docker/postgres/seed/03_benchmark_expansion.sql` bổ sung **17 kịch bản**
 trên topology `mpls-core`: link/trunk, OSPF, MPLS, sai IP, ACL và Loopback.
 Đây là các trường hợp được biên soạn riêng theo `docs/device-configure.txt`,
@@ -192,6 +195,10 @@ docker compose up -d db
 docker compose run --rm migrate
 docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
   < docker/postgres/seed/03_benchmark_expansion.sql
+
+# Nạp 6 kịch bản BGP (iBGP PE-PE và eBGP CE-PE)
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \\
+  < docker/postgres/seed/04_benchmark_bgp.sql
 ```
 
 Lệnh SQL chạy trong transaction và dùng `ON CONFLICT (scenario_key) DO NOTHING`,

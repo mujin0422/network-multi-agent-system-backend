@@ -1,5 +1,6 @@
 """Schema dùng chung trong Benchmark domain."""
 
+from ipaddress import IPv4Address
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -38,6 +39,8 @@ class BenchmarkAction(BaseModel):
         "interface_ip_set",
         "acl_block",
         "acl_remove",
+        "bgp_neighbor_shutdown",
+        "bgp_neighbor_no_shutdown",
     ]
     interface: str | None = None
     process_id: int | None = Field(default=None, ge=1, le=65535)
@@ -51,6 +54,8 @@ class BenchmarkAction(BaseModel):
     direction: Literal["in", "out"] | None = None
     source_network: str | None = None
     source_wildcard: str | None = None
+    local_as: int | None = Field(default=None, ge=1, le=4294967295)
+    neighbor_ip: str | None = None
 
     @model_validator(mode="after")
     def validate_action_fields(self) -> "BenchmarkAction":
@@ -71,6 +76,8 @@ class BenchmarkAction(BaseModel):
                 "source_network", "source_wildcard",
             ),
             "acl_remove": ("interface", "acl_number", "direction"),
+            "bgp_neighbor_shutdown": ("local_as", "neighbor_ip"),
+            "bgp_neighbor_no_shutdown": ("local_as", "neighbor_ip"),
         }
         missing = [
             field_name
@@ -81,6 +88,13 @@ class BenchmarkAction(BaseModel):
             raise ValueError(
                 f"Action '{self.action}' thiếu tham số: {', '.join(missing)}"
             )
+
+        # A strict IPv4 address prevents arbitrary CLI fragments in a BGP neighbor.
+        if self.action in {"bgp_neighbor_shutdown", "bgp_neighbor_no_shutdown"}:
+            try:
+                IPv4Address(self.neighbor_ip)
+            except ValueError as error:
+                raise ValueError("BGP neighbor_ip phải là địa chỉ IPv4 hợp lệ") from error
         return self
 
 

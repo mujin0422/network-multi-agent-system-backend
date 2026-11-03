@@ -1,4 +1,7 @@
 import re
+
+import pytest
+from pydantic import ValidationError
 from datetime import UTC, datetime
 
 from app.domains.benchmark.schemas import (
@@ -261,3 +264,44 @@ def test_benchmark_evaluation_waits_for_final_response_after_approval() -> None:
     # evaluation for the same Task.
     service.complete_for_task(task, final_message)
     assert len(evaluations.saved) == 1
+
+
+def test_bgp_neighbor_shutdown_and_cleanup_commands() -> None:
+    disable = BenchmarkAction.model_validate({
+        "device": "PE1",
+        "action": "bgp_neighbor_shutdown",
+        "local_as": 2204,
+        "neighbor_ip": "10.2.2.2",
+    })
+    restore = disable.model_copy(update={"action": "bgp_neighbor_no_shutdown"})
+
+    assert build_benchmark_action_commands(disable) == [
+        "router bgp 2204",
+        "neighbor 10.2.2.2 shutdown",
+    ]
+    assert build_benchmark_action_commands(restore) == [
+        "router bgp 2204",
+        "no neighbor 10.2.2.2 shutdown",
+    ]
+
+
+@pytest.mark.parametrize("neighbor_ip", ["", "999.1.1.1", "example.org", "10.1.1.1\\nexit"])
+def test_bgp_neighbor_actions_reject_invalid_ipv4(neighbor_ip: str) -> None:
+    with pytest.raises(ValidationError):
+        BenchmarkAction.model_validate({
+            "device": "PE1",
+            "action": "bgp_neighbor_shutdown",
+            "local_as": 2204,
+            "neighbor_ip": neighbor_ip,
+        })
+
+
+@pytest.mark.parametrize("local_as", [0, 4294967296, None])
+def test_bgp_neighbor_actions_require_valid_autonomous_system(local_as: int | None) -> None:
+    with pytest.raises(ValidationError):
+        BenchmarkAction.model_validate({
+            "device": "PE1",
+            "action": "bgp_neighbor_no_shutdown",
+            "local_as": local_as,
+            "neighbor_ip": "10.2.2.2",
+        })
