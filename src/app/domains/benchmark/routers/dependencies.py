@@ -3,6 +3,7 @@
 from functools import lru_cache
 
 from app.core.config import get_settings
+from app.core.database import DatabaseUnitOfWork
 from app.domains.benchmark.repositories import (
     BenchmarkRunRepository,
     BenchmarkScenarioRepository,
@@ -18,7 +19,10 @@ from app.tools import NetmikoNetworkTool
 @lru_cache
 def _build_benchmark_scenario_service() -> BenchmarkScenarioService:
     settings = get_settings()
-    return BenchmarkScenarioService(BenchmarkScenarioRepository(settings.database_url))
+    return BenchmarkScenarioService(
+        BenchmarkScenarioRepository(settings.database_url),
+        uow=DatabaseUnitOfWork.from_url(settings.database_url),
+    )
 
 
 @lru_cache
@@ -41,6 +45,7 @@ def _build_benchmark_run_service() -> BenchmarkRunService:
         BenchmarkScenarioRepository(settings.database_url),
         TaskEvaluationRepository(settings.database_url),
         network_tool,
+        uow=DatabaseUnitOfWork.from_url(settings.database_url),
     )
 
 

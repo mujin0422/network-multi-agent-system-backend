@@ -2,7 +2,8 @@
 
 from datetime import UTC, datetime
 
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import (
     BenchmarkRunRepositoryProtocol,
@@ -34,12 +35,14 @@ class BenchmarkRunService:
         scenario_repository: BenchmarkScenarioRepositoryProtocol,
         evaluation_repository: TaskEvaluationRepositoryProtocol,
         network_tool: NetworkTool,
+        uow: DatabaseUnitOfWork | None = None,
     ) -> None:
         """Khởi tạo BenchmarkRunService cùng các phụ thuộc cần thiết."""
         self._runs = run_repository
         self._scenarios = scenario_repository
         self._evaluations = evaluation_repository
         self._network_tool = network_tool
+        self._uow = uow
 
     def list_runs(self, limit: int = 50) -> list[BenchmarkRun]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_runs."""
@@ -69,10 +72,19 @@ class BenchmarkRunService:
         )
         # Record the start request atomically BEFORE any network side effect.
         # SQL rollback cannot undo commands sent to physical network devices.
-        with audit_mutation(
-            "BENCHMARK_RUN_START", "BENCHMARK_RUN", run.id, actor_user_id=user_id
-        ):
-            self._runs.save(run)
+        if self._uow is None:
+            with audit_mutation(
+                "BENCHMARK_RUN_START", "BENCHMARK_RUN", run.id, actor_user_id=user_id
+            ):
+                self._runs.save(run)
+        else:
+            with self._uow.begin() as session:
+                self._runs.save_in_session(session, run)
+                record_audit_in_session(
+                    session, action="BENCHMARK_RUN_START",
+                    resource_type="BENCHMARK_RUN", resource_id=run.id,
+                    actor_user_id=user_id,
+                )
         injection_started = False
         try:
             self._execute_checks(scenario.preconditions)
@@ -202,8 +214,16 @@ class BenchmarkRunService:
                 "cleaned_at": datetime.now(UTC),
             }
         )
-        with audit_mutation("BENCHMARK_RUN_CLEANUP", "BENCHMARK_RUN", cleaned.id):
-            self._runs.save(cleaned)
+        if self._uow is None:
+            with audit_mutation("BENCHMARK_RUN_CLEANUP", "BENCHMARK_RUN", cleaned.id):
+                self._runs.save(cleaned)
+        else:
+            with self._uow.begin() as session:
+                self._runs.save_in_session(session, cleaned)
+                record_audit_in_session(
+                    session, action="BENCHMARK_RUN_CLEANUP",
+                    resource_type="BENCHMARK_RUN", resource_id=cleaned.id,
+                )
         return to_public_benchmark_run(cleaned)
 
     def _execute_checks(self, checks: list[BenchmarkCheck]) -> None:

@@ -2,7 +2,8 @@
 
 from datetime import UTC, datetime
 
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 
 from app.core.exceptions import ResourceConflictError
 from app.core.utils import IdPrefix, generate_id
@@ -16,9 +17,13 @@ from app.domains.benchmark.schemas import (
 
 
 class BenchmarkScenarioService:
-    def __init__(self, repository: BenchmarkScenarioRepositoryProtocol) -> None:
+    def __init__(
+        self, repository: BenchmarkScenarioRepositoryProtocol,
+        uow: DatabaseUnitOfWork | None = None,
+    ) -> None:
         """Khởi tạo BenchmarkScenarioService cùng các phụ thuộc cần thiết."""
         self._repository = repository
+        self._uow = uow
 
     def list(self) -> list[BenchmarkScenarioSummary]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list."""
@@ -50,8 +55,17 @@ class BenchmarkScenarioService:
             created_at=now,
             last_updated_at=now,
         )
-        with audit_mutation("BENCHMARK_SCENARIO_CREATE", "BENCHMARK_SCENARIO", record.id, actor_user_id=user_id):
-            self._repository.save(record)
+        if self._uow is None:
+            with audit_mutation("BENCHMARK_SCENARIO_CREATE", "BENCHMARK_SCENARIO", record.id, actor_user_id=user_id):
+                self._repository.save(record)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, record)
+                record_audit_in_session(
+                    session, action="BENCHMARK_SCENARIO_CREATE",
+                    resource_type="BENCHMARK_SCENARIO", resource_id=record.id,
+                    actor_user_id=user_id,
+                )
         return record
 
     def update(
@@ -67,6 +81,15 @@ class BenchmarkScenarioService:
             }
         )
         validated = BenchmarkScenarioRecord.model_validate(updated.model_dump())
-        with audit_mutation("BENCHMARK_SCENARIO_UPDATE", "BENCHMARK_SCENARIO", validated.id, actor_user_id=user_id):
-            self._repository.save(validated)
+        if self._uow is None:
+            with audit_mutation("BENCHMARK_SCENARIO_UPDATE", "BENCHMARK_SCENARIO", validated.id, actor_user_id=user_id):
+                self._repository.save(validated)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_in_session(session, validated)
+                record_audit_in_session(
+                    session, action="BENCHMARK_SCENARIO_UPDATE",
+                    resource_type="BENCHMARK_SCENARIO", resource_id=validated.id,
+                    actor_user_id=user_id,
+                )
         return validated
