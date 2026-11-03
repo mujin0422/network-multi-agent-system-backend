@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.core.database import create_session_factory
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.domains.evaluation.models import (
     TaskEvaluationMetricModel,
@@ -41,13 +42,18 @@ class TaskEvaluationRepository:
     def save(self, evaluation: TaskEvaluationDetail) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
         with self._sessions.begin() as session:
-            session.add(
-                TaskEvaluationModel(**evaluation.model_dump(exclude={"metrics"}))
-            )
-            session.add_all(
-                TaskEvaluationMetricModel(**metric.model_dump())
-                for metric in evaluation.metrics
-            )
+            self.save_in_session(session, evaluation)
+
+    @staticmethod
+    def save_in_session(session: Session, evaluation: TaskEvaluationDetail) -> None:
+        """Save evaluation and metrics inside caller-owned transaction."""
+        session.add(
+            TaskEvaluationModel(**evaluation.model_dump(exclude={"metrics"}))
+        )
+        session.add_all(
+            TaskEvaluationMetricModel(**metric.model_dump())
+            for metric in evaluation.metrics
+        )
 
     def get_by_id(self, evaluation_id: UUID) -> TaskEvaluationDetail | None:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""

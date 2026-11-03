@@ -159,18 +159,24 @@ class BenchmarkRunService:
             response,
             now,
         )
-        self._evaluations.save(evaluation)
-        self._runs.save(
-            run.model_copy(
-                update={
-                    "status": BenchmarkRunStatus.COMPLETED,
-                    "task_id": task.id,
-                    "evaluation_id": str(evaluation.id),
-                    "evaluation_result": rca_result.value,
-                    "completed_at": now,
-                }
-            )
+        completed_run = run.model_copy(
+            update={
+                "status": BenchmarkRunStatus.COMPLETED,
+                "task_id": task.id,
+                "evaluation_id": str(evaluation.id),
+                "evaluation_result": rca_result.value,
+                "completed_at": now,
+            }
         )
+        if self._uow is None:
+            # Compatibility with in-memory repositories in existing tests.
+            self._evaluations.save(evaluation)
+            self._runs.save(completed_run)
+        else:
+            # Never commit evaluation while leaving the run RUNNING, or vice versa.
+            with self._uow.begin() as session:
+                self._evaluations.save_in_session(session, evaluation)
+                self._runs.save_in_session(session, completed_run)
 
     def complete_for_task(
         self,
