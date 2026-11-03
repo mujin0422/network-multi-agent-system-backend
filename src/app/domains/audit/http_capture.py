@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 # method, FastAPI's matched route template -> action, resource, ID field
 AUDITED_ROUTES: dict[tuple[str, str], tuple[str, str, str | None]] = {
-    ("POST", "/api/v1/auth/login"): ("AUTH_LOGIN", "USER_SESSION", None),
-    ("POST", "/api/v1/auth/refresh"): ("AUTH_REFRESH", "USER_SESSION", None),
-    ("POST", "/api/v1/auth/logout"): ("AUTH_LOGOUT", "USER_SESSION", None),
+    ("POST", "/api/v1/auth/login"): ("AUTH_LOGIN", "USER", None),
+    ("POST", "/api/v1/auth/refresh"): ("AUTH_REFRESH", "USER", None),
+    ("POST", "/api/v1/auth/logout"): ("AUTH_LOGOUT", "USER", None),
     ("POST", "/api/v1/users/"): ("USER_CREATE", "USER", None),
     ("PATCH", "/api/v1/users/{user_id}"): ("USER_UPDATE", "USER", "user_id"),
     ("POST", "/api/v1/roles/"): ("ROLE_CREATE", "ROLE", None),
