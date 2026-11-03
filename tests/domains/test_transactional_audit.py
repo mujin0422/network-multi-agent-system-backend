@@ -70,3 +70,99 @@ def test_nested_audit_intent_restores_previous_context():
             assert _active_audit.get().resource_id == "role-2"
         assert _active_audit.get().resource_id == "role-1"
     assert _active_audit.get() is None
+
+
+def test_service_owned_uow_commits_business_and_audit_together(tmp_path):
+    """Explicit UoW: both records commit, and a raised error rolls back both."""
+    from app.core.database import DatabaseUnitOfWork
+    from app.domains.audit.transaction import record_audit_in_session
+
+    database_url = f"sqlite:///{tmp_path / 'service-uow.db'}"
+    sessions = create_session_factory(database_url)
+    Base.metadata.create_all(
+        sessions.kw["bind"],
+        tables=[RoleModel.__table__, AuditLogModel.__table__],
+    )
+    uow = DatabaseUnitOfWork.from_url(database_url)
+    record = Role(
+        id="role-uow-test",
+        name="Before",
+        created_at=datetime.now(UTC),
+    )
+
+    with uow.begin() as session:
+        RoleRepository.save_role_in_session(session, record)
+        record_audit_in_session(
+            session, action="ROLE_CREATE", resource_type="ROLE",
+            resource_id=record.id,
+        )
+
+    with sessions() as session:
+        assert session.get(RoleModel, record.id).name == "Before"
+        assert session.scalar(
+            select(func.count()).select_from(AuditLogModel)
+        ) == 1
+
+    with pytest.raises(RuntimeError, match="forced rollback"):
+        with uow.begin() as session:
+            RoleRepository.save_role_in_session(
+                session, record.model_copy(
+                    update={"name": "SHOULD NOT BE SAVED"}
+                )
+            )
+            record_audit_in_session(
+                session, action="ROLE_UPDATE", resource_type="ROLE",
+                resource_id=record.id,
+            )
+            raise RuntimeError("forced rollback")
+
+    with sessions() as session:
+        assert session.get(RoleModel, record.id).name == "Before"
+        assert session.scalar(
+            select(func.count()).select_from(AuditLogModel)
+        ) == 1
+
+
+def test_service_owned_uow_rolls_back_business_when_audit_insert_fails(
+    tmp_path, monkeypatch
+):
+    """A failed audit insert must not leave a successfully updated role."""
+    from app.core.database import DatabaseUnitOfWork
+    from app.domains.audit.transaction import record_audit_in_session
+
+    database_url = f"sqlite:///{tmp_path / 'failing-uow.db'}"
+    sessions = create_session_factory(database_url)
+    Base.metadata.create_all(
+        sessions.kw["bind"],
+        tables=[RoleModel.__table__, AuditLogModel.__table__],
+    )
+    uow = DatabaseUnitOfWork.from_url(database_url)
+    record = Role(id="role-fail", name="Before", created_at=datetime.now(UTC))
+    with uow.begin() as session:
+        RoleRepository.save_role_in_session(session, record)
+        record_audit_in_session(
+            session, action="ROLE_CREATE", resource_type="ROLE",
+            resource_id=record.id,
+        )
+    with sessions() as session:
+        initial_audit_id = session.scalar(select(AuditLogModel.id))
+
+    monkeypatch.setattr(
+        "app.domains.audit.services.audit_log.generate_uuid",
+        lambda: initial_audit_id,
+    )
+    with pytest.raises(IntegrityError):
+        with uow.begin() as session:
+            RoleRepository.save_role_in_session(
+                session, record.model_copy(update={"name": "MUST ROLLBACK"})
+            )
+            record_audit_in_session(
+                session, action="ROLE_UPDATE", resource_type="ROLE",
+                resource_id=record.id,
+            )
+
+    with sessions() as session:
+        assert session.get(RoleModel, record.id).name == "Before"
+        assert session.scalar(
+            select(func.count()).select_from(AuditLogModel)
+        ) == 1
