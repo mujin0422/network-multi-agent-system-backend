@@ -106,3 +106,8 @@ class TaskEvaluationSummary(TaskEvaluation):
         default_factory=dict,
         description="Số đo định lượng LATENCY (ms) và INTERACTION_TURNS (lượt gọi tool).",
     )
+    scores: dict[str, float] = Field(
+        default_factory=dict,
+        description="Versioned structured RCA F1 scores (v4), omitted for legacy evaluators.",
+    )
+
