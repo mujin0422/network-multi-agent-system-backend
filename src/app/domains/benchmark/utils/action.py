@@ -25,6 +25,14 @@ def build_benchmark_action_commands(action: BenchmarkAction) -> list[str]:
         prefix = "" if action.action == "default_route_add" else "no "
         return [f"{prefix}ip route 0.0.0.0 0.0.0.0 {action.next_hop}"]
 
+    if action.action in {"bgp_neighbor_shutdown", "bgp_neighbor_no_shutdown"}:
+        command = (
+            f"neighbor {action.neighbor_ip} shutdown"
+            if action.action == "bgp_neighbor_shutdown"
+            else f"no neighbor {action.neighbor_ip} shutdown"
+        )
+        return [f"router bgp {action.local_as}", command]
+
     if action.action == "interface_ip_set":
         return [
             f"interface {action.interface}",
