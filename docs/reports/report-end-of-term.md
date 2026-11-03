@@ -713,4 +713,81 @@ Nhóm hiện có bằng chứng kiểm thử phần mềm đạt và một lần
 
 [13] GNS3 Project, “GNS3 Architecture Documentation.” https://docs.gns3.com/docs/using-gns3/design/architecture
 
-*Ngày đối chiếu tài liệu và mã nguồn: 31/10/2026.*
+[14] Z. Wang, A. Cornacchia, A. Sacco, F. Galante, M. Canini và D. Jiang, “A Network Arena for Benchmarking AI Agents on Network Troubleshooting” (NIKA), arXiv:2512.16381, 2025. https://arxiv.org/abs/2512.16381
+
+[15] SANDS Lab, “NIKA 0.2: Scoring Implementation, RootCause Model and Scoring Tests.” https://github.com/sands-lab/nika/blob/main/src/nika/evaluator/scoring.py ; https://github.com/sands-lab/nika/blob/main/src/nika/problems/rca/models.py ; https://github.com/sands-lab/nika/blob/main/tests/nika/evaluator/test_scoring.py
+
+[16] Y. Zhou và cộng sự, “NETARENA: Dynamic Benchmarks for AI Agents in Network Automation,” ICLR, 2026. (Thông tin bibliographic theo đề cương giữa kỳ.)
+
+[17] C. Liu, X. Xie, X. Chen và Y. Cui, “NetConfArena: An Executable Benchmark for LLM Agents in Closed-Loop Network Configuration,” arXiv:2608.23179, 2026. https://arxiv.org/abs/2608.23179
+
+[18] Y. Luo và cộng sự, “OpsAgent: An Evolving Multi-agent System for Incident Management in Microservices,” arXiv:2510.24145. https://arxiv.org/abs/2510.24145
+
+---
+
+# PHỤ LỤC A. BẢNG ĐỐI CHIẾU MÃ NGUỒN ĐÃ TRIỂN KHAI
+
+| Thành phần | File/đường dẫn | Vai trò xác minh |
+| --- | --- | --- |
+| LangGraph | `src/app/agents/workflow.py` | Message graph và approval graph |
+| Planner Agent | `src/app/agents/planner/` | Sinh và validate execution plan |
+| Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/` | Điều phối Task/Operation/Approval |
+| Network Agent | `src/app/agents/network/`, `src/app/tools/network/` | Kết nối và thực thi qua Netmiko/Nornir |
+| Analyst Agent | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải kết quả, ghi diagnosis_submission |
+| Identity/RBAC | `src/app/domains/identity/` | User, session, token, roles/permissions |
+| Inventory | `src/app/domains/inventory/` | Brand, category, device, credential/provider |
+| Conversation | `src/app/domains/conversation/` | Message, conversation, title |
+| Execution | `src/app/domains/execution/` | Task, dependency, approval, activity, action log |
+| Audit | `src/app/domains/audit/` | Audit Log và bộ lọc |
+| Benchmark | `src/app/domains/benchmark/` | Scenario/Run, injection, verification, cleanup |
+| RCA scorer | `src/app/domains/benchmark/utils/structured_rca.py` | Tính precision, recall, F1 theo NIKA 0.2 |
+| Evaluation | `src/app/domains/evaluation/` | Metric, result/evidence và API lịch sử |
+| TSR/Latency | `src/app/domains/benchmark/utils/summary.py`, `active_runtime.py` | Tổng hợp run và thời gian workflow |
+| Migration | `migrations/versions/`, `scripts/migrate.py` | Kiểm soát schema theo version |
+| Frontend | Repository `network-multi-agent-system-frontend/src/features/` | UI Chat, Tasks, Devices, Benchmark, Evaluation |
+
+# PHỤ LỤC B. API VÀ QUY TRÌNH TRUY VẾT
+
+Các endpoint tiêu biểu dùng prefix `/api/v1`:
+
+| Mục đích | Đường dẫn |
+| --- | --- |
+| Bắt đầu Conversation | `POST /conversations/messages` |
+| Xem message trong hội thoại | `GET /conversations/{conversation_id}/messages` |
+| Chi tiết kế hoạch và log Task | `GET /tasks/{task_id}/records` |
+| Timeline Task | `GET /tasks/{task_id}/activity-events` |
+| Scenario management | `GET/POST /benchmarks/scenarios` |
+| Bắt đầu Benchmark Run | `POST /benchmarks/runs` |
+| Thống kê TSR toàn bộ lịch sử | `GET /benchmarks/runs/summary` |
+| Cleanup một run | `POST /benchmarks/runs/{run_id}/cleanup` |
+| Xem Evaluation | `GET /evaluations` |
+| Xem metric từng Task | `GET /evaluations/tasks/{task_id}` |
+| Tra cứu hệ thống Audit Log | `GET /audit-logs/` |
+
+Quan hệ quan trọng khi đọc Evidence:
+
+```text
+BenchmarkScenario (version + Ground Truth)
+   → BenchmarkRun (scenario_snapshot)
+   → Conversation / USER_REQUEST Message
+   → Task / TaskActivityEvent (diagnosis_submission)
+   → TaskEvaluation (evaluator_version)
+   → TaskEvaluationMetric (expected_value / actual_value / evidence)
+   → Evaluation UI và TSR summary
+```
+
+Trình tự này cho phép đối chiếu dự đoán với nhãn kịch bản và truy xem Agent đã sử dụng lệnh nào. Khi đưa dữ liệu vào báo cáo hoặc phụ lục không xuất password, token, secret, mã khóa hay thông tin xác thực thiết bị.
+
+# PHỤ LỤC C. NHẬT KÝ XÁC NHẬN KẾT QUẢ
+
+**C.1. Kiểm thử được xác nhận (03/11/2026).** Nhóm cung cấp output `pytest` với bốn tệp: `tests/domains/test_nika_style_rca.py`, `tests/domains/test_benchmark_observations.py`, `tests/domains/test_benchmark_service.py`, `tests/agents/test_analyst_agent.py`. Kết quả: **42 collected, 42 passed, 1 warning, 1.86 s**. Đây là bốn bộ test được chọn, không phải toàn bộ test suite.
+
+**C.2. Lượt Benchmark v4.** Giao diện Evaluation nhóm cung cấp hiển thị `db-benchmark-v4`, GOAL/RCA PASS, RCA F1/Precision/Recall và Localization/Fault Type F1/Detection 100%, Latency workflow 22,40 s, Interaction Turns 4. Các mục expected/actual/evidence chưa mở rộng nên không kết luận thêm thông tin không nhìn thấy.
+
+**C.3. Phiên bản và thuật ngữ.** v1–v3 chấm GOAL/RCA từ khóa; v4 chấm nhãn có cấu trúc. v2 Latency đo end-to-end gồm chờ phê duyệt; v3–v4 đo active workflow time. Chỉ số `rca_accuracy` trong triển khai này là alias của Recall. `Interaction Turns` là số lượt Agent gọi tool, không phải số lần người dùng nhắn tin.
+
+**C.4. Trạng thái chưa chấm.** `Remediation` và `Safety` trong v4 = NOT_APPLICABLE. Điều này không đồng nghĩa Agent an toàn tuyệt đối, không đồng nghĩa Agent đã sửa lỗi thành công và cũng không phải giá trị 0%/100%.
+
+---
+
+*Ngày đối chiếu đề cương, mã nguồn và bằng chứng nhóm cung cấp: 03/11/2026.*
