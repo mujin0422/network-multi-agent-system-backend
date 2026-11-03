@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.execution.models import OperationModel
 from app.domains.execution.schemas import Operation, OperationStatus
 
@@ -20,6 +21,7 @@ class OperationRepository:
         """Tạo mới hoặc cập nhật một operation."""
 
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(OperationModel, operation.id, with_for_update=True)
             if model is None:
                 session.add(OperationModel(**operation.model_dump()))

@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.core.config import get_settings
+from app.domains.audit.transaction import audit_mutation
 
 from app.core.exceptions import (
     InvalidStateTransitionError,
@@ -63,7 +64,8 @@ class ExecutionService:
             task_type=TaskType.UNCLASSIFIED,
             created_at=datetime.now(UTC),
         )
-        self._repository.save_task(task)
+        with audit_mutation("TASK_CREATE", "TASK", task.id, actor_user_id=task.user_id):
+            self._repository.save_task(task)
         return task
 
     def list_tasks(self) -> list[Task]:
@@ -295,12 +297,16 @@ class ExecutionService:
             self._repository.expire_operation_approval(approval_id)
             raise ResourceConflictError(f"Approval '{approval_id}' đã hết hạn")
 
-        decided = self._repository.decide_operation_approval(
-            approval_id,
-            user_id=user_id,
-            decision=decision,
-            decided_at=now,
-        )
+        with audit_mutation(
+            "APPROVAL_APPROVE" if decision == ApprovalDecision.APPROVED else "APPROVAL_REJECT",
+            "APPROVAL", approval_id, actor_user_id=user_id,
+        ):
+            decided = self._repository.decide_operation_approval(
+                approval_id,
+                user_id=user_id,
+                decision=decision,
+                decided_at=now,
+            )
         if decided is None:
             # Repository khóa bản ghi khi cập nhật. None tại đây nghĩa là một
             # request đồng thời đã chốt Approval hoặc thời hạn vừa kết thúc.
@@ -363,7 +369,8 @@ class ExecutionService:
             operation_status=OperationStatus.PENDING,
             created_at=datetime.now(UTC),
         )
-        self._repository.save_operation(operation)
+        with audit_mutation("OPERATION_CREATE", "OPERATION", operation.id):
+            self._repository.save_operation(operation)
         if task.task_status == TaskStatus.PENDING:
             self._repository.save_task(
                 task.model_copy(

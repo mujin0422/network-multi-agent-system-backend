@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.execution.models import (
     OperationDeviceApprovalModel,
     TaskOperationDeviceModel,
@@ -129,6 +130,7 @@ class OperationDeviceApprovalRepository:
             approval_model.approval_status = ApprovalStatus(decision.value)
             approval_model.decided_by = user_id
             approval_model.decided_at = decided_at
+            append_audit_in_session(session)
 
             if decision == ApprovalDecision.REJECTED:
                 mapping = session.get(

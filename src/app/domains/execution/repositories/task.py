@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.execution.models import TaskModel
 from app.domains.execution.schemas import Task, TaskStatus
 
@@ -21,6 +22,7 @@ class TaskRepository:
 
         with self._sessions.begin() as session:
             self.save_in_session(session, task)
+            append_audit_in_session(session)
 
     @staticmethod
     def save_in_session(session: Any, task: Task) -> None:
