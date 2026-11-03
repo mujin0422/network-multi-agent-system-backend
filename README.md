@@ -175,6 +175,39 @@ AI runtime, activity timeline, operation-device approval và evaluation/benchmar
 Docker bootstrap tạo schema rồi chèn reference/development seed từ
 `02_seed.sql.template`. Init script chỉ chạy khi PostgreSQL volume được tạo lần đầu.
 
+### Mở rộng Benchmark Scenarios cho GNS3
+
+Bộ seed mặc định có 10 kịch bản. Tệp
+`docker/postgres/seed/03_benchmark_expansion.sql` bổ sung **17 kịch bản**
+trên topology `mpls-core`: link/trunk, OSPF, MPLS, sai IP, ACL và Loopback.
+Đây là các trường hợp được biên soạn riêng theo `docs/device-configure.txt`,
+**không phải bản sao/import từ NIKA**.
+
+- **Database mới:** Docker Compose tự nạp thêm tệp SQL này sau `02_seed.sh`
+  khi PostgreSQL khởi tạo volume lần đầu.
+- **Database đang sử dụng:** không xóa volume và không sửa migration. Chạy:
+
+```bash
+docker compose up -d db
+docker compose run --rm migrate
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+  < docker/postgres/seed/03_benchmark_expansion.sql
+```
+
+Lệnh SQL chạy trong transaction và dùng `ON CONFLICT (scenario_key) DO NOTHING`,
+nên chạy lại không thêm bản ghi trùng hoặc ghi đè những kịch bản đã chỉnh sửa.
+Các scenario mới chỉ được **lưu vào database**, không tự chạy hoặc thay đổi
+cấu hình thiết bị khi seed.
+
+**Trước khi chạy từng benchmark thật:** đối chiếu hostname, interface,
+trạng thái ban đầu và đường kết nối với lab đang mở; để Preconditions từ chối
+kịch bản khi thiết bị không đúng cấu hình. Luôn kiểm tra Cleanup sau mỗi lần chạy;
+các cặp lệnh khôi phục giả định lab đúng cấu hình mẫu. Không chạy nhiều lỗi đồng
+thời trên cùng topology. Các bài ACL sử dụng số 102/103 và chỉ nên chạy khi hai
+ACL đó chưa được dùng bởi cấu hình khác.
+
+Danh sách và lưu ý từng nhóm lỗi: `docker/postgres/seed/README.md`.
+
 ### Initial migration
 
 Không xóa volume chỉ để nhận schema mới. Chạy migration có version:
