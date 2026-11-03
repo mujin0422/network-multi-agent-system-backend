@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.domains.audit.routers.dependencies import get_audit_log_service
+from app.domains.audit.transaction import set_request_audit_actor, reset_request_audit_actor
 from app.domains.audit.schemas import (
     AuditActorType,
     AuditEventStatus,
@@ -78,6 +79,11 @@ AUDITED_ROUTES: dict[tuple[str, str], tuple[str, str, str | None]] = {
 }
 
 
+# Successful mutations in this set are written inside the business transaction.
+# HTTP middleware is retained only for failed/denied requests, or legacy actions.
+TRANSACTIONAL_ACTIONS = {'USER_CREATE','USER_UPDATE','ROLE_CREATE','ROLE_UPDATE','ROLE_PERMISSIONS_REPLACE','BRAND_CREATE','BRAND_UPDATE','DEVICE_CREATE','DEVICE_UPDATE','CREDENTIAL_CREATE','CREDENTIAL_UPDATE','TASK_CREATE','OPERATION_CREATE','APPROVAL_DECISION','BENCHMARK_SCENARIO_CREATE','BENCHMARK_SCENARIO_UPDATE','BENCHMARK_RUN_START','BENCHMARK_RUN_CLEANUP'}
+
+
 def _request_uuid(raw: str | None) -> UUID | None:
     if not raw:
         return None
@@ -112,13 +118,28 @@ async def _optional_actor(request: Request):
 
 class AuditCaptureMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
+        # A verified principal is shared with the service via a request-local
+        # ContextVar; never derive actor identity from a user-supplied payload.
+        actor = await _optional_actor(request) if request.method in {
+            "POST", "PUT", "PATCH", "DELETE",
+        } else None
+        token = (
+            set_request_audit_actor(actor.id, actor.full_name)
+            if actor else None
+        )
+        if actor:
+            request.state.audit_actor = actor
         try:
-            response = await call_next(request)
-        except Exception:
-            await self._record(request, 500)
-            raise
-        await self._record(request, response.status_code)
-        return response
+            try:
+                response = await call_next(request)
+            except Exception:
+                await self._record(request, 500)
+                raise
+            await self._record(request, response.status_code)
+            return response
+        finally:
+            if token is not None:
+                reset_request_audit_actor(token)
 
     async def _record(self, request: Request, status_code: int) -> None:
         route = request.scope.get("route")
@@ -129,6 +150,9 @@ class AuditCaptureMiddleware(BaseHTTPMiddleware):
         if rule is None:
             return
         action, resource_type, path_field = rule
+        if 200 <= status_code < 300 and action in TRANSACTIONAL_ACTIONS:
+            # Already committed (or rolled back) atomically by its repository.
+            return
         if status_code in (401, 403):
             outcome = AuditEventStatus.DENIED
         elif 200 <= status_code < 300:

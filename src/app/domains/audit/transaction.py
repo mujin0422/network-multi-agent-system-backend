@@ -6,7 +6,7 @@ No ambient request body, token, credential or command data is captured.
 """
 
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Iterator
@@ -30,6 +30,17 @@ class AuditIntent:
 _active_audit: ContextVar[AuditIntent | None] = ContextVar(
     "active_business_audit", default=None
 )
+_request_actor: ContextVar[tuple[str, str] | None] = ContextVar(
+    "authenticated_audit_actor", default=None
+)
+
+
+def set_request_audit_actor(user_id: str, display_name: str) -> Token:
+    return _request_actor.set((user_id, display_name))
+
+
+def reset_request_audit_actor(token: Token) -> None:
+    _request_actor.reset(token)
 
 
 @contextmanager
@@ -42,12 +53,13 @@ def audit_mutation(
     actor_display_name: str | None = None,
 ) -> Iterator[None]:
     """Service declares an action; repository persists it in its own transaction."""
+    verified = _request_actor.get()
     intent = AuditIntent(
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
-        actor_user_id=actor_user_id,
-        actor_display_name=actor_display_name,
+        actor_user_id=verified[0] if verified else actor_user_id,
+        actor_display_name=verified[1] if verified else actor_display_name,
     )
     token = _active_audit.set(intent)
     try:
