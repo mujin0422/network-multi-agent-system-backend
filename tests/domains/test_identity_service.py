@@ -29,7 +29,7 @@ from app.domains.identity.services import AccessControlService, IdentityService
 from app.domains.identity.utils import hash_password
 
 
-class MemoryIdentityRepository:
+class MemoryIdentityStore:
     def __init__(self) -> None:
         now = datetime.now(UTC)
         self.user = UserRecord(
@@ -41,13 +41,13 @@ class MemoryIdentityRepository:
         self.sessions = {}
         self.permissions = {("Device Management", "View")}
 
-    def get_user_by_email(self, email):
+    def get_by_email(self, email):
         return self.user if email == self.user.email else None
 
-    def get_user_by_id(self, user_id):
+    def get_by_id(self, user_id):
         return User.model_validate(self.user.model_dump()) if user_id == self.user.id else None
 
-    def get_user_record_by_id(self, user_id):
+    def get_record_by_id(self, user_id):
         return self.user if user_id == self.user.id else None
 
     def get_role_by_id(self, role_id):
@@ -59,7 +59,7 @@ class MemoryIdentityRepository:
     def save_session(self, session):
         self.sessions[session.id] = session
 
-    def get_session_by_token_hash(self, token_hash):
+    def get_by_token_hash(self, token_hash):
         return next((s for s in self.sessions.values() if s.refresh_token_hash == token_hash), None)
 
     def revoke_session(self, session_id, revoked_at):
@@ -70,7 +70,7 @@ class MemoryIdentityRepository:
         s = self.sessions.get(session_id)
         return bool(s and not s.revoked_at and s.expires_at > datetime.now(UTC))
 
-    def get_active_session_by_id(self, session_id):
+    def get_active_by_id(self, session_id):
         return self.sessions.get(session_id) if self.get_is_session_active(session_id) else None
 
     def rotate_session(self, session_id, revoked_at, replacement):
@@ -86,9 +86,9 @@ class MemoryIdentityRepository:
 
 @pytest.fixture
 def identity():
-    repo = MemoryIdentityRepository()
+    repo = MemoryIdentityStore()
     settings = Settings(auth_jwt_secret="unit-test-secret", auth_access_token_minutes=15)
-    return IdentityService(repo, settings), repo
+    return IdentityService(repo, repo, repo, settings), repo
 
 
 def test_login_authenticate_refresh_and_logout(identity):
@@ -185,7 +185,7 @@ class MemoryAccessControlRepository:
             ]
         }
 
-    def get_role_by_id(self, role_id):
+    def get_by_id(self, role_id):
         return self.roles.get(role_id)
 
     def get_all_actions(self):
@@ -197,7 +197,7 @@ class MemoryAccessControlRepository:
     def get_all_permissions(self):
         return [Permission(id="perm-view", function_id="func-device", action_id="act-view")]
 
-    def get_all_role_permissions_by_role_id(self, role_id):
+    def get_all_by_role_id(self, role_id):
         return self.role_permissions.get(role_id, [])
 
     def replace_role_permissions(self, role_id, permission_ids):
@@ -207,7 +207,8 @@ class MemoryAccessControlRepository:
 
 
 def test_access_control_catalog_and_role_permission_replacement() -> None:
-    service = AccessControlService(MemoryAccessControlRepository())
+    repository = MemoryAccessControlRepository()
+    service = AccessControlService(repository, repository)
 
     catalog = service.get_catalog()
     rows = service.replace_role_permissions("role-operator", [])
@@ -217,7 +218,8 @@ def test_access_control_catalog_and_role_permission_replacement() -> None:
 
 
 def test_access_control_rejects_unknown_permission_and_super_admin_changes() -> None:
-    service = AccessControlService(MemoryAccessControlRepository())
+    repository = MemoryAccessControlRepository()
+    service = AccessControlService(repository, repository)
 
     with pytest.raises(ResourceNotFoundError):
         service.replace_role_permissions("role-operator", ["perm-unknown"])

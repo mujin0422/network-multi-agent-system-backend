@@ -17,9 +17,7 @@ class OperationModel(Base):
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"))
     operation_intent: Mapped[str] = mapped_column(String(100))
     display_order: Mapped[int] = mapped_column(Integer)
-    operation_status: Mapped[OperationStatus] = mapped_column(
-        Enum(OperationStatus, name="operation_status")
-    )
+    operation_status: Mapped[OperationStatus] = mapped_column(Enum(OperationStatus, name="operation_status"))
     operation_parameters: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

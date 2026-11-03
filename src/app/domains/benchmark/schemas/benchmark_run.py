@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.domains.benchmark.schemas.benchmark_scenario import BenchmarkScenario
 
@@ -35,6 +35,13 @@ class BenchmarkRun(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     cleaned_at: datetime | None = None
+
+    @field_validator("evaluation_id", mode="before")
+    @classmethod
+    def normalize_evaluation_id(cls, value: object) -> object:
+        """Chuẩn hóa UUID từ ORM thành chuỗi dùng trong API."""
+
+        return str(value) if value is not None else None
 
 
 class BenchmarkRunRecord(BenchmarkRun):

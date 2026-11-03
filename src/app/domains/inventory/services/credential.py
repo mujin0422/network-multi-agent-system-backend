@@ -13,6 +13,8 @@ class CredentialService:
     """Quản lý Credential mà không trả password hoặc secret ra ngoài."""
 
     def __init__(self, repository: CredentialRepository) -> None:
+        """Khởi tạo service cùng Credential repository."""
+
         self._repository = repository
 
     # =============================================================================

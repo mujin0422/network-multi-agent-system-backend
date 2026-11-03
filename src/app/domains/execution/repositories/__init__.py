@@ -3,7 +3,7 @@
 from app.domains.execution.repositories.device_action_log import (
     DeviceActionLogRepository,
 )
-from app.domains.execution.repositories.unit_of_work import ExecutionRepository
+from app.domains.execution.repositories.approval_timeout import ApprovalTimeoutRepository
 from app.domains.execution.repositories.operation import OperationRepository
 from app.domains.execution.repositories.operation_dependency import (
     OperationDependencyRepository,
@@ -16,7 +16,7 @@ from app.domains.execution.repositories.task_execution import TaskExecutionRepos
 
 __all__ = [
     "DeviceActionLogRepository",
-    "ExecutionRepository",
+    "ApprovalTimeoutRepository",
     "OperationDependencyRepository",
     "OperationDeviceRepository",
     "OperationDeviceApprovalRepository",

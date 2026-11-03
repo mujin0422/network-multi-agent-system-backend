@@ -11,21 +11,20 @@ from app.domains.audit.schemas import AuditEventStatus, AuditLog
 
 
 class AuditLogRepository:
-    """Đọc và ghi append-only đối với bảng audit_logs."""
 
     def __init__(self, database_url: str) -> None:
         """Khởi tạo AuditLogRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
+
     def save(self, audit_log: AuditLog) -> None:
         """Chèn một bản ghi mới; repository không cung cấp update hoặc delete."""
-
         with self._sessions.begin() as session:
             session.add(AuditLogModel(**audit_log.model_dump()))
 
+
     def get_by_id(self, audit_log_id: UUID) -> AuditLog | None:
         """Lấy một audit log theo UUID."""
-
         with self._sessions() as session:
             model = session.get(AuditLogModel, audit_log_id)
             return (
@@ -33,6 +32,7 @@ class AuditLogRepository:
                 if model is not None
                 else None
             )
+
 
     def get_all(
         self,
@@ -47,7 +47,6 @@ class AuditLogRepository:
         limit: int = 100,
     ) -> list[AuditLog]:
         """Lọc audit log và trả dữ liệu mới nhất trước."""
-
         statement: Select = select(AuditLogModel)
         if actor_user_id is not None:
             statement = statement.where(

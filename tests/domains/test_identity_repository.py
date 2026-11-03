@@ -16,7 +16,12 @@ from app.domains.identity.models import (
     UserModel,
     UserSessionModel,
 )
-from app.domains.identity.repositories import IdentityRepository
+from app.domains.identity.repositories import (
+    RolePermissionRepository,
+    RoleRepository,
+    UserRepository,
+    UserSessionRepository,
+)
 from app.domains.identity.schemas import Role, UserRecord, UserSessionRecord, UserStatus
 
 
@@ -34,10 +39,13 @@ def identity_database(tmp_path):
         UserSessionModel.__table__,
     ]
     Base.metadata.create_all(sessions.kw["bind"], tables=tables)
-    repository = IdentityRepository(database_url)
+    users = UserRepository(database_url)
+    roles = RoleRepository(database_url)
+    permissions = RolePermissionRepository(database_url)
+    sessions_repository = UserSessionRepository(database_url)
     now = datetime.now(UTC)
-    repository.save_role(Role(id="role-test", name="Admin", created_at=now))
-    repository.save_user(
+    roles.save_role(Role(id="role-test", name="Admin", created_at=now))
+    users.save_user(
         UserRecord(
             id="user-test",
             role_id="role-test",
@@ -48,32 +56,32 @@ def identity_database(tmp_path):
             created_at=now,
         )
     )
-    return repository, sessions
+    return users, roles, permissions, sessions_repository, sessions
 
 
 def test_user_and_role_queries_preserve_password_privacy(identity_database):
-    repository, _ = identity_database
+    users, roles, _, _, _ = identity_database
 
-    assert repository.get_role_by_name("ADMIN").id == "role-test"
-    assert len(repository.get_all_roles()) == 1
-    assert repository.get_user_by_email("TEST@EXAMPLE.COM").password_hash == (
+    assert roles.get_by_name("ADMIN").id == "role-test"
+    assert len(roles.get_all()) == 1
+    assert users.get_by_email("TEST@EXAMPLE.COM").password_hash == (
         "test-password-hash"
     )
-    assert "password_hash" not in repository.get_user_by_id("user-test").model_dump()
-    assert "password_hash" not in repository.get_all_users()[0].model_dump()
+    assert "password_hash" not in users.get_by_id("user-test").model_dump()
+    assert "password_hash" not in users.get_all()[0].model_dump()
 
-    user = repository.get_user_record_by_id("user-test")
-    repository.save_user(user.model_copy(update={"full_name": "Updated User"}))
-    repository.update_login("user-test", datetime.now(UTC))
-    assert repository.get_user_by_id("user-test").full_name == "Updated User"
-    assert repository.get_user_by_id("user-test").last_login_at is not None
-    role = repository.get_role_by_id("role-test")
-    repository.save_role(role.model_copy(update={"name": "Operator"}))
-    assert repository.get_role_by_name("operator").id == role.id
+    user = users.get_record_by_id("user-test")
+    users.save_user(user.model_copy(update={"full_name": "Updated User"}))
+    users.update_login("user-test", datetime.now(UTC))
+    assert users.get_by_id("user-test").full_name == "Updated User"
+    assert users.get_by_id("user-test").last_login_at is not None
+    role = roles.get_by_id("role-test")
+    roles.save_role(role.model_copy(update={"name": "Operator"}))
+    assert roles.get_by_name("operator").id == role.id
 
 
 def test_role_permissions_remain_scoped_to_role(identity_database):
-    repository, sessions = identity_database
+    _, _, permissions, _, sessions = identity_database
     with sessions.begin() as session:
         session.add(ManagementFunctionModel(id="func-test", name="Device Management"))
         session.add(ActionModel(id="act-test", name="View"))
@@ -86,12 +94,12 @@ def test_role_permissions_remain_scoped_to_role(identity_database):
         session.flush()
         session.add(RolePermissionModel(role_id="role-test", permission_id="perm-test"))
 
-    assert repository.get_all_permission_pairs_by_role_id("role-test") == {("Device Management", "View")}
-    assert repository.get_all_permission_pairs_by_role_id("other-role") == set()
+    assert permissions.get_all_permission_pairs_by_role_id("role-test") == {("Device Management", "View")}
+    assert permissions.get_all_permission_pairs_by_role_id("other-role") == set()
 
 
 def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_database):
-    repository, _ = identity_database
+    _, _, _, repository, _ = identity_database
     now = datetime.now(UTC)
     original = UserSessionRecord(
         id=uuid4(),
@@ -101,20 +109,20 @@ def test_session_rotation_is_atomic_and_cannot_reuse_revoked_session(identity_da
         expires_at=now + timedelta(days=1),
     )
     repository.save_session(original)
-    assert repository.get_session_by_token_hash("original-hash").id == original.id
+    assert repository.get_by_token_hash("original-hash").id == original.id
 
     # Trùng hash làm INSERT thất bại; UPDATE thu hồi phiên cũ phải rollback.
     invalid = original.model_copy(update={"id": uuid4()})
     with pytest.raises(IntegrityError):
         repository.rotate_session(original.id, now, invalid)
-    assert repository.get_is_session_active(original.id)
+    assert repository.get_is_active(original.id)
 
     replacement = original.model_copy(
         update={"id": uuid4(), "refresh_token_hash": "replacement-hash"}
     )
     assert repository.rotate_session(original.id, now, replacement)
-    assert repository.get_active_session_by_id(original.id) is None
-    assert repository.get_is_session_active(replacement.id)
+    assert repository.get_active_by_id(original.id) is None
+    assert repository.get_is_active(replacement.id)
     assert not repository.rotate_session(original.id, now, replacement)
     repository.revoke_session(replacement.id, now)
-    assert not repository.get_is_session_active(replacement.id)
+    assert not repository.get_is_active(replacement.id)

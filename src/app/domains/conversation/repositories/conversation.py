@@ -8,17 +8,14 @@ from app.domains.conversation.schemas import Conversation, Message
 
 
 class ConversationRepository:
-    """Persistence cho Conversation và transaction khởi tạo Message đầu tiên."""
 
     def __init__(self, database_url: str) -> None:
-        # Session factory tạo session mới cho từng thao tác và không giữ kết nối database như state lâu dài bên trong repository.
         """Khởi tạo ConversationRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
 
     def save_conversation(self, conversation: Conversation) -> None:
         """Tạo mới hoặc cập nhật conversation theo primary key."""
-
         values = conversation.model_dump()
         with self._sessions.begin() as session:
             model = session.get(ConversationModel, conversation.id)
@@ -31,13 +28,9 @@ class ConversationRepository:
             model.title = conversation.title
             model.last_updated_at = conversation.last_updated_at
 
-    def create_with_first_message(
-        self,
-        conversation: Conversation,
-        message: Message,
-    ) -> None:
-        """Tạo Conversation và USER_REQUEST đầu tiên trong cùng transaction."""
 
+    def create_with_first_message(self, conversation: Conversation, message: Message,) -> None:
+        """Tạo Conversation và USER_REQUEST đầu tiên trong cùng transaction."""
         with self._sessions.begin() as session:
             session.add(ConversationModel(**conversation.model_dump()))
             session.add(MessageModel(**message.model_dump()))
@@ -45,7 +38,6 @@ class ConversationRepository:
 
     def get_by_id(self, conversation_id: str) -> Conversation | None:
         """Lấy một conversation; trả None để service quyết định lỗi nghiệp vụ."""
-
         with self._sessions() as session:
             model = session.get(ConversationModel, conversation_id)
             return Conversation.model_validate(model, from_attributes=True) if model else None
@@ -53,7 +45,6 @@ class ConversationRepository:
 
     def get_all(self, user_id: str | None = None) -> list[Conversation]:
         """Lấy toàn bộ conversation hoặc chỉ conversation của một user."""
-
         statement = select(ConversationModel)
         if user_id is not None:
             statement = statement.where(ConversationModel.user_id == user_id)

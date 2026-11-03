@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domains.benchmark.schemas.common import (
     BenchmarkAction,
@@ -51,6 +51,29 @@ class BenchmarkScenarioRecord(BenchmarkScenario):
     last_updated_by: str | None = None
     created_at: datetime
     last_updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def merge_definition(cls, value: object) -> object:
+        """Trải definition JSONB của ORM thành các trường scenario."""
+
+        if isinstance(value, dict) or not hasattr(value, "definition"):
+            return value
+        return {
+            "id": value.id,
+            "scenario_key": value.scenario_key,
+            "version": value.version,
+            "name": value.name,
+            "description": value.description,
+            "topology": value.topology,
+            "initial_message": value.initial_message,
+            **value.definition,
+            "is_active": value.is_active,
+            "created_by": value.created_by,
+            "last_updated_by": value.last_updated_by,
+            "created_at": value.created_at,
+            "last_updated_at": value.last_updated_at,
+        }
 
 
 class BenchmarkScenarioUpdate(BaseModel):

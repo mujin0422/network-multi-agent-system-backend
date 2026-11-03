@@ -10,15 +10,14 @@ from app.domains.inventory.schemas import Category
 
 
 class CategoryRepository:
-    """Đọc loại thiết bị từ bảng ``categories``."""
 
     def __init__(self, database_url: str) -> None:
         """Khởi tạo CategoryRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
+
     def get_all(self) -> list[Category]:
         """Trả toàn bộ Category từ database."""
-
         statement = select(CategoryModel)
         with self._sessions() as session:
             models = session.scalars(statement).all()

@@ -52,8 +52,11 @@ _TIMEOUT_REASON = "APPROVAL_TIMEOUT"
 
 
 class ApprovalTimeoutRepository:
+
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo repository xử lý approval quá hạn."""
         self._sessions = create_session_factory(database_url)
+
 
     def expire_due_approvals(
         self,

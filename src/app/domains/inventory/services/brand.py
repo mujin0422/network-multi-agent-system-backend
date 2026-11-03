@@ -11,6 +11,8 @@ class BrandService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới hãng thiết bị."""
 
     def __init__(self, repository: BrandRepository) -> None:
+        """Khởi tạo service cùng Brand repository."""
+
         self._repository = repository
 
     # =============================================================================

@@ -98,9 +98,8 @@ một file `status.py` riêng.
 
 ### `repositories/`
 
-`IdentityRepositoryProtocol` tổng hợp contract của các repository con.
-`IdentityRepository` là facade chuyển tiếp, giữ nguyên giao diện các service
-đang sử dụng; không chứa query ORM.
+Mỗi bảng có repository riêng. Service chỉ nhận những repository cần cho use case,
+không dùng facade tổng hợp hoặc repository protocol trung gian.
 
 - `user.py`: query/lưu user và cập nhật lần đăng nhập gần nhất.
 - `role.py`: query/lưu role.
@@ -186,11 +185,11 @@ Client
 Auth Router
   ↓
 IdentityService
-  ├── IdentityRepository → đọc user/password hash
+  ├── UserRepository → đọc user/password hash
   ├── kiểm tra trạng thái UserStatus.ACTIVE
   ├── kiểm tra password
   ├── tạo access token + refresh token
-  └── IdentityRepository → lưu UserSessionRecord
+  └── UserSessionRepository → lưu UserSessionRecord
 ```
 
 Access token chứa:
@@ -247,9 +246,7 @@ Cho phép request hoặc trả lỗi authorization
 Luồng hợp lệ trong Identity:
 
 ```text
-Router → Service → IdentityRepository contract
-                         ↓
-             IdentityRepository → ORM Model → Database
+Router → Service → Repository theo bảng → ORM Model → Database
 ```
 
 Các cách gọi bị cấm:
@@ -263,7 +260,7 @@ Schema     ─X→ Database
 
 Domain khác cần kiểm tra người dùng hoặc quyền phải sử dụng public service hoặc
 FastAPI dependency của Identity, không truy cập trực tiếp `UserModel`,
-`RoleModel` hoặc `IdentityRepository`.
+`RoleModel` hoặc repository nội bộ của domain.
 
 ## Quy tắc bảo mật
 

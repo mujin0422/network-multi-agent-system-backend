@@ -13,6 +13,8 @@ class AuditLogService:
     """Cung cấp thao tác append nội bộ và truy vấn audit log chỉ đọc."""
 
     def __init__(self, repository: AuditLogRepository) -> None:
+        """Khởi tạo service cùng repository audit log."""
+
         self._repository = repository
 
     def record(self, payload: AuditLogCreate) -> AuditLog:

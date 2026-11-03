@@ -4,38 +4,25 @@ from datetime import datetime
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
-from app.domains.execution.models import (
-    OperationDeviceApprovalModel,
-    TaskOperationDeviceModel,
-)
-from app.domains.execution.schemas import (
-    ApprovalDecision,
-    ApprovalStatus,
-    OperationDeviceApproval,
-    OperationDeviceStatus,
-)
+from app.domains.execution.models import OperationDeviceApprovalModel, TaskOperationDeviceModel
+from app.domains.execution.schemas import ApprovalDecision, ApprovalStatus, OperationDeviceApproval, OperationDeviceStatus
 
 
 class OperationDeviceApprovalRepository:
+
     def __init__(self, database_url: str) -> None:
         """Khởi tạo OperationDeviceApprovalRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def save_operation_device_approval(
-        self,
-        approval: OperationDeviceApproval,
-    ) -> None:
-        """Tạo approval duy nhất cho một operation-device WRITE."""
 
+    def save_operation_device_approval(self, approval: OperationDeviceApproval,) -> None:
+        """Tạo approval duy nhất cho một operation-device WRITE."""
         with self._sessions.begin() as session:
             session.add(OperationDeviceApprovalModel(**approval.model_dump()))
 
-    def get_all_by_operation_id(
-        self,
-        operation_id: str,
-    ) -> list[OperationDeviceApproval]:
-        """Lấy Approval của các Device mapping thuộc một Operation."""
 
+    def get_all_by_operation_id(self, operation_id: str,) -> list[OperationDeviceApproval]:
+        """Lấy Approval của các Device mapping thuộc một Operation."""
         statement = (
             select(OperationDeviceApprovalModel)
             .join(
@@ -55,10 +42,8 @@ class OperationDeviceApprovalRepository:
                 for model in session.scalars(statement).all()
             ]
 
-    def get_by_id(
-        self,
-        approval_id: str,
-    ) -> OperationDeviceApproval | None:
+
+    def get_by_id(self, approval_id: str,) -> OperationDeviceApproval | None:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
             model = session.get(OperationDeviceApprovalModel, approval_id)
@@ -68,12 +53,9 @@ class OperationDeviceApprovalRepository:
                 else None
             )
 
-    def get_by_operation_device_id(
-        self,
-        operation_device_id: str,
-    ) -> OperationDeviceApproval | None:
-        """Lấy Approval duy nhất của một operation-device mapping."""
 
+    def get_by_operation_device_id(self, operation_device_id: str,) -> OperationDeviceApproval | None:
+        """Lấy Approval duy nhất của một operation-device mapping."""
         statement = select(OperationDeviceApprovalModel).where(
             OperationDeviceApprovalModel.operation_device_id == operation_device_id
         )
@@ -85,9 +67,9 @@ class OperationDeviceApprovalRepository:
                 else None
             )
 
+
     def expire_operation_approval(self, approval_id: str) -> None:
         """Chuyển PENDING quá hạn thành EXPIRED theo cách idempotent."""
-
         with self._sessions.begin() as session:
             session.execute(
                 update(OperationDeviceApprovalModel)
@@ -99,6 +81,7 @@ class OperationDeviceApprovalRepository:
                 .values(approval_status=ApprovalStatus.EXPIRED)
             )
 
+
     def decide_operation_approval(
         self,
         approval_id: str,
@@ -108,7 +91,6 @@ class OperationDeviceApprovalRepository:
         decided_at: datetime,
     ) -> OperationDeviceApproval | None:
         """Chốt Approval và mapping REJECTED trong cùng transaction."""
-
         with self._sessions.begin() as session:
             approval_model = session.scalar(
                 select(OperationDeviceApprovalModel)

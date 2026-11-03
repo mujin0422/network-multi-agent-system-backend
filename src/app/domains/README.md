@@ -114,13 +114,11 @@ execution/repositories/
 ├── task.py                  # tasks
 ├── operation.py             # task_operations
 ├── operation_dependency.py  # operation_dependencies
-├── operation_device.py      # task_operation_devices
-└── unit_of_work.py          # facade transaction của execution plan
+└── operation_device.py      # task_operation_devices
 ```
 
-Facade nhiều bảng chỉ được dùng khi một use case bắt buộc phải commit nguyên tử.
-Nó điều phối các repository theo bảng trong cùng transaction, không chứa business
-rule. Không tạo repository cho bảng chưa có use case đọc/ghi thực tế.
+Service điều phối các repository theo bảng theo đúng thứ tự của use case. Không tạo
+repository cho bảng chưa có use case đọc/ghi thực tế.
 
 ### `services/`
 
@@ -322,7 +320,7 @@ Application service
 Không được gọi theo cách:
 
 ```text
-ConversationService ─X→ ExecutionRepository
+ConversationService ─X→ Execution repository
 ```
 
 Quy tắc này giữ các domain độc lập, dễ kiểm thử và tránh phụ thuộc vòng tròn khi

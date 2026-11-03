@@ -23,6 +23,4 @@ class DeviceModel(Base):
     device_type: Mapped[str] = mapped_column(String(100), nullable=False)
     location: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    last_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

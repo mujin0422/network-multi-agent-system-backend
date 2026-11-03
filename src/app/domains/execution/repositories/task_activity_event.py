@@ -8,13 +8,14 @@ from app.domains.execution.schemas import TaskActivityEvent
 
 
 class TaskActivityEventRepository:
+
     def __init__(self, database_url: str) -> None:
         """Khởi tạo TaskActivityEventRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
+
     def get_all_by_task_id(self, task_id: str) -> list[TaskActivityEvent]:
         """Lấy timeline của Task theo sequence_number ổn định."""
-
         statement = (
             select(TaskActivityEventModel)
             .where(TaskActivityEventModel.task_id == task_id)
@@ -28,9 +29,10 @@ class TaskActivityEventRepository:
                 TaskActivityEvent.model_validate(model, from_attributes=True)
                 for model in session.scalars(statement).all()
             ]
+
+        
     def save_task_activity_event(self, event: TaskActivityEvent) -> None:
         """Tạo hoặc cập nhật một mốc timeline."""
-
         with self._sessions.begin() as session:
             model = session.get(TaskActivityEventModel, event.id)
             if model is None:

@@ -19,6 +19,7 @@ from app.domains.execution.schemas import (
     TaskType,
 )
 from app.domains.execution.services import ExecutionService
+from tests.execution_service_factory import build_execution_service_stub
 from app.domains.inventory.schemas import Device
 from app.domains.inventory.services import DeviceService
 
@@ -86,7 +87,7 @@ class FakeRetryChatModel(FakeChatModel):
         return await super().ainvoke(messages)
 
 
-class StubExecutionRepository:
+class StubExecutionStore:
     def __init__(self):
         self.tasks = {}
         self.operations = []
@@ -156,10 +157,10 @@ def test_orchestrator_creates_task_operations_dependencies_and_devices() -> None
         created_at=now,
         last_updated_at=now,
     )
-    execution_repository = StubExecutionRepository()
+    execution_repository = StubExecutionStore()
     orchestrator = PlanningOrchestrator(
         PlannerAgent(FakeChatModel()),
-        ExecutionService(execution_repository),
+        build_execution_service_stub(execution_repository),
         DeviceService(StubDeviceRepository(device)),
     )
     conversation = Conversation(
@@ -190,8 +191,8 @@ def test_orchestrator_creates_task_operations_dependencies_and_devices() -> None
 def test_execution_service_persists_plan_and_returns_task_detail() -> None:
     """Regression: use the generated plan records, not undefined local variables."""
 
-    repository = StubExecutionRepository()
-    service = ExecutionService(repository)
+    repository = StubExecutionStore()
+    service = build_execution_service_stub(repository)
     task = service.create_task(
         TaskCreate(
             conversation_id="cons-1",

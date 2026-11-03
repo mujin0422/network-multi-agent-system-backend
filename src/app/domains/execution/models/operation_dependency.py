@@ -14,10 +14,6 @@ class OperationDependencyModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     operation_id: Mapped[str] = mapped_column(ForeignKey("task_operations.id"))
-    depends_on_operation_id: Mapped[str] = mapped_column(
-        ForeignKey("task_operations.id")
-    )
-    dependency_type: Mapped[DependencyType] = mapped_column(
-        Enum(DependencyType, name="dependency_type")
-    )
+    depends_on_operation_id: Mapped[str] = mapped_column(ForeignKey("task_operations.id"))
+    dependency_type: Mapped[DependencyType] = mapped_column(Enum(DependencyType, name="dependency_type"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

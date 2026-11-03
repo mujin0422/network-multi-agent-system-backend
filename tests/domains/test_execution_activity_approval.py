@@ -21,6 +21,7 @@ from app.domains.execution.schemas import (
     TaskType,
 )
 from app.domains.execution.services import ExecutionService
+from tests.execution_service_factory import build_execution_service_stub
 
 
 class ApprovalRepositoryStub:
@@ -111,7 +112,7 @@ class ApprovalRepositoryStub:
 
 def test_lists_activity_and_safe_approval_response() -> None:
     repository = ApprovalRepositoryStub()
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
 
     assert service.list_task_activity_events("task-test") == [repository.event]
     response = service.list_operation_approvals("oper-test")[0]
@@ -146,7 +147,7 @@ class TaskRecordsRepositoryStub(ApprovalRepositoryStub):
 
 def test_task_records_include_operation_timeline_and_safe_approvals() -> None:
     repository = TaskRecordsRepositoryStub()
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
 
     records = service.get_task_records(repository.task.id)
 
@@ -166,7 +167,7 @@ def test_task_records_include_operation_timeline_and_safe_approvals() -> None:
 
 
 def test_task_scoped_logs_require_valid_task() -> None:
-    service = ExecutionService(TaskRecordsRepositoryStub())
+    service = build_execution_service_stub(TaskRecordsRepositoryStub())
 
     assert service.list_device_action_logs_by_task("task-test") == []
     with pytest.raises(ResourceNotFoundError):
@@ -177,7 +178,7 @@ def test_task_scoped_logs_require_valid_task() -> None:
 
 def test_approval_decision_uses_authenticated_user_and_is_final() -> None:
     repository = ApprovalRepositoryStub()
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
 
     response = service.decide_operation_approval(
         "aprv-test",
@@ -202,7 +203,7 @@ def test_expired_approval_cannot_be_decided() -> None:
     repository.approval = repository.approval.model_copy(
         update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)}
     )
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
 
     with pytest.raises(ResourceConflictError, match="đã hết hạn"):
         service.decide_operation_approval(
@@ -216,7 +217,7 @@ def test_expired_approval_cannot_be_decided() -> None:
 
 
 def test_missing_parent_resources_return_not_found() -> None:
-    service = ExecutionService(ApprovalRepositoryStub())
+    service = build_execution_service_stub(ApprovalRepositoryStub())
 
     with pytest.raises(ResourceNotFoundError):
         service.list_task_activity_events("task-missing")
@@ -264,7 +265,7 @@ def test_old_pending_approval_with_null_deadline_still_expires() -> None:
             "expires_at": None,
         }
     )
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
 
     with pytest.raises(ResourceConflictError, match="đã hết hạn"):
         service.decide_operation_approval(
@@ -284,7 +285,7 @@ def test_timeout_sweep_delegates_to_repository() -> None:
         return ["task-test"]
     repository.expire_due_approvals = expire_due_approvals
 
-    service = ExecutionService(repository)
+    service = build_execution_service_stub(repository)
     now = datetime.now(UTC)
     assert service.expire_due_approvals(now) == ["task-test"]
     assert called == [(now, 15)]

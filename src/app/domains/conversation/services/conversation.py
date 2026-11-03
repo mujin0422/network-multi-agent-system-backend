@@ -112,6 +112,8 @@ class ConversationService:
 
     # READ (Conversation) — Lấy danh sách conversation, có thể lọc theo user_id.
     def list(self, user_id: str | None = None) -> list[Conversation]:
+        """Lấy danh sách conversation, có thể lọc theo người dùng."""
+
         return self._conversation_repository.get_all(user_id)
 
     # READ (Conversation) — Lấy chi tiết conversation theo mã, bao gồm danh sách message.
@@ -137,6 +139,8 @@ class ConversationService:
 
     # CREATE (Message) — Lưu message mới vào conversation đã tồn tại.
     def create_message(self, conversation_id: str, payload: MessageCreate) -> Message:
+        """Tạo message mới trong conversation đã tồn tại."""
+
         self._require_conversation(conversation_id)
         now = datetime.now(UTC)
         message = Message(
@@ -162,6 +166,8 @@ class ConversationService:
 
     # READ (Conversation) — Xác nhận conversation tồn tại, nếu không ném lỗi ResourceNotFoundError.
     def _require_conversation(self, conversation_id: str) -> Conversation:
+        """Lấy conversation hoặc phát sinh lỗi nếu không tồn tại."""
+
         conversation = self._conversation_repository.get_by_id(conversation_id)
         if conversation is None:
             raise ResourceNotFoundError(

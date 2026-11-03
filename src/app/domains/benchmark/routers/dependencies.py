@@ -9,7 +9,7 @@ from app.domains.benchmark.repositories import (
     BenchmarkScenarioRepository,
 )
 from app.domains.benchmark.services import BenchmarkRunService, BenchmarkScenarioService
-from app.domains.evaluation.repositories import TaskEvaluationRepository
+from app.domains.evaluation.services import build_task_evaluation_service
 from app.domains.inventory.providers import DeviceConnectionProvider
 from app.domains.inventory.repositories import DeviceConfigRepository
 from app.domains.inventory.services import NetworkService
@@ -40,7 +40,7 @@ def _build_benchmark_run_service() -> BenchmarkRunService:
     return BenchmarkRunService(
         BenchmarkRunRepository(settings.database_url),
         BenchmarkScenarioRepository(settings.database_url),
-        TaskEvaluationRepository(settings.database_url),
+        build_task_evaluation_service(settings.database_url),
         network_tool,
         BenchmarkObservationRepository(settings.database_url),
     )

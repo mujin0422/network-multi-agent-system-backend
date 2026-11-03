@@ -8,6 +8,8 @@ class CategoryService:
     """Cung cấp các thao tác nghiệp vụ liên quan tới loại thiết bị."""
 
     def __init__(self, repository: CategoryRepository) -> None:
+        """Khởi tạo service cùng Category repository."""
+
         self._repository = repository
 
     # =============================================================================

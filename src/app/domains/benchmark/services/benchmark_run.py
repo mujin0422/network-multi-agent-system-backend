@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import (
-    BenchmarkObservationReaderProtocol,
-    BenchmarkRunRepositoryProtocol,
-    BenchmarkScenarioRepositoryProtocol,
+    BenchmarkObservationRepository,
+    BenchmarkRunRepository,
+    BenchmarkScenarioRepository,
 )
 from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
 from app.domains.benchmark.schemas.benchmark_run_summary import BenchmarkRunSummary
@@ -24,7 +24,7 @@ from app.domains.benchmark.utils import (
     to_public_benchmark_run,
 )
 from app.domains.conversation.schemas import Conversation, Message, MessageType
-from app.domains.evaluation.repositories import TaskEvaluationRepositoryProtocol
+from app.domains.evaluation.services import TaskEvaluationService
 from app.domains.execution.schemas import AccessMode, TaskDetail
 from app.tools import NetworkTool
 
@@ -32,16 +32,16 @@ from app.tools import NetworkTool
 class BenchmarkRunService:
     def __init__(
         self,
-        run_repository: BenchmarkRunRepositoryProtocol,
-        scenario_repository: BenchmarkScenarioRepositoryProtocol,
-        evaluation_repository: TaskEvaluationRepositoryProtocol,
+        run_repository: BenchmarkRunRepository,
+        scenario_repository: BenchmarkScenarioRepository,
+        evaluation_service: TaskEvaluationService,
         network_tool: NetworkTool,
-        observation_reader: BenchmarkObservationReaderProtocol | None = None,
+        observation_reader: BenchmarkObservationRepository | None = None,
     ) -> None:
         """Khởi tạo BenchmarkRunService cùng các phụ thuộc cần thiết."""
         self._runs = run_repository
         self._scenarios = scenario_repository
-        self._evaluations = evaluation_repository
+        self._evaluations = evaluation_service
         self._network_tool = network_tool
         self._observation_reader = observation_reader
 

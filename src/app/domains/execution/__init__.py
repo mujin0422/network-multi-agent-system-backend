@@ -1,6 +1,5 @@
 """Public API của AI Execution Management domain."""
 
-from app.domains.execution.repositories import ExecutionRepository
 from app.domains.execution.schemas import (
     AccessMode,
     ActivityActorType,
@@ -37,7 +36,7 @@ from app.domains.execution.schemas import (
     TaskStatus,
     TaskType,
 )
-from app.domains.execution.services import ExecutionService
+from app.domains.execution.services import ExecutionService, build_execution_service
 
 __all__ = [
     "AccessMode",
@@ -67,7 +66,7 @@ __all__ = [
     "PlannedDevice",
     "PlannedOperation",
     "RiskLevel",
-    "ExecutionRepository",
+    "build_execution_service",
     "Task",
     "TaskCreate",
     "TaskDetail",

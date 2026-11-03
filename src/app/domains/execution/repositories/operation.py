@@ -1,7 +1,5 @@
 """Repository cho bảng task_operations."""
 
-from typing import Any
-
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
@@ -10,15 +8,14 @@ from app.domains.execution.schemas import Operation, OperationStatus
 
 
 class OperationRepository:
-    """Quản lý các operation logic do Planner tạo."""
 
     def __init__(self, database_url: str) -> None:
         """Khởi tạo OperationRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
+
     def save_operation(self, operation: Operation) -> None:
         """Tạo mới hoặc cập nhật một operation."""
-
         with self._sessions.begin() as session:
             model = session.get(OperationModel, operation.id, with_for_update=True)
             if model is None:
@@ -38,16 +35,16 @@ class OperationRepository:
             model.started_at = operation.started_at
             model.completed_at = operation.completed_at
 
+
     def get_by_id(self, operation_id: str) -> Operation | None:
         """Lấy operation theo primary key để execution worker sử dụng."""
-
         with self._sessions() as session:
             model = session.get(OperationModel, operation_id)
             return Operation.model_validate(model, from_attributes=True) if model else None
 
+
     def get_all_by_task_id(self, task_id: str) -> list[Operation]:
         """Lấy operations thuộc Task theo đúng display_order của Planner."""
-
         statement = (
             select(OperationModel)
             .where(OperationModel.task_id == task_id)
@@ -59,8 +56,3 @@ class OperationRepository:
                 for model in session.scalars(statement).all()
             ]
 
-    @staticmethod
-    def save_all_in_session(session: Any, operations: list[Operation]) -> None:
-        """Thêm operations bằng transaction chung của execution plan."""
-
-        session.add_all(OperationModel(**item.model_dump()) for item in operations)

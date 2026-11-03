@@ -14,6 +14,8 @@ class DeviceService:
     """Điểm vào công khai cho thao tác tạo, đọc và cập nhật thiết bị."""
 
     def __init__(self, repository: DeviceRepository) -> None:
+        """Khởi tạo service cùng Device repository."""
+
         self._repository = repository
 
     # =============================================================================

@@ -177,7 +177,7 @@ Agent   ─X→ ORM Model/Repository/Database
 Planner ─X→ NetworkTool/DeviceConnectionProvider
 Network ─X→ CredentialRepository/Netmiko/Nornir trực tiếp
 Analyst ─X→ NetworkTool/DeviceConnectionProvider
-Tool    ─X→ ExecutionRepository
+Tool    ─X→ Execution repository hoặc Unit of Work
 Domain  ─X→ Agent implementation
 ```
 

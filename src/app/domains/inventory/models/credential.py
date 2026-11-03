@@ -21,6 +21,4 @@ class CredentialModel(Base):
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     last_updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    last_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -1,7 +1,5 @@
 """Repository cho bảng task_operation_devices."""
 
-from typing import Any
-
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
@@ -10,18 +8,14 @@ from app.domains.execution.schemas import OperationDeviceStatus, TaskOperationDe
 
 
 class OperationDeviceRepository:
-    """Quản lý thiết bị, role và access mode được gán cho operation."""
 
     def __init__(self, database_url: str) -> None:
         """Khởi tạo OperationDeviceRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
 
-    def get_all_by_operation_id(
-        self,
-        operation_id: str,
-    ) -> list[TaskOperationDevice]:
-        """Lấy tất cả device mapping mà Network Agent phải thực thi."""
 
+    def get_all_by_operation_id(self, operation_id: str) -> list[TaskOperationDevice]:
+        """Lấy tất cả device mapping mà Network Agent phải thực thi."""
         statement = select(TaskOperationDeviceModel).where(
             TaskOperationDeviceModel.operation_id == operation_id
         )
@@ -31,9 +25,9 @@ class OperationDeviceRepository:
                 for model in session.scalars(statement).all()
             ]
 
+
     def save_operation_device(self, mapping: TaskOperationDevice) -> None:
         """Tạo hoặc cập nhật trạng thái thực thi trên một thiết bị."""
-
         with self._sessions.begin() as session:
             model = session.get(TaskOperationDeviceModel, mapping.id, with_for_update=True)
             if model is None:
@@ -49,12 +43,9 @@ class OperationDeviceRepository:
             model.started_at = mapping.started_at
             model.completed_at = mapping.completed_at
 
-    def get_by_id(
-        self,
-        operation_device_id: str,
-    ) -> TaskOperationDevice | None:
-        """Lấy một mapping để tiếp tục Task sau quyết định Approval."""
 
+    def get_by_id(self, operation_device_id: str,) -> TaskOperationDevice | None:
+        """Lấy một mapping để tiếp tục Task sau quyết định Approval."""
         with self._sessions() as session:
             model = session.get(TaskOperationDeviceModel, operation_device_id)
             return (
@@ -63,13 +54,3 @@ class OperationDeviceRepository:
                 else None
             )
 
-    @staticmethod
-    def save_all_in_session(
-        session: Any,
-        mappings: list[TaskOperationDevice],
-    ) -> None:
-        """Thêm mappings bằng session chung, không tự commit transaction."""
-
-        session.add_all(
-            TaskOperationDeviceModel(**item.model_dump()) for item in mappings
-        )

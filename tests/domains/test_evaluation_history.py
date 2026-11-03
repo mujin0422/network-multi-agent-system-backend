@@ -14,7 +14,7 @@ from app.domains.evaluation.schemas import (
 )
 
 
-class FakeEvaluationRepository:
+class FakeEvaluationService:
     def __init__(self) -> None:
         self.last_limit: int | None = None
 
@@ -41,17 +41,17 @@ class FakeEvaluationRepository:
 
 
 def test_history_returns_metric_statuses_without_ground_truth() -> None:
-    repository = FakeEvaluationRepository()
+    service = FakeEvaluationService()
 
     rows = asyncio.run(
         list_evaluations(
             _user=None,  # Auth is checked by FastAPI's dependency layer.
-            evaluation_repository=repository,  # type: ignore[arg-type]
+            evaluation_service=service,  # type: ignore[arg-type]
             limit=25,
         )
     )
 
-    assert repository.last_limit == 25
+    assert service.last_limit == 25
     assert len(rows) == 1
     assert rows[0].results[EvaluationMetricType.RCA] == EvaluationResult.FAIL
     serialized = rows[0].model_dump(mode="json")

@@ -14,6 +14,7 @@ from app.domains.conversation.services import ConversationService
 from app.domains.execution.routers.dependencies import get_execution_service
 from app.domains.execution.schemas import Operation, Task
 from app.domains.execution.services import ExecutionService
+from tests.execution_service_factory import build_execution_service_stub
 from app.domains.inventory.routers.dependencies import get_device_service
 from app.domains.inventory.schemas import Device
 from app.domains.inventory.services import DeviceService
@@ -29,7 +30,7 @@ from app.core.config import Settings
 from datetime import UTC, datetime
 
 
-class StubIdentityRepository:
+class StubIdentityStore:
     def __init__(self):
         now = datetime.now(UTC)
         self.user = UserRecord(
@@ -43,17 +44,17 @@ class StubIdentityRepository:
         )
         self.sessions = {}
 
-    def get_user_by_email(self, email):
+    def get_by_email(self, email):
         return self.user if email == self.user.email else None
 
-    def get_user_by_id(self, user_id):
+    def get_by_id(self, user_id):
         return (
             User.model_validate(self.user.model_dump())
             if user_id == self.user.id
             else None
         )
 
-    def get_user_record_by_id(self, user_id):
+    def get_record_by_id(self, user_id):
         return self.user if user_id == self.user.id else None
 
     def get_role_by_id(self, role_id):
@@ -73,7 +74,7 @@ class StubIdentityRepository:
     def save_session(self, session):
         self.sessions[session.id] = session
 
-    def get_session_by_token_hash(self, token_hash):
+    def get_by_token_hash(self, token_hash):
         return next(
             (s for s in self.sessions.values() if s.refresh_token_hash == token_hash),
             None,
@@ -88,7 +89,7 @@ class StubIdentityRepository:
         s = self.sessions.get(session_id)
         return bool(s and s.revoked_at is None and s.expires_at > datetime.now(UTC))
 
-    def get_active_session_by_id(self, session_id):
+    def get_active_by_id(self, session_id):
         return (
             self.sessions.get(session_id)
             if self.get_is_session_active(session_id)
@@ -106,9 +107,12 @@ class StubIdentityRepository:
         self.user = self.user.model_copy(update={"last_login_at": logged_in_at})
 
 
-TEST_IDENTITY_REPOSITORY = StubIdentityRepository()
+TEST_IDENTITY_STORE = StubIdentityStore()
 TEST_IDENTITY_SERVICE = IdentityService(
-    TEST_IDENTITY_REPOSITORY, Settings(auth_jwt_secret="test-only-secret")
+    TEST_IDENTITY_STORE,
+    TEST_IDENTITY_STORE,
+    TEST_IDENTITY_STORE,
+    Settings(auth_jwt_secret="test-only-secret"),
 )
 
 
@@ -201,7 +205,7 @@ class StubConversationRepository:
         return list(self._messages.get(conversation_id, []))
 
 
-class StubExecutionRepository:
+class StubExecutionStore:
     def __init__(self) -> None:
         self._tasks: dict[str, Task] = {}
         self._operations: dict[str, Operation] = {}
@@ -335,7 +339,7 @@ def test_inventory_api_enforces_hostname_uniqueness() -> None:
 
 
 def test_execution_api_creates_task_and_operation() -> None:
-    service = ExecutionService(StubExecutionRepository())
+    service = build_execution_service_stub(StubExecutionStore())
 
     async def override_execution_service() -> ExecutionService:
         return service

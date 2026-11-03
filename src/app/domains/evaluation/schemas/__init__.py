@@ -1,14 +1,18 @@
 """Public schema exports for the Evaluation domain."""
 
-from app.domains.evaluation.schemas.task_evaluation import (
+from app.domains.evaluation.schemas.common import (
     EvaluationMetricType,
     EvaluationResult,
     EvaluationStatus,
     EvaluatorType,
+)
+from app.domains.evaluation.schemas.task_evaluation import (
     TaskEvaluation,
     TaskEvaluationDetail,
-    TaskEvaluationMetric,
     TaskEvaluationSummary,
+)
+from app.domains.evaluation.schemas.task_evaluation_metric import (
+    TaskEvaluationMetric,
 )
 
 __all__ = [

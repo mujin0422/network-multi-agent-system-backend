@@ -1,7 +1,5 @@
 """Read-only benchmark evidence: logged tool calls and approval pauses."""
 
-from typing import Protocol
-
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
@@ -14,15 +12,7 @@ from app.domains.execution.models import TaskActivityEventModel, TaskExecutionMo
 from app.domains.execution.schemas import ActivityEventType
 
 
-class BenchmarkObservationReaderProtocol(Protocol):
-    def get_for_task(self, task_id: str, source_message_id: str) -> BenchmarkObservation:
-        """Return timing evidence and agent-to-tool call count."""
-        ...
-
-
-def approval_pauses_from_events(
-    events: list[tuple[ActivityEventType, object]],
-) -> tuple[list[ApprovalWaitInterval], bool]:
+def approval_pauses_from_events(events: list[tuple[ActivityEventType, object]]) -> tuple[list[ApprovalWaitInterval], bool]:
     """Pair REQUESTED -> next EXECUTION_STARTED, not approval decision alone.
 
     Resume may happen after the user approves. Waiting ends when orchestration
@@ -43,10 +33,14 @@ def approval_pauses_from_events(
 
 
 class BenchmarkObservationRepository:
+
     def __init__(self, database_url: str) -> None:
+        """Khởi tạo repository đọc bằng chứng benchmark."""
         self._sessions = create_session_factory(database_url)
 
+
     def get_for_task(self, task_id: str, source_message_id: str) -> BenchmarkObservation:
+        """Lấy thời gian, số tool call và kết quả phân tích của Task."""
         with self._sessions() as session:
             request_created_at = session.scalar(
                 select(MessageModel.created_at).where(MessageModel.id == source_message_id)

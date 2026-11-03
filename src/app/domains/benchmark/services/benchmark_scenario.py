@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from app.core.exceptions import ResourceConflictError
 from app.core.utils import IdPrefix, generate_id
-from app.domains.benchmark.repositories import BenchmarkScenarioRepositoryProtocol
+from app.domains.benchmark.repositories import BenchmarkScenarioRepository
 from app.domains.benchmark.schemas import (
     BenchmarkScenario,
     BenchmarkScenarioRecord,
@@ -14,7 +14,7 @@ from app.domains.benchmark.schemas import (
 
 
 class BenchmarkScenarioService:
-    def __init__(self, repository: BenchmarkScenarioRepositoryProtocol) -> None:
+    def __init__(self, repository: BenchmarkScenarioRepository) -> None:
         """Khởi tạo BenchmarkScenarioService cùng các phụ thuộc cần thiết."""
         self._repository = repository
 

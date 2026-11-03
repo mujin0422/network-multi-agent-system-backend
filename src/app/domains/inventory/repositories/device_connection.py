@@ -8,16 +8,12 @@ from app.domains.inventory.schemas import DeviceConfig
 
 
 class DeviceConfigRepository:
-    """Read device metadata and decrypted credentials from PostgreSQL.
-
-    Password and enable secret are only materialized for the Netmiko connection
-    flow. They are never returned by the public Inventory API.
-    """
 
     def __init__(self, database_url: str, encryption_key: str) -> None:
         """Khởi tạo DeviceConfigRepository cùng các phụ thuộc cần thiết."""
         self._sessions = create_session_factory(database_url)
         self._encryption_key = encryption_key
+
 
     def get_by_identifier(self, device_identifier: str) -> DeviceConfig | None:
         # Cho phép agent gọi bằng cả primary key (devc-...) và hostname (P1).

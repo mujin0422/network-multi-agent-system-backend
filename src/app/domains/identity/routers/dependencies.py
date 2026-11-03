@@ -8,7 +8,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
-from app.domains.identity.repositories import IdentityRepository
+from app.domains.identity.repositories import (
+    RolePermissionRepository,
+    RoleRepository,
+    UserRepository,
+    UserSessionRepository,
+)
 from app.domains.identity.schemas import User
 from app.domains.identity.services import (
     AccessControlService,
@@ -21,28 +26,51 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 @lru_cache
-def _build_identity_repository() -> IdentityRepository:
-    return IdentityRepository(get_settings().database_url)
+def _build_user_repository() -> UserRepository:
+    return UserRepository(get_settings().database_url)
+
+
+@lru_cache
+def _build_role_repository() -> RoleRepository:
+    return RoleRepository(get_settings().database_url)
+
+
+@lru_cache
+def _build_role_permission_repository() -> RolePermissionRepository:
+    return RolePermissionRepository(get_settings().database_url)
+
+
+@lru_cache
+def _build_user_session_repository() -> UserSessionRepository:
+    return UserSessionRepository(get_settings().database_url)
 
 
 @lru_cache
 def _build_identity_service() -> IdentityService:
-    return IdentityService(_build_identity_repository(), get_settings())
+    return IdentityService(
+        _build_user_repository(),
+        _build_user_session_repository(),
+        _build_role_permission_repository(),
+        get_settings(),
+    )
 
 
 @lru_cache
 def _build_user_service() -> UserService:
-    return UserService(_build_identity_repository())
+    return UserService(_build_user_repository(), _build_role_repository())
 
 
 @lru_cache
 def _build_role_service() -> RoleService:
-    return RoleService(_build_identity_repository())
+    return RoleService(_build_role_repository())
 
 
 @lru_cache
 def _build_access_control_service() -> AccessControlService:
-    return AccessControlService(_build_identity_repository())
+    return AccessControlService(
+        _build_role_repository(),
+        _build_role_permission_repository(),
+    )
 
 
 async def get_identity_service() -> IdentityService:

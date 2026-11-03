@@ -40,7 +40,8 @@ class FakeSessions:
 def test_delayed_callback_cannot_revive_timed_out_task():
     now = datetime.now(UTC)
     stored = SimpleNamespace(task_status=TaskStatus.FAILED, completed_at=now)
-    session = FakeSession(stored)
+    repo = object.__new__(TaskRepository)
+    repo._sessions = FakeSessions(stored)
     incoming = Task(
         id="task-1",
         conversation_id="cons-1",
@@ -51,7 +52,7 @@ def test_delayed_callback_cannot_revive_timed_out_task():
         created_at=now,
     )
 
-    TaskRepository.save_in_session(session, incoming)
+    repo.save_task(incoming)
 
     assert stored.task_status == TaskStatus.FAILED
     assert stored.completed_at == now

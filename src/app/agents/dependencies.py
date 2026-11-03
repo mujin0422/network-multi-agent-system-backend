@@ -10,8 +10,7 @@ from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator,
 from app.agents.planner import PlannerAgent
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.core.config import get_settings
-from app.domains.execution.repositories import ExecutionRepository
-from app.domains.execution.services import ExecutionService
+from app.domains.execution.services import build_execution_service
 from app.domains.conversation.repositories import ConversationRepository, MessageRepository
 from app.domains.conversation.services import ConversationService
 from app.domains.inventory.providers import DeviceConnectionProvider, GNS3Provider
@@ -134,7 +133,7 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
     """Compose and compile the single LangGraph-owned AI workflow."""
 
     settings = get_settings()
-    execution_service = ExecutionService(ExecutionRepository(settings.database_url))
+    execution_service = build_execution_service(settings.database_url)
     conversation_service = ConversationService(
         ConversationRepository(settings.database_url),
         MessageRepository(settings.database_url),
