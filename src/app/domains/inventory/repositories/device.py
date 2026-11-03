@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import DeviceModel
 from app.domains.inventory.schemas import Device
@@ -22,22 +23,22 @@ class DeviceRepository:
         self._sessions = create_session_factory(database_url)
 
     def save(self, device: Device) -> None:
-        """Insert hoặc update một device trong cùng một câu lệnh.
-
-        ``ON CONFLICT (id)`` giúp cùng method phục vụ cả create và update.
-        ``created_at`` không bị ghi đè khi update để bảo toàn thời điểm tạo.
-        Context manager tự commit khi thành công và rollback khi có exception.
-        """
-        values = device.model_dump()
+        """Legacy single-write API; prefer save_in_session from a service UoW."""
         with self._sessions.begin() as session:
+            self.save_in_session(session, device)
             append_audit_in_session(session)
-            model = session.get(DeviceModel, device.id)
-            if model is None:
-                session.add(DeviceModel(**values))
-                return
-            for field, value in values.items():
-                if field not in {"id", "created_at", "created_by"}:
-                    setattr(model, field, value)
+
+    @staticmethod
+    def save_in_session(session: Session, device: Device) -> None:
+        """Persist device using the caller's transaction, without committing."""
+        values = device.model_dump()
+        model = session.get(DeviceModel, device.id)
+        if model is None:
+            session.add(DeviceModel(**values))
+            return
+        for field, value in values.items():
+            if field not in {"id", "created_at", "created_by"}:
+                setattr(model, field, value)
 
     def get_by_id(self, device_id: str) -> Device | None:
         """Đọc một thiết bị bằng primary key và validate thành schema Device."""

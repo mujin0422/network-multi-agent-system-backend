@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import BrandModel
 from app.domains.inventory.schemas import Brand
@@ -21,13 +22,18 @@ class BrandRepository:
         """Thêm mới hoặc cập nhật Brand theo primary key."""
 
         with self._sessions.begin() as session:
+            self.save_in_session(session, brand)
             append_audit_in_session(session)
-            model = session.get(BrandModel, brand.id)
-            if model is None:
-                session.add(BrandModel(**brand.model_dump()))
-                return
-            model.name = brand.name
-            model.supported_drivers = brand.supported_drivers
+
+    @staticmethod
+    def save_in_session(session: Session, brand: Brand) -> None:
+        """Create/update with an externally owned Session; no commit."""
+        model = session.get(BrandModel, brand.id)
+        if model is None:
+            session.add(BrandModel(**brand.model_dump()))
+            return
+        model.name = brand.name
+        model.supported_drivers = brand.supported_drivers
 
     def get_by_id(self, brand_id: str) -> Brand | None:
         """Lấy một Brand theo primary key."""

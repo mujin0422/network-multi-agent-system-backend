@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import CredentialModel
 from app.domains.inventory.schemas import Credential
@@ -28,18 +29,31 @@ class CredentialRepository:
     ) -> None:
         """Mã hóa password/secret bằng AES-256 trước khi insert."""
 
-        model = CredentialModel(
-            **credential.model_dump(),
-            password=encrypted_credential(password, self._encryption_key),
-            secret=(
-                encrypted_credential(secret, self._encryption_key)
-                if secret is not None
-                else None
-            ),
-        )
         with self._sessions.begin() as session:
+            self.create_in_session(
+                session, credential, password=password, secret=secret
+            )
             append_audit_in_session(session)
-            session.add(model)
+
+    def create_in_session(
+        self,
+        session: Session,
+        credential: Credential,
+        *,
+        password: str,
+        secret: str | None,
+    ) -> None:
+        """Encrypt and insert credentials in the caller's transaction."""
+        session.add(
+            CredentialModel(
+                **credential.model_dump(),
+                password=encrypted_credential(password, self._encryption_key),
+                secret=(
+                    encrypted_credential(secret, self._encryption_key)
+                    if secret is not None else None
+                ),
+            )
+        )
 
     def update(
         self,
@@ -52,23 +66,37 @@ class CredentialRepository:
     ) -> None:
         """Cập nhật metadata và chỉ mã hóa lại secret được gửi trong request."""
 
+        with self._sessions.begin() as session:
+            self.update_in_session(
+                session, credential, password=password, secret=secret,
+                update_password=update_password, update_secret=update_secret,
+            )
+            append_audit_in_session(session)
+
+    def update_in_session(
+        self,
+        session: Session,
+        credential: Credential,
+        *,
+        password: str | None,
+        secret: str | None,
+        update_password: bool,
+        update_secret: bool,
+    ) -> None:
+        """Update encrypted credential fields without owning transaction."""
         values = credential.model_dump(exclude={"id", "created_by", "created_at"})
         if update_password and password is not None:
             values["password"] = encrypted_credential(password, self._encryption_key)
         if update_secret:
             values["secret"] = (
                 encrypted_credential(secret, self._encryption_key)
-                if secret is not None
-                else None
+                if secret is not None else None
             )
-        statement = (
+        session.execute(
             update(CredentialModel)
             .where(CredentialModel.id == credential.id)
             .values(**values)
         )
-        with self._sessions.begin() as session:
-            append_audit_in_session(session)
-            session.execute(statement)
 
     def get_by_id(self, credential_id: str) -> Credential | None:
         """Lấy metadata Credential theo ID, không đọc ciphertext."""
