@@ -13,6 +13,7 @@ def test_migrations_start_with_project_baseline() -> None:
         "0004",
         "0005",
         "0006",
+        "0007",
     ]
     assert migrations[0].name == "initial_schema"
     assert migrations[0].sql.startswith(migrate.CANONICAL_SCHEMA_DIRECTIVE)
