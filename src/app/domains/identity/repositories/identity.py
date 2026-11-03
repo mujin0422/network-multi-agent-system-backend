@@ -3,6 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
 from app.domains.identity.repositories.role import RoleRepository
 from app.domains.identity.repositories.role_permission import RolePermissionRepository
 from app.domains.identity.repositories.user import UserRepository
@@ -49,6 +51,10 @@ class IdentityRepository:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         self._users.save_user(user)
 
+    def save_user_in_session(self, session: Session, user: UserRecord) -> None:
+        """Save a user with a service-owned transaction."""
+        self._users.save_user_in_session(session, user)
+
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
         """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""
         self._users.update_login(user_id, logged_in_at)
@@ -69,6 +75,10 @@ class IdentityRepository:
     def save_role(self, role: Role) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
         self._roles.save_role(role)
+
+    def save_role_in_session(self, session: Session, role: Role) -> None:
+        """Save a role with a service-owned transaction."""
+        self._roles.save_role_in_session(session, role)
 
     # =============================================================================
     # Role Permission — tra cứu quyền được gán cho role
@@ -100,6 +110,13 @@ class IdentityRepository:
     ) -> list[RolePermission]:
         """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         return self._role_permissions.replace_role_permissions(role_id, permission_ids)
+
+    def replace_role_permissions_in_session(
+        self, session: Session, role_id: str, permission_ids: set[str]
+    ) -> None:
+        self._role_permissions.replace_role_permissions_in_session(
+            session, role_id, permission_ids
+        )
 
     # =============================================================================
     # User Session — quản lý phiên và rotate refresh token nguyên tử
