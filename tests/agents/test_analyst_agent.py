@@ -44,7 +44,8 @@ def test_analyst_recreates_truncated_json_on_retry() -> None:
                 '{"summary":"P1 và P2 hoạt động bình thường.",'
                 '"findings":["OSPF đã hội tụ"],'
                 '"likely_causes":[],"recommendations":[],'
-                '"requires_more_data":false}'
+                '"requires_more_data":false,'
+                '"is_anomaly":false,"root_causes":[]}'
             ),
         ]
     )
@@ -64,7 +65,7 @@ def test_analyst_repairs_unquoted_schema_key_and_trailing_comma() -> None:
                 'Phân tích:\n```json\n{"summary":"OSPF đã hội tụ",'
                 '"findings":["P1 và P2 có route OSPF"],'
                 'likely_causes:[],"recommendations":[],'
-                'requires_more_data:false,}\n```'
+                'requires_more_data:false,is_anomaly:false,root_causes:[],}\n```'
             )
         ]
     )
