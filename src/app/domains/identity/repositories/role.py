@@ -3,6 +3,7 @@
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import RoleModel
 from app.domains.identity.schemas import Role
@@ -40,12 +41,17 @@ class RoleRepository:
     def save_role(self, record: Role) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
         with self._sessions.begin() as session:
+            self.save_role_in_session(session, record)
             append_audit_in_session(session)
-            model = session.get(RoleModel, record.id)
-            if model is None:
-                session.add(RoleModel(**record.model_dump()))
-                return
-            model.name = record.name
-            model.description = record.description
-            model.last_updated_by = record.last_updated_by
-            model.last_updated_at = record.last_updated_at
+
+    @staticmethod
+    def save_role_in_session(session: Session, record: Role) -> None:
+        """Upsert role using the service's Unit of Work."""
+        model = session.get(RoleModel, record.id)
+        if model is None:
+            session.add(RoleModel(**record.model_dump()))
+            return
+        model.name = record.name
+        model.description = record.description
+        model.last_updated_by = record.last_updated_by
+        model.last_updated_at = record.last_updated_at

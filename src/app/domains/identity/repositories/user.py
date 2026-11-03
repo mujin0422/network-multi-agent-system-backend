@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import UserModel
 from app.domains.identity.schemas import User, UserRecord
@@ -52,30 +53,35 @@ class UserRepository:
     def save_user(self, record: UserRecord) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         with self._sessions.begin() as session:
+            self.save_user_in_session(session, record)
             append_audit_in_session(session)
-            model = session.get(UserModel, record.id)
-            if model is None:
-                session.add(
-                    UserModel(
-                        id=record.id,
-                        role_id=record.role_id,
-                        email=record.email,
-                        password_hash=record.password_hash,
-                        full_name=record.full_name,
-                        user_status=record.user_status,
-                        created_at=record.created_at,
-                        last_updated_at=record.last_updated_at,
-                        last_login_at=record.last_login_at,
-                    )
+
+    @staticmethod
+    def save_user_in_session(session: Session, record: UserRecord) -> None:
+        """Upsert user with an injected Session, without committing."""
+        model = session.get(UserModel, record.id)
+        if model is None:
+            session.add(
+                UserModel(
+                    id=record.id,
+                    role_id=record.role_id,
+                    email=record.email,
+                    password_hash=record.password_hash,
+                    full_name=record.full_name,
+                    user_status=record.user_status,
+                    created_at=record.created_at,
+                    last_updated_at=record.last_updated_at,
+                    last_login_at=record.last_login_at,
                 )
-                return
-            model.role_id = record.role_id
-            model.email = record.email
-            model.password_hash = record.password_hash
-            model.full_name = record.full_name
-            model.user_status = record.user_status
-            model.last_updated_at = record.last_updated_at
-            model.last_login_at = record.last_login_at
+            )
+            return
+        model.role_id = record.role_id
+        model.email = record.email
+        model.password_hash = record.password_hash
+        model.full_name = record.full_name
+        model.user_status = record.user_status
+        model.last_updated_at = record.last_updated_at
+        model.last_login_at = record.last_login_at
 
     def update_login(self, user_id: str, logged_in_at: datetime) -> None:
         """Cập nhật dữ liệu theo nghiệp vụ của phương thức update_login."""

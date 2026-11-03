@@ -5,6 +5,7 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.core.exceptions import ResourceNotFoundError
 from app.domains.benchmark.models import BenchmarkScenarioModel
@@ -83,6 +84,13 @@ class BenchmarkScenarioRepository:
 
     def save(self, scenario: BenchmarkScenarioRecord) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save."""
+        with self._sessions.begin() as session:
+            self.save_in_session(session, scenario)
+            append_audit_in_session(session)
+
+    @staticmethod
+    def save_in_session(session: Session, scenario: BenchmarkScenarioRecord) -> None:
+        """Persist scenario snapshot inside an externally owned transaction."""
         definition_fields = {
             "preconditions",
             "injection",
@@ -95,11 +103,9 @@ class BenchmarkScenarioRepository:
         values["definition"] = scenario.model_dump(
             include=definition_fields, mode="json"
         )
-        with self._sessions.begin() as session:
-            append_audit_in_session(session)
-            model = session.get(BenchmarkScenarioModel, scenario.id)
-            if model is None:
-                session.add(BenchmarkScenarioModel(**values))
-            else:
-                for key, value in values.items():
-                    setattr(model, key, value)
+        model = session.get(BenchmarkScenarioModel, scenario.id)
+        if model is None:
+            session.add(BenchmarkScenarioModel(**values))
+        else:
+            for key, value in values.items():
+                setattr(model, key, value)

@@ -3,6 +3,7 @@
 from sqlalchemy import delete, select
 
 from app.core.database import create_session_factory
+from sqlalchemy.orm import Session
 from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import (
     ActionModel,
@@ -92,14 +93,21 @@ class RolePermissionRepository:
     ) -> list[RolePermission]:
         """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         with self._sessions.begin() as session:
+            self.replace_role_permissions_in_session(session, role_id, permission_ids)
             append_audit_in_session(session)
-            session.execute(
-                delete(RolePermissionModel).where(
-                    RolePermissionModel.role_id == role_id
-                )
-            )
-            session.add_all(
-                RolePermissionModel(role_id=role_id, permission_id=permission_id)
-                for permission_id in sorted(permission_ids)
-            )
         return self.get_all_by_role_id(role_id)
+
+    @staticmethod
+    def replace_role_permissions_in_session(
+        session: Session, role_id: str, permission_ids: set[str]
+    ) -> None:
+        """Replace all role permissions without committing the caller's UoW."""
+        session.execute(
+            delete(RolePermissionModel).where(
+                RolePermissionModel.role_id == role_id
+            )
+        )
+        session.add_all(
+            RolePermissionModel(role_id=role_id, permission_id=permission_id)
+            for permission_id in sorted(permission_ids)
+        )
