@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.agents.analyst.schemas import PredictedRootCause
+from app.domains.evaluation.schemas.diagnosis import PredictedRootCause
 from app.domains.benchmark.schemas.common import BenchmarkRootCause
 
 
