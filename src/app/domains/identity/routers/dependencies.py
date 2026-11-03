@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
@@ -64,10 +64,12 @@ async def get_access_control_service() -> AccessControlService:
 async def get_current_identity(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     service: Annotated[IdentityService, Depends(get_identity_service)],
+    request: Request,
 ) -> tuple[User, str]:
     if credentials is None:
         raise AuthenticationError("Cần đăng nhập để thực hiện thao tác này")
     user, session_id = service.authenticate(credentials.credentials)
+    request.state.audit_actor = user
     return user, str(session_id)
 
 

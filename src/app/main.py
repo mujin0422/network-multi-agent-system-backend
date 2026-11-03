@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.approval_timeout_worker import run_approval_timeout_worker
 from app.core.exceptions.handlers import register_error_handlers
+from app.domains.audit.http_capture import AuditCaptureMiddleware
 from app.domains.audit.routers import router as audit_logs_router
 from app.domains.benchmark import router as benchmark_router
 from app.domains.conversation.routers import router as conversation_router
@@ -65,6 +66,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(AuditCaptureMiddleware)
 
 register_error_handlers(app)
 
