@@ -18,8 +18,11 @@ và sự kiện nghiệp vụ quan trọng trong hệ thống.
 - `GET /api/v1/device-action-logs/`: lịch sử command thực tế trên thiết bị;
   endpoint này thuộc Execution domain và không phải system audit log.
 
-API không cho phép client tạo, sửa hoặc xóa audit log. Các use case nội bộ gọi
-`AuditLogService.record()` sau khi hành động nghiệp vụ đã có kết quả xác định.
+API không cho phép client tạo, sửa hoặc xóa audit log. Với nghiệp vụ CRUD, Service
+khai báo `audit_mutation(action, resource_type, resource_id)` và repository gọi
+`append_audit_in_session(session)` trong cùng `session.begin()` dùng để ghi
+bản ghi nghiệp vụ. Hàm này gọi `AuditLogService.record_in_session(session, ...)`.
+**Cả hai cùng COMMIT hoặc cùng ROLLBACK**, không có commit riêng cho audit.
 
 ## Quy tắc bảo mật
 
@@ -30,9 +33,20 @@ API không cho phép client tạo, sửa hoặc xóa audit log. Các use case n�
 
 ## Tự động ghi audit cho API nghiệp vụ
 
-`AuditCaptureMiddleware` đăng ký tại `app/main.py`, ghi event **sau khi**
-request hoàn tất. Mỗi action được ánh xạ tường minh trong
-`app/domains/audit/http_capture.py::AUDITED_ROUTES`.
+Hai cơ chế có chủ đích khác nhau:
+
+1. **Thành công của CRUD và approval:** Service khai báo event; repository ghi
+   business row và audit row vào **cùng SQLAlchemy Session/transaction**.
+   Ghi audit thất bại làm rollback cả business mutation. Không chấp nhận
+   ghi thành công trên middleware (tránh log trùng).
+2. **Đăng nhập, refresh, logout, Conversation và HTTP lỗi/từ chối:**
+   `AuditCaptureMiddleware` ghi một audit event **độc lập** sau khi xử lý,
+   vì login thất bại hoặc permission denied không có transaction nghiệp vụ
+   thành công. Các luồng này chưa dùng chung transaction với audit.
+
+Danh mục route được khai báo tường minh trong
+`app/domains/audit/http_capture.py::AUDITED_ROUTES`, còn
+`TRANSACTIONAL_ACTIONS` đánh dấu các route ghi audit nguyên tử.
 
 Các nhóm đã kết nối:
 
@@ -44,10 +58,11 @@ Các nhóm đã kết nối:
 - Approval: phê duyệt, từ chối (không lưu command snapshot).
 - Worker timeout: event `APPROVAL_TIMEOUT` ghi cùng transaction kết thúc Task.
 
-Bản ghi ghi `action`, `resource_type`, `resource_id` (nếu biết),
-`event_status`, actor từ backend-auth, IP, thời điểm UTC, HTTP status,
-tên route chuẩn hóa và correlation UUID hợp lệ từ `X-Request-ID`.
-Không lưu request/response body, query params, Authorization header,
+Audit nguyên tử có `action`, `resource_type`, `resource_id`,
+`event_status`, actor được xác thực và thời điểm UTC; không lưu HTTP body.
+Audit độc lập do middleware ghi cho các trường hợp trên có thêm HTTP status,
+route chuẩn hóa, IP và UUID hợp lệ từ `X-Request-ID`.
+Không ghi request/response body, query params, Authorization header,
 password, token, credential hoặc command. Client không thể tự POST audit.
 
 Lưu ý:
@@ -58,16 +73,22 @@ Lưu ý:
   Khi có Bearer token hợp lệ, middleware kiểm tra token/session để gán User.
   Việc bắt buộc RBAC cho các endpoint cũ cần được triển khai riêng để tránh
   làm thay đổi HTTP contract ở đợt tích hợp audit này.
-- Audit ghi bằng transaction riêng sau mutation. Nếu Audit DB không lưu được,
-  backend ghi lỗi `SYSTEM AUDIT WRITE FAILED` vào server log và giữ HTTP
-  response của nghiệp vụ đã commit. **Đây là best-effort audit**, chưa phải
-  transactional audit đối với mọi CRUD. Trên production cần alert lỗi này và
-  cân nhắc transactional outbox nếu có yêu cầu tuân thủ nghiêm ngặt.
+- Các thao tác CRUD/approval đã dùng audit nguyên tử: User, Role, Role
+  Permissions, Device, Brand, Credential, Benchmark Scenario, khởi tạo/cleanup
+  Benchmark Run, Task Create, Operation Create, và Approval Approve/Reject.
+  Các luồng còn lại (đăng nhập, Conversation/Message, rename Conversation,
+  và lỗi/denied) được ghi best-effort. Cần triển khai chung transaction cho
+  các nghiệp vụ còn lại nếu yêu cầu tuân thủ tuyệt đối.
+- Benchmark có thao tác **thiết bị mạng bên ngoài PostgreSQL**; DB rollback
+  không tự đảo ngược cấu hình thiết bị. Cleanup vẫn phải được vận hành riêng.
+- Với login failure / HTTP denied, middleware ghi transaction riêng; nếu DB
+  ghi audit thất bại, sẽ có `SYSTEM AUDIT WRITE FAILED` trong server log.
+  Cần theo dõi và cảnh báo lỗi này trên production.
 
 ## Kiểm thử
 
 ```bash
-pytest tests/domains/test_audit.py tests/domains/test_audit_capture.py -q
+pytest tests/domains/test_audit.py tests/domains/test_audit_capture.py tests/domains/test_transactional_audit.py -q
 ```
 
 Kiểm thử với PostgreSQL thật (không chạy trên lab sản xuất):
@@ -83,6 +104,9 @@ Kiểm thử với PostgreSQL thật (không chạy trên lab sản xuất):
 6. Dùng Swagger `GET /api/v1/audit-logs/?limit=20` với Bearer token đủ quyền
    để đối chiếu với dữ liệu trên frontend.
 
+Test `test_transactional_audit.py` cố ý gây trùng khóa audit và khẳng định
+thao tác cập nhật Role cũng rollback. Trên PostgreSQL thật, xác minh cùng
+trạng thái trước và sau khi audit insert thất bại trong môi trường test.
 Nếu UI trống, xem log API, kết quả migration, RBAC permission và
 `SYSTEM AUDIT WRITE FAILED`. Những log trước khi tính năng được triển khai
 không được tạo lại tự động.
