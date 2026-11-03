@@ -95,6 +95,7 @@ class BenchmarkObservationRepository:
                 analysis_event.get("diagnosis_submission")
                 if isinstance(analysis_event, dict)
                 and isinstance(analysis_event.get("diagnosis_submission"), dict)
+                and not analysis_event.get("used_fallback", False)
                 else None
             ),
         )
