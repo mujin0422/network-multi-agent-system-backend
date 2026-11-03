@@ -175,3 +175,32 @@ def test_overlapping_approval_waits_are_merged() -> None:
     )
     assert ms == 20000
     assert wait_ms == 30000
+
+
+def test_keyword_complete_response_without_structured_diagnosis_fails() -> None:
+    now = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    # The fixture response mentions P1 and shutdown, which previously passed.
+    metrics = make_evaluation(BenchmarkObservation(), now + timedelta(seconds=5))
+    assert metrics[EvaluationMetricType.RCA].result == EvaluationResult.FAIL
+    assert metrics[EvaluationMetricType.GOAL].result == EvaluationResult.FAIL
+    assert metrics[EvaluationMetricType.RCA].evidence["submission_status"] == "no_submission"
+    assert metrics[EvaluationMetricType.RCA].actual_value["rca_f1"] == 0
+
+
+def test_correct_root_cause_but_incorrect_detection_separates_rca_and_goal() -> None:
+    now = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    metrics = make_evaluation(
+        BenchmarkObservation(
+            diagnosis_submission={
+                "is_anomaly": False,
+                "root_causes": [
+                    {"device": "P1", "interface": None, "fault_type": "link_down"}
+                ],
+            },
+        ),
+        now + timedelta(seconds=4),
+    )
+    assert metrics[EvaluationMetricType.RCA].result == EvaluationResult.PASS
+    assert metrics[EvaluationMetricType.GOAL].result == EvaluationResult.FAIL
+    assert metrics[EvaluationMetricType.RCA].actual_value["rca_f1"] == 1
+    assert metrics[EvaluationMetricType.GOAL].evidence["detection_score"] == 0
