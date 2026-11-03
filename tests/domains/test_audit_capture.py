@@ -11,6 +11,8 @@ from fastapi.routing import APIRoute
 from app.domains.audit.http_capture import AUDITED_ROUTES, AuditCaptureMiddleware
 from app.domains.audit.schemas import AuditActorType, AuditEventStatus
 from app.main import app as application
+from app.domains.inventory.routers.dependencies import get_brand_service
+from app.domains.inventory.schemas import Brand
 
 
 class MemoryAuditService:
@@ -126,3 +128,39 @@ def test_every_registered_mutating_business_endpoint_has_an_audit_action():
         and (method, route.path) not in AUDITED_ROUTES
     ]
     assert uncovered == []
+
+
+def test_actual_app_wires_business_route_into_system_audit():
+    """Covers main.py middleware registration and real Brand create endpoint."""
+    service = MemoryAuditService()
+
+    class StubBrandService:
+        def create_brand(self, payload):
+            return Brand(
+                id="brnd-audit-test",
+                name=payload.name,
+                supported_drivers=payload.supported_drivers,
+            )
+
+    async def override_brand_service():
+        return StubBrandService()
+
+    application.dependency_overrides[get_brand_service] = override_brand_service
+    application.state.audit_service = service
+    try:
+        response = asyncio.run(request(
+            application,
+            "POST",
+            "/api/v1/brands/",
+            {"name": "Audit-Test", "supported_drivers": ["cisco_ios"]},
+        ))
+        assert response.status_code == 201
+        assert len(service.events) == 1
+        event = service.events[0]
+        assert event.action == "BRAND_CREATE"
+        assert event.resource_id == "brnd-audit-test"
+        assert event.event_status == AuditEventStatus.SUCCESS
+        assert event.actor_type == AuditActorType.SYSTEM
+    finally:
+        application.dependency_overrides.pop(get_brand_service, None)
+        del application.state.audit_service
