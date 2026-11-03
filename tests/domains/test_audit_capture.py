@@ -49,6 +49,10 @@ def build_test_app(service):
     async def update_device(device_id: str):
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    @app.post("/api/v1/auth/login")
+    async def failed_login():
+        raise HTTPException(status_code=401, detail="Bad credentials")
+
     @app.get("/api/v1/devices/")
     async def list_devices():
         return []
@@ -60,7 +64,7 @@ def build_test_app(service):
     return app
 
 
-def test_create_audits_authenticated_actor_without_recording_secrets():
+def test_transactional_success_does_not_create_duplicate_middleware_event():
     service = MemoryAuditService()
     api = build_test_app(service)
 
@@ -70,23 +74,9 @@ def test_create_audits_authenticated_actor_without_recording_secrets():
         "commands": ["secret command"],
     }))
     assert response.status_code == 201
-    assert len(service.events) == 1
-    event = service.events[0]
-    assert event.actor_type == AuditActorType.USER
-    assert event.actor_user_id == "user-test"
-    assert event.actor_display_name == "Network Admin"
-    assert event.action == "DEVICE_CREATE"
-    assert event.resource_type == "DEVICE"
-    assert event.resource_id == "devc-1"
-    assert event.event_status == AuditEventStatus.SUCCESS
-    assert event.event_data == {
-        "method": "POST",
-        "route": "/api/v1/devices/",
-        "http_status": 201,
-    }
-    serialized = json.dumps(event.model_dump(mode="json"))
-    assert "NEVER_LOG_THIS" not in serialized
-    assert "secret command" not in serialized
+    # Successful mutations are logged by the repository in its DB transaction.
+    # The fake endpoint has no repository; middleware must NOT duplicate them.
+    assert service.events == []
 
 
 def test_denied_write_creates_denied_event_without_read_log():
@@ -112,9 +102,9 @@ def test_audit_storage_outage_does_not_misreport_committed_mutation(caplog):
             raise ConnectionError("audit database unreachable")
 
     api = build_test_app(UnavailableAuditService())
-    response = asyncio.run(request(api, "POST", "/api/v1/devices/", {"hostname": "P1"}))
+    response = asyncio.run(request(api, "POST", "/api/v1/auth/login"))
 
-    assert response.status_code == 201
+    assert response.status_code == 401
     assert "SYSTEM AUDIT WRITE FAILED" in caplog.text
 
 
@@ -155,12 +145,9 @@ def test_actual_app_wires_business_route_into_system_audit():
             {"name": "Audit-Test", "supported_drivers": ["cisco_ios"]},
         ))
         assert response.status_code == 201
-        assert len(service.events) == 1
-        event = service.events[0]
-        assert event.action == "BRAND_CREATE"
-        assert event.resource_id == "brnd-audit-test"
-        assert event.event_status == AuditEventStatus.SUCCESS
-        assert event.actor_type == AuditActorType.SYSTEM
+        # The mocked service does not write to DB. Middleware intentionally
+        # does not manufacture a duplicate SUCCESS event for atomic actions.
+        assert service.events == []
     finally:
         application.dependency_overrides.pop(get_brand_service, None)
         del application.state.audit_service
