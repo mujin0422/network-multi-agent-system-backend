@@ -4,9 +4,11 @@ from datetime import UTC, datetime
 
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import (
+    BenchmarkObservationReaderProtocol,
     BenchmarkRunRepositoryProtocol,
     BenchmarkScenarioRepositoryProtocol,
 )
+from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
 from app.domains.benchmark.schemas import (
     BenchmarkAction,
     BenchmarkCheck,
@@ -33,12 +35,14 @@ class BenchmarkRunService:
         scenario_repository: BenchmarkScenarioRepositoryProtocol,
         evaluation_repository: TaskEvaluationRepositoryProtocol,
         network_tool: NetworkTool,
+        observation_reader: BenchmarkObservationReaderProtocol | None = None,
     ) -> None:
         """Khởi tạo BenchmarkRunService cùng các phụ thuộc cần thiết."""
         self._runs = run_repository
         self._scenarios = scenario_repository
         self._evaluations = evaluation_repository
         self._network_tool = network_tool
+        self._observation_reader = observation_reader
 
     def list_runs(self, limit: int = 50) -> list[BenchmarkRun]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_runs."""
@@ -134,11 +138,17 @@ class BenchmarkRunService:
         if response is None or response.message_type != MessageType.FINAL_RESPONSE:
             return
         now = datetime.now(UTC)
+        observations = (
+            self._observation_reader.get_for_task(task.id, run.source_message_id)
+            if self._observation_reader is not None and run.source_message_id
+            else BenchmarkObservation()
+        )
         evaluation, rca_result = build_benchmark_evaluation(
             run,
             task,
             response,
             now,
+            observations=observations,
         )
         self._evaluations.save(evaluation)
         self._runs.save(

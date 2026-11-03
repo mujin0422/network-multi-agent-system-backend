@@ -41,7 +41,7 @@ CREATE TYPE device_action_phase AS ENUM (
 CREATE TYPE evaluation_status AS ENUM ('PENDING', 'COMPLETED', 'ERROR');
 CREATE TYPE evaluation_result AS ENUM ('PASS', 'FAIL', 'UNKNOWN', 'NOT_APPLICABLE');
 CREATE TYPE evaluator_type AS ENUM ('AUTOMATED', 'HUMAN');
-CREATE TYPE evaluation_metric_type AS ENUM ('GOAL', 'RCA', 'REMEDIATION', 'SAFETY');
+CREATE TYPE evaluation_metric_type AS ENUM ('GOAL', 'RCA', 'REMEDIATION', 'SAFETY', 'LATENCY', 'INTERACTION_TURNS');
 CREATE TYPE activity_actor_type AS ENUM (
     'ORCHESTRATOR', 'PLANNER', 'NETWORK', 'ANALYST', 'TOOL'
 );

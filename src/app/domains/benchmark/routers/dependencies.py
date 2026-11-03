@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.domains.benchmark.repositories import (
+    BenchmarkObservationRepository,
     BenchmarkRunRepository,
     BenchmarkScenarioRepository,
 )
@@ -41,6 +42,7 @@ def _build_benchmark_run_service() -> BenchmarkRunService:
         BenchmarkScenarioRepository(settings.database_url),
         TaskEvaluationRepository(settings.database_url),
         network_tool,
+        BenchmarkObservationRepository(settings.database_url),
     )
 
 

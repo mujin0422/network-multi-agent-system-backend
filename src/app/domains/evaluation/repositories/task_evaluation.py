@@ -11,6 +11,7 @@ from app.domains.evaluation.models import (
     TaskEvaluationModel,
 )
 from app.domains.evaluation.schemas import (
+    EvaluationMetricType,
     TaskEvaluationDetail,
     TaskEvaluationMetric,
     TaskEvaluationSummary,
@@ -84,8 +85,19 @@ class TaskEvaluationRepository:
                 )
             ).all()
             results_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
+            measurements_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
             for metric in metric_rows:
                 results_by_id[metric.evaluation_id][metric.metric_type] = metric.result
+                if metric.metric_type == EvaluationMetricType.LATENCY:
+                    key = "duration_ms"
+                elif metric.metric_type == EvaluationMetricType.INTERACTION_TURNS:
+                    key = "count"
+                else:
+                    continue
+                raw = metric.actual_value
+                value = raw.get(key) if isinstance(raw, dict) else None
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                    measurements_by_id[metric.evaluation_id][metric.metric_type] = value
             return [
                 TaskEvaluationSummary.model_validate(
                     {
@@ -97,6 +109,7 @@ class TaskEvaluationRepository:
                         "created_at": row.created_at,
                         "evaluated_at": row.evaluated_at,
                         "results": results_by_id[row.id],
+                        "measurements": measurements_by_id[row.id],
                     }
                 )
                 for row in rows
