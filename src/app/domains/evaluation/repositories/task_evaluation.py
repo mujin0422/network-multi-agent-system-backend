@@ -84,12 +84,18 @@ class TaskEvaluationRepository:
                     )
                 )
             ).all()
+            evaluation_versions = {item.id: item.evaluator_version for item in rows}
             results_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
             measurements_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
             for metric in metric_rows:
                 results_by_id[metric.evaluation_id][metric.metric_type] = metric.result
                 if metric.metric_type == EvaluationMetricType.LATENCY:
-                    key = "duration_ms"
+                    # Legacy v2 was end-to-end. v3 is active AI workflow time.
+                    key = (
+                        "active_duration_ms"
+                        if evaluation_versions.get(metric.evaluation_id) == "db-benchmark-v3"
+                        else "duration_ms"
+                    )
                 elif metric.metric_type == EvaluationMetricType.INTERACTION_TURNS:
                     key = "count"
                 else:
