@@ -14,7 +14,7 @@ import sys
 
 import psycopg
 
-import migrate
+from scripts import migrate
 
 
 def _present(conn: psycopg.Connection, name: str) -> bool:
