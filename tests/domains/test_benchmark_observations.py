@@ -71,6 +71,10 @@ def test_latency_excludes_gns3_setup_and_counts_agent_tool_calls() -> None:
         BenchmarkObservation(
             source_message_created_at=start,
             agent_tool_calls=3,
+            diagnosis_submission={
+                "is_anomaly": True,
+                "root_causes": [{"device": "P1", "interface": None, "fault_type": "link_down"}],
+            },
         ),
         start + timedelta(seconds=4, milliseconds=250),
     )
