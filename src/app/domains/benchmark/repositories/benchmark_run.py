@@ -3,15 +3,23 @@
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 
 from app.core.database import create_session_factory
 from app.core.exceptions import ResourceNotFoundError
 from app.domains.benchmark.models import BenchmarkRunModel
 from app.domains.benchmark.schemas import BenchmarkRunRecord
+from app.domains.benchmark.schemas.benchmark_run_summary import BenchmarkRunSummary
+from app.domains.benchmark.utils.summary import summarize_run_groups
+from app.domains.evaluation.models import TaskEvaluationMetricModel
+from app.domains.evaluation.schemas import EvaluationMetricType
 
 
 class BenchmarkRunRepositoryProtocol(Protocol):
+    def get_summary(self) -> BenchmarkRunSummary:
+        """Aggregate ALL runs by GOAL outcome, not the paginated list."""
+        ...
+
     def get_all(self, limit: int = 50) -> list[BenchmarkRunRecord]:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
         ...
@@ -56,6 +64,51 @@ class BenchmarkRunRepository:
                 "cleaned_at": model.cleaned_at,
             }
         )
+
+    def get_summary(self) -> BenchmarkRunSummary:
+        """SQL GROUP BY across the entire history; prevent 100-row sample bias."""
+        has_source = BenchmarkRunModel.source_message_id.is_not(None)
+        has_evaluation = BenchmarkRunModel.evaluation_id.is_not(None)
+        has_error = BenchmarkRunModel.error_message.is_not(None)
+        goal_result = TaskEvaluationMetricModel.result
+        statement = (
+            select(
+                BenchmarkRunModel.status,
+                has_source.label("has_source"),
+                has_evaluation.label("has_evaluation"),
+                goal_result,
+                has_error.label("has_error"),
+                func.count(BenchmarkRunModel.id),
+            )
+            .outerjoin(
+                TaskEvaluationMetricModel,
+                and_(
+                    TaskEvaluationMetricModel.evaluation_id
+                    == BenchmarkRunModel.evaluation_id,
+                    TaskEvaluationMetricModel.metric_type == EvaluationMetricType.GOAL,
+                ),
+            )
+            .group_by(
+                BenchmarkRunModel.status,
+                has_source,
+                has_evaluation,
+                goal_result,
+                has_error,
+            )
+        )
+        with self._sessions() as session:
+            grouped_rows = session.execute(statement).all()
+        return summarize_run_groups([
+            (
+                str(status),
+                bool(source),
+                bool(evaluation),
+                result.value if result is not None else None,
+                bool(error),
+                int(count),
+            )
+            for status, source, evaluation, result, error, count in grouped_rows
+        ])
 
     def get_all(self, limit: int = 50) -> list[BenchmarkRunRecord]:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_all."""
