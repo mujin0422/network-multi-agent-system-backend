@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import TaskOperationDeviceModel
-from app.domains.execution.schemas import TaskOperationDevice
+from app.domains.execution.schemas import OperationDeviceStatus, TaskOperationDevice
 
 
 class OperationDeviceRepository:
@@ -35,9 +35,14 @@ class OperationDeviceRepository:
         """Tạo hoặc cập nhật trạng thái thực thi trên một thiết bị."""
 
         with self._sessions.begin() as session:
-            model = session.get(TaskOperationDeviceModel, mapping.id)
+            model = session.get(TaskOperationDeviceModel, mapping.id, with_for_update=True)
             if model is None:
                 session.add(TaskOperationDeviceModel(**mapping.model_dump()))
+                return
+            if model.operation_device_status in {
+                OperationDeviceStatus.SUCCESS, OperationDeviceStatus.FAILED,
+                OperationDeviceStatus.REJECTED, OperationDeviceStatus.SKIPPED,
+            }:
                 return
             model.operation_device_status = mapping.operation_device_status
             model.error_message = mapping.error_message

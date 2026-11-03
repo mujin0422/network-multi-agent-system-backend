@@ -42,6 +42,21 @@ class ExecutionOrchestrator:
     async def execute_task(self, task: TaskDetail) -> list[NetworkExecutionResult]:
         """Chạy Task theo thứ tự DAG và chốt trạng thái cuối."""
 
+        # A late approval callback must not revive a Task already finalized by
+        # the approval expiry worker.
+        if task.task_status in {
+            TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+            TaskStatus.FAILED, TaskStatus.REJECTED,
+        }:
+            return []
+        if task.task_status == TaskStatus.RUNNING and (
+            self._execution_service.get_task(task.id).task_status in {
+                TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+                TaskStatus.FAILED, TaskStatus.REJECTED,
+            }
+        ):
+            return []
+
         started_at = datetime.now(UTC)
         running_task = task.model_copy(
             update={"task_status": TaskStatus.RUNNING, "completed_at": None}
@@ -60,6 +75,13 @@ class ExecutionOrchestrator:
                 task.operations,
                 key=lambda item: item.display_order,
             ):
+                if task.task_status == TaskStatus.RUNNING and (
+                    self._execution_service.get_task(task.id).task_status in {
+                        TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+                        TaskStatus.FAILED, TaskStatus.REJECTED,
+                    }
+                ):
+                    return results
                 if operation.operation_status in TERMINAL_OPERATION_STATUSES:
                     statuses[operation.id] = operation.operation_status
                     continue
@@ -81,6 +103,13 @@ class ExecutionOrchestrator:
             self._fail_task(running_task, started_at, exc)
             raise
 
+        if task.task_status == TaskStatus.RUNNING and (
+            self._execution_service.get_task(task.id).task_status in {
+                TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+                TaskStatus.FAILED, TaskStatus.REJECTED,
+            }
+        ):
+            return results
         self._complete_task(running_task, started_at, statuses)
         return results
 

@@ -25,6 +25,11 @@ class BenchmarkScenarioService:
             for scenario in self._repository.get_all()
         ]
 
+    def get(self, scenario_id: str) -> BenchmarkScenarioRecord:
+        """Lấy đủ các bước inject/verify/cleanup để chỉnh sửa một scenario."""
+
+        return self._repository.get_by_id(scenario_id)
+
     def create(
         self, payload: BenchmarkScenario, user_id: str
     ) -> BenchmarkScenarioRecord:

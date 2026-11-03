@@ -91,3 +91,12 @@ class TaskEvaluationDetail(TaskEvaluation):
         default_factory=list,
         description="Các kết quả GOAL, RCA, REMEDIATION và SAFETY.",
     )
+
+
+class TaskEvaluationSummary(TaskEvaluation):
+    """Compact evaluation row for the history page (no ground truth or evidence)."""
+
+    results: dict[EvaluationMetricType, EvaluationResult] = Field(
+        default_factory=dict,
+        description="Chỉ trạng thái từng metric; dữ liệu chi tiết lấy từ API theo Task.",
+    )

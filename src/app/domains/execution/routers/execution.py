@@ -5,6 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
+from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
+from app.domains.benchmark.services import BenchmarkRunService
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 
@@ -20,6 +22,7 @@ from app.domains.execution.schemas import (
     TaskActivityEvent,
     TaskCreate,
     TaskDetail,
+    TaskRecords,
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.execution.routers.dependencies import get_execution_service
@@ -42,13 +45,31 @@ async def list_device_action_logs(
     return service.list_device_action_logs(limit)
 
 
+@device_action_logs_router.get(
+    "/by-task/{task_id}",
+    response_model=list[DeviceActionLog],
+)
+async def list_device_action_logs_by_task(
+    task_id: str,
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
+) -> list[DeviceActionLog]:
+    """Chỉ trả command logs của Task cho người có quyền Audit Log View."""
+
+    return service.list_device_action_logs_by_task(task_id)
+
+
 async def _resume_approved_workflow(
     operation_device_id: str,
     workflow: NetworkAutomationWorkflow,
+    benchmark_service: BenchmarkRunService,
 ) -> None:
-    """Resume LangGraph from its execution branch after an approval decision."""
+    """Resume and finalize a benchmark only after the final Agent response."""
 
-    await workflow.resume_after_approval(operation_device_id)
+    state = await workflow.resume_after_approval(operation_device_id)
+    task = state.get("task")
+    if task is not None:
+        benchmark_service.complete_for_task(task, state.get("response"))
 
 
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
@@ -75,6 +96,17 @@ async def get_task(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> TaskDetail:
     return service.get_task(task_id)
+
+
+@router.get("/{task_id}/records", response_model=TaskRecords)
+async def get_task_records(
+    task_id: str,
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+) -> TaskRecords:
+    """Đọc GROUP 3: plan, operation devices, dependency, Agent executions, timeline, approvals."""
+
+    return service.get_task_records(task_id)
 
 
 @router.get("/{task_id}/activity-events", response_model=list[TaskActivityEvent])
@@ -129,6 +161,10 @@ async def decide_operation_device_approval(
         NetworkAutomationWorkflow,
         Depends(get_network_automation_workflow),
     ],
+    benchmark_service: Annotated[
+        BenchmarkRunService,
+        Depends(get_benchmark_run_service),
+    ],
     user: Annotated[User, Depends(require_permission("Task Management", "Approve"))],
 ) -> OperationDeviceApprovalResponse:
     """Phê duyệt hoặc từ chối một lần bằng User trong access token."""
@@ -155,5 +191,6 @@ async def decide_operation_device_approval(
         _resume_approved_workflow,
         approval.operation_device_id,
         workflow,
+        benchmark_service,
     )
     return approval

@@ -40,6 +40,19 @@ async def create_scenario(
     return service.create(payload, user.id)
 
 
+@router.get("/{scenario_id}", response_model=BenchmarkScenarioRecord)
+async def get_scenario(
+    scenario_id: str,
+    service: Annotated[
+        BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
+    ],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+) -> BenchmarkScenarioRecord:
+    """Trả đầy đủ cấu hình scenario để giao diện chỉnh sửa an toàn."""
+
+    return service.get(scenario_id)
+
+
 @router.patch("/{scenario_id}", response_model=BenchmarkScenarioSummary)
 async def update_scenario(
     scenario_id: str,

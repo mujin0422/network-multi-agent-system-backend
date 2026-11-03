@@ -1,6 +1,8 @@
 """Public service cho vòng đời Task và Operation."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+from app.core.config import get_settings
 
 from app.core.exceptions import (
     InvalidStateTransitionError,
@@ -27,6 +29,7 @@ from app.domains.execution.schemas import (
     TaskActivityEvent,
     TaskCreate,
     TaskDetail,
+    TaskRecords,
     TaskStatus,
     TaskOperationDevice,
     TaskExecution,
@@ -72,6 +75,38 @@ class ExecutionService:
         return TaskDetail(
             **task.model_dump(),
             operations=self._repository.get_all_operations_by_task_id(task_id),
+        )
+
+    def get_task_records(self, task_id: str) -> TaskRecords:
+        """Đọc các bản ghi GROUP 3 của Task; không trả command logs ở đây."""
+
+        task = self.get_task(task_id)
+        operation_ids = [operation.id for operation in task.operations]
+        return TaskRecords(
+            task=task,
+            operation_devices=[
+                mapping
+                for operation_id in operation_ids
+                for mapping in self._repository.get_all_operation_devices_by_operation_id(
+                    operation_id
+                )
+            ],
+            dependencies=[
+                dependency
+                for operation_id in operation_ids
+                for dependency in self._repository.get_all_dependencies_by_operation_id(
+                    operation_id
+                )
+            ],
+            executions=self._repository.get_all_task_executions_by_task_id(task_id),
+            activity_events=self._repository.get_all_task_activity_events_by_task_id(task_id),
+            approvals=[
+                to_approval_response(approval)
+                for operation_id in operation_ids
+                for approval in self._repository.get_all_operation_approvals_by_operation_id(
+                    operation_id
+                )
+            ],
         )
 
     # =============================================================================
@@ -177,7 +212,7 @@ class ExecutionService:
 
         self._require_operation(operation_id)
         return [
-            self._to_approval_response(approval)
+            to_approval_response(approval)
             for approval in self._repository.get_all_operation_approvals_by_operation_id(
                 operation_id
             )
@@ -213,9 +248,18 @@ class ExecutionService:
             commands,
             request_hash,
             datetime.now(UTC),
+            timeout_minutes=get_settings().approval_timeout_minutes,
         )
         self._repository.save_operation_device_approval(approval)
         return approval
+
+    def expire_due_approvals(self, now: datetime | None = None) -> list[str]:
+        """Atomically finalize overdue approvals, their Tasks and Benchmark Runs."""
+
+        return self._repository.expire_due_approvals(
+            now or datetime.now(UTC),
+            get_settings().approval_timeout_minutes,
+        )
 
     def expire_operation_approval(self, approval_id: str) -> None:
         """Đánh dấu Approval PENDING đã quá hạn."""
@@ -242,7 +286,12 @@ class ExecutionService:
             )
 
         now = datetime.now(UTC)
-        if approval.expires_at is not None and approval.expires_at <= now:
+        # Legacy rows may have NULL expires_at. Still apply the configured TTL.
+        deadline = approval.expires_at or (
+            approval.requested_at
+            + timedelta(minutes=get_settings().approval_timeout_minutes)
+        )
+        if deadline <= now:
             self._repository.expire_operation_approval(approval_id)
             raise ResourceConflictError(f"Approval '{approval_id}' đã hết hạn")
 
@@ -292,6 +341,10 @@ class ExecutionService:
     def list_device_action_logs(self, limit: int = 500) -> list[DeviceActionLog]:
         return self._repository.get_recent_device_action_logs(limit)
 
+    def list_device_action_logs_by_task(self, task_id: str) -> list[DeviceActionLog]:
+        self._require_task(task_id)
+        return self._repository.get_all_device_action_logs_by_task_id(task_id)
+
     # =============================================================================
     # Execution Plan — tạo operation và lưu kế hoạch nguyên tử
     # =============================================================================
@@ -339,11 +392,12 @@ class ExecutionService:
 
         records = build_execution_plan_records(task, plan, datetime.now(UTC))
         self._repository.save_execution_plan(
-            planned_task,
-            operations=operations,
-            dependencies=dependencies,
-            operation_devices=operation_devices,
+            records.task,
+            operations=records.operations,
+            dependencies=records.dependencies,
+            operation_devices=records.operation_devices,
         )
+        return self.get_task(task_id)
 
     # =============================================================================
     # Xác minh tài nguyên và chuyển đổi response

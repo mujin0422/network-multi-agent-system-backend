@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import TaskModel
-from app.domains.execution.schemas import Task
+from app.domains.execution.schemas import Task, TaskStatus
 
 
 class TaskRepository:
@@ -30,9 +30,16 @@ class TaskRepository:
         execution plan trong ``ExecutionRepository.save_execution_plan``.
         """
 
-        model = session.get(TaskModel, task.id)
+        model = session.get(TaskModel, task.id, with_for_update=True)
         if model is None:
             session.add(TaskModel(**task.model_dump()))
+            return
+        # Terminal tasks are immutable: reject even a stale SUCCESS callback
+        # after timeout was committed as FAILED or PARTIAL_SUCCESS.
+        if model.task_status in {
+            TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
+            TaskStatus.FAILED, TaskStatus.REJECTED,
+        }:
             return
         model.conversation_id = task.conversation_id
         model.source_message_id = task.source_message_id

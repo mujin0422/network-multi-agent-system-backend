@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import OperationModel
-from app.domains.execution.schemas import Operation
+from app.domains.execution.schemas import Operation, OperationStatus
 
 
 class OperationRepository:
@@ -20,9 +20,15 @@ class OperationRepository:
         """Tạo mới hoặc cập nhật một operation."""
 
         with self._sessions.begin() as session:
-            model = session.get(OperationModel, operation.id)
+            model = session.get(OperationModel, operation.id, with_for_update=True)
             if model is None:
                 session.add(OperationModel(**operation.model_dump()))
+                return
+            if model.operation_status in {
+                OperationStatus.SUCCESS, OperationStatus.PARTIAL_SUCCESS,
+                OperationStatus.FAILED, OperationStatus.REJECTED,
+                OperationStatus.SKIPPED,
+            }:
                 return
             model.task_id = operation.task_id
             model.operation_intent = operation.operation_intent

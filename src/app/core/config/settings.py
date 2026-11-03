@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     )
     gns3_request_timeout: float = Field(default=10.0, gt=0)
 
+    # Human approval deadlines and database expiry sweep.
+    approval_timeout_minutes: int = Field(default=15, ge=1, le=1440)
+    approval_sweep_interval_seconds: int = Field(default=30, ge=5, le=3600)
+    approval_sweep_enabled: bool = True
+
     # Network connection timeouts.
     ssh_timeout: int = Field(default=60, gt=0)
     ssh_auth_timeout: int = Field(default=30, gt=0)

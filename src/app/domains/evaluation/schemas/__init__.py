@@ -8,6 +8,7 @@ from app.domains.evaluation.schemas.task_evaluation import (
     TaskEvaluation,
     TaskEvaluationDetail,
     TaskEvaluationMetric,
+    TaskEvaluationSummary,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "TaskEvaluation",
     "TaskEvaluationDetail",
     "TaskEvaluationMetric",
+    "TaskEvaluationSummary",
 ]

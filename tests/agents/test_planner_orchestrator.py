@@ -14,6 +14,8 @@ from app.domains.execution.schemas import (
     DependencyType,
     DeviceRole,
     ExecutionPlanCreate,
+    TaskCreate,
+    TaskStatus,
     TaskType,
 )
 from app.domains.execution.services import ExecutionService
@@ -183,6 +185,66 @@ def test_orchestrator_creates_task_operations_dependencies_and_devices() -> None
     assert execution_repository.dependencies[0].operation_id == task.operations[1].id
     assert len(execution_repository.operation_devices) == 1
     assert execution_repository.operation_devices[0].device_id == device.id
+
+
+def test_execution_service_persists_plan_and_returns_task_detail() -> None:
+    """Regression: use the generated plan records, not undefined local variables."""
+
+    repository = StubExecutionRepository()
+    service = ExecutionService(repository)
+    task = service.create_task(
+        TaskCreate(
+            conversation_id="cons-1",
+            source_message_id="mesg-1",
+            user_id="user-1",
+            input_message="Read P1 routing table, then analyze it",
+        )
+    )
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "COMPOSITE",
+            "operations": [
+                {
+                    "operation_intent": "GET_ROUTING_TABLE",
+                    "operation_parameters": {"command": "show ip route"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                },
+                {
+                    "operation_intent": "ANALYZE_ROUTING_DATA",
+                    "operation_parameters": {},
+                    "devices": [],
+                    "dependencies": [
+                        {
+                            "depends_on_order": 1,
+                            "dependency_type": "ON_SUCCESS",
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+    result = service.create_execution_plan(task.id, plan)
+
+    assert result.id == task.id
+    assert result.task_status == TaskStatus.PLANNING
+    assert result.task_type == TaskType.COMPOSITE
+    assert [operation.display_order for operation in result.operations] == [1, 2]
+    assert repository.tasks[task.id].task_status == TaskStatus.PLANNING
+    assert len(repository.operations) == 2
+    assert len(repository.dependencies) == 1
+    assert repository.dependencies[0].operation_id == result.operations[1].id
+    assert repository.dependencies[0].depends_on_operation_id == result.operations[0].id
+    assert len(repository.operation_devices) == 1
+    assert repository.operation_devices[0].operation_id == result.operations[0].id
+    assert repository.operation_devices[0].device_id == "devc-1"
 
 
 def test_planner_retries_when_model_omits_device_command() -> None:

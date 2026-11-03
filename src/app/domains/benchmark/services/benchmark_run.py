@@ -20,7 +20,7 @@ from app.domains.benchmark.utils import (
     build_benchmark_evaluation,
     to_public_benchmark_run,
 )
-from app.domains.conversation.schemas import Conversation, Message
+from app.domains.conversation.schemas import Conversation, Message, MessageType
 from app.domains.evaluation.repositories import TaskEvaluationRepositoryProtocol
 from app.domains.execution.schemas import AccessMode, TaskDetail
 from app.tools import NetworkTool
@@ -129,6 +129,10 @@ class BenchmarkRunService:
     ) -> None:
         """Xử lý trạng thái nghiệp vụ trong phương thức complete."""
         run = self._runs.get_by_id(run_id)
+        if run.status != BenchmarkRunStatus.RUNNING:
+            return
+        if response is None or response.message_type != MessageType.FINAL_RESPONSE:
+            return
         now = datetime.now(UTC)
         evaluation, rca_result = build_benchmark_evaluation(
             run,
@@ -148,6 +152,23 @@ class BenchmarkRunService:
                 }
             )
         )
+
+    def complete_for_task(
+        self,
+        task: TaskDetail,
+        response: Message | None,
+    ) -> None:
+        """Finalize a resumed benchmark only once a FINAL_RESPONSE is available.
+
+        The benchmark run is linked by the source user message, including when
+        the workflow pauses for approvals and resumes later in another request.
+        """
+        run = self._runs.get_by_source_message_id(task.source_message_id)
+        if run is None or run.status != BenchmarkRunStatus.RUNNING:
+            return
+        if response is None or response.message_type != MessageType.FINAL_RESPONSE:
+            return
+        self.complete(run.id, task, response)
 
     def fail(self, run_id: str, error: Exception) -> None:
         """Xử lý trạng thái nghiệp vụ trong phương thức fail."""
