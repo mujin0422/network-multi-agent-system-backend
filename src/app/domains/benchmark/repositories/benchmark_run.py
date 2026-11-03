@@ -103,7 +103,7 @@ class BenchmarkRunRepository:
                 str(status),
                 bool(source),
                 bool(evaluation),
-                result.value if result is not None else None,
+                (result.value if hasattr(result, "value") else result),
                 bool(error),
                 int(count),
             )
