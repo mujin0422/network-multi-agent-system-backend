@@ -87,13 +87,23 @@ class TaskEvaluationRepository:
             evaluation_versions = {item.id: item.evaluator_version for item in rows}
             results_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
             measurements_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
+            scores_by_id: dict[UUID, dict] = {item.id: {} for item in rows}
             for metric in metric_rows:
                 results_by_id[metric.evaluation_id][metric.metric_type] = metric.result
+                if (
+                    metric.metric_type == EvaluationMetricType.RCA
+                    and evaluation_versions.get(metric.evaluation_id) == "db-benchmark-v4"
+                    and isinstance(metric.actual_value, dict)
+                ):
+                    for field in ("rca_f1", "localization_f1", "fault_type_f1", "rca_precision", "rca_recall"):
+                        value = metric.actual_value.get(field)
+                        if isinstance(value, (int, float)) and not isinstance(value, bool):
+                            scores_by_id[metric.evaluation_id][field] = float(value)
                 if metric.metric_type == EvaluationMetricType.LATENCY:
                     # Legacy v2 was end-to-end. v3 is active AI workflow time.
                     key = (
                         "active_duration_ms"
-                        if evaluation_versions.get(metric.evaluation_id) == "db-benchmark-v3"
+                        if evaluation_versions.get(metric.evaluation_id) in {"db-benchmark-v3", "db-benchmark-v4"}
                         else "duration_ms"
                     )
                 elif metric.metric_type == EvaluationMetricType.INTERACTION_TURNS:
@@ -116,6 +126,7 @@ class TaskEvaluationRepository:
                         "evaluated_at": row.evaluated_at,
                         "results": results_by_id[row.id],
                         "measurements": measurements_by_id[row.id],
+                        "scores": scores_by_id[row.id],
                     }
                 )
                 for row in rows
