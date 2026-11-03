@@ -1,12 +1,18 @@
-"""Raw observations collected for one benchmark task (not PASS/FAIL judgments)."""
+"""Task-local activity observations for numerical benchmark evaluation."""
 
 from datetime import datetime
 
 from pydantic import BaseModel, Field
 
 
+class ApprovalWaitInterval(BaseModel):
+    started_at: datetime
+    resumed_at: datetime
+
+
 class BenchmarkObservation(BaseModel):
-    # The benchmark initial message is created after preconditions/fault injection.
+    # Retained for inspection of old logs; no longer used to measure AI runtime.
     source_message_created_at: datetime | None = None
-    # One persisted TaskExecution with non-null tool_name = one agent-tool turn.
     agent_tool_calls: int | None = Field(default=None, ge=0)
+    approval_wait_intervals: list[ApprovalWaitInterval] = Field(default_factory=list)
+    approval_wait_open: bool = False

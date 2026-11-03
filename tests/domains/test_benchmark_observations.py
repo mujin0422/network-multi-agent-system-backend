@@ -3,14 +3,16 @@
 from datetime import UTC, datetime, timedelta
 
 from app.domains.benchmark.schemas import BenchmarkRunRecord, BenchmarkScenario
-from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
+from app.domains.benchmark.schemas.benchmark_observation import ApprovalWaitInterval, BenchmarkObservation
+from app.domains.benchmark.repositories.benchmark_observation import approval_pauses_from_events
+from app.domains.execution.schemas import ActivityEventType
 from app.domains.benchmark.utils import build_benchmark_evaluation
 from app.domains.conversation.schemas import Message, MessageSender, MessageType
 from app.domains.evaluation.schemas import EvaluationMetricType, EvaluationResult
 from app.domains.execution.schemas import TaskDetail, TaskStatus, TaskType
 
 
-def make_evaluation(observation: BenchmarkObservation, response_time: datetime):
+def make_evaluation(observation: BenchmarkObservation, response_time: datetime, *, task_created_at: datetime | None = None):
     source = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
     scenario = BenchmarkScenario.model_validate({
         "scenario_key": "latency-test",
@@ -46,7 +48,7 @@ def make_evaluation(observation: BenchmarkObservation, response_time: datetime):
         "input_message": "Diagnose",
         "task_status": TaskStatus.SUCCESS,
         "task_type": TaskType.DIAGNOSIS,
-        "created_at": source,
+        "created_at": task_created_at or source,
     })
     response = Message.model_validate({
         "id": "mesg-response",
@@ -73,7 +75,7 @@ def test_latency_excludes_gns3_setup_and_counts_agent_tool_calls() -> None:
         start + timedelta(seconds=4, milliseconds=250),
     )
     assert len(metrics) == 6
-    assert metrics[EvaluationMetricType.LATENCY].actual_value == {"duration_ms": 4250}
+    assert metrics[EvaluationMetricType.LATENCY].actual_value == {"active_duration_ms": 4250}
     assert metrics[EvaluationMetricType.INTERACTION_TURNS].actual_value == {"count": 3}
     assert metrics[EvaluationMetricType.LATENCY].result == EvaluationResult.UNKNOWN
     assert metrics[EvaluationMetricType.INTERACTION_TURNS].result == EvaluationResult.UNKNOWN
@@ -83,20 +85,89 @@ def test_latency_excludes_gns3_setup_and_counts_agent_tool_calls() -> None:
     assert metrics[EvaluationMetricType.SAFETY].result == EvaluationResult.NOT_APPLICABLE
 
 
-def test_missing_request_timestamp_does_not_invent_latency() -> None:
+def test_missing_request_timestamp_does_not_break_task_based_measurement() -> None:
     now = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
     metrics = make_evaluation(BenchmarkObservation(agent_tool_calls=0), now)
-    assert metrics[EvaluationMetricType.LATENCY].actual_value is None
+    assert metrics[EvaluationMetricType.LATENCY].actual_value == {"active_duration_ms": 0}
     assert metrics[EvaluationMetricType.INTERACTION_TURNS].actual_value == {"count": 0}
 
 
 def test_negative_duration_is_unknown_instead_of_clamped_to_zero() -> None:
     now = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
     metrics = make_evaluation(
-        BenchmarkObservation(
-            source_message_created_at=now + timedelta(seconds=10),
-            agent_tool_calls=1,
-        ),
+        BenchmarkObservation(agent_tool_calls=1),
         now,
+        task_created_at=now + timedelta(seconds=10),
     )
     assert metrics[EvaluationMetricType.LATENCY].actual_value is None
+
+
+def test_ai_runtime_excludes_human_wait_and_preserves_tool_calls() -> None:
+    start = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    metrics = make_evaluation(
+        BenchmarkObservation(
+            agent_tool_calls=4,
+            approval_wait_intervals=[
+                ApprovalWaitInterval(
+                    started_at=start + timedelta(seconds=10),
+                    resumed_at=start + timedelta(seconds=35),
+                ),
+            ],
+        ),
+        start + timedelta(seconds=45),
+    )
+    assert metrics[EvaluationMetricType.LATENCY].actual_value == {"active_duration_ms": 20000}
+    assert metrics[EvaluationMetricType.LATENCY].evidence["approval_wait_ms"] == 25000
+    assert metrics[EvaluationMetricType.INTERACTION_TURNS].actual_value == {"count": 4}
+
+
+def test_unfinished_approval_pause_yields_missing_measurement() -> None:
+    start = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    metrics = make_evaluation(
+        BenchmarkObservation(approval_wait_open=True),
+        start + timedelta(seconds=40),
+    )
+    assert metrics[EvaluationMetricType.LATENCY].actual_value is None
+
+
+def test_waiting_events_pair_with_actual_execution_resume() -> None:
+    start = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    pauses, open_wait = approval_pauses_from_events([
+        (ActivityEventType.EXECUTION_STARTED, start + timedelta(seconds=1)),
+        (ActivityEventType.APPROVAL_REQUESTED, start + timedelta(seconds=5)),
+        (ActivityEventType.APPROVAL_APPROVED, start + timedelta(seconds=25)),
+        (ActivityEventType.EXECUTION_STARTED, start + timedelta(seconds=27)),
+    ])
+    assert not open_wait
+    assert pauses[0].started_at == start + timedelta(seconds=5)
+    assert pauses[0].resumed_at == start + timedelta(seconds=27)
+
+
+def test_waiting_events_refuse_unmatched_request() -> None:
+    start = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    pauses, open_wait = approval_pauses_from_events([
+        (ActivityEventType.APPROVAL_REQUESTED, start),
+        (ActivityEventType.APPROVAL_APPROVED, start + timedelta(seconds=2)),
+    ])
+    assert open_wait
+    assert pauses == []
+
+
+def test_overlapping_approval_waits_are_merged() -> None:
+    from app.domains.benchmark.utils.active_runtime import active_workflow_duration_ms
+    start = datetime(2026, 11, 3, 8, 0, tzinfo=UTC)
+    ms, wait_ms = active_workflow_duration_ms(
+        start, start + timedelta(seconds=50),
+        BenchmarkObservation(approval_wait_intervals=[
+            ApprovalWaitInterval(
+                started_at=start + timedelta(seconds=10),
+                resumed_at=start + timedelta(seconds=30),
+            ),
+            ApprovalWaitInterval(
+                started_at=start + timedelta(seconds=20),
+                resumed_at=start + timedelta(seconds=40),
+            ),
+        ]),
+    )
+    assert ms == 20000
+    assert wait_ms == 30000

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
 from app.domains.benchmark.schemas import BenchmarkRun, BenchmarkStartRequest
+from app.domains.benchmark.schemas.benchmark_run_summary import BenchmarkRunSummary
 from app.domains.benchmark.services import BenchmarkRunService
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
@@ -30,6 +31,15 @@ async def list_runs(
     limit: int = 50,
 ) -> list[BenchmarkRun]:
     return service.list_runs(min(max(limit, 1), 100))
+
+
+@router.get("/summary", response_model=BenchmarkRunSummary)
+async def get_run_summary(
+    service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+) -> BenchmarkRunSummary:
+    """TSR across full run history (not limited by the list pagination)."""
+    return service.get_summary()
 
 
 @router.get("/{run_id}", response_model=BenchmarkRun)

@@ -9,6 +9,7 @@ from app.domains.benchmark.repositories import (
     BenchmarkScenarioRepositoryProtocol,
 )
 from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
+from app.domains.benchmark.schemas.benchmark_run_summary import BenchmarkRunSummary
 from app.domains.benchmark.schemas import (
     BenchmarkAction,
     BenchmarkCheck,
@@ -43,6 +44,10 @@ class BenchmarkRunService:
         self._evaluations = evaluation_repository
         self._network_tool = network_tool
         self._observation_reader = observation_reader
+
+    def get_summary(self) -> BenchmarkRunSummary:
+        """Compute Task Success Rate for all Benchmark Runs from GOAL metrics."""
+        return self._runs.get_summary()
 
     def list_runs(self, limit: int = 50) -> list[BenchmarkRun]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_runs."""

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.domains.benchmark.schemas import BenchmarkRunRecord
 from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
+from app.domains.benchmark.utils.active_runtime import active_workflow_duration_ms
 from app.domains.conversation.schemas import Message
 from app.domains.evaluation.schemas import (
     EvaluationMetricType,
@@ -27,18 +28,12 @@ def build_benchmark_evaluation(
     """Tạo evaluation và kết quả RCA từ response của Agent."""
 
     observations = observations or BenchmarkObservation()
-    source_at = observations.source_message_created_at
     response_at = response.created_at if response is not None else None
-    # Source user message happens after GNS3 injection. Wall-clock includes any
-    # human approval pauses and agent execution, but excludes benchmark cleanup.
-    latency_ms: int | None = None
-    if source_at is not None and response_at is not None:
-        try:
-            elapsed_ms = (response_at - source_at).total_seconds() * 1000
-        except (TypeError, OverflowError):
-            elapsed_ms = -1
-        if elapsed_ms >= 0:
-            latency_ms = round(elapsed_ms)
+    active_ms, approval_wait_ms = (
+        active_workflow_duration_ms(task.created_at, response_at, observations)
+        if response_at is not None
+        else (None, None)
+    )
 
     # Count persisted agent-tool calls, not User/Agent chat messages or chain steps.
     interaction_turns = observations.agent_tool_calls
@@ -75,7 +70,7 @@ def build_benchmark_evaluation(
         task_id=task.id,
         evaluation_status=EvaluationStatus.COMPLETED,
         evaluator_type=EvaluatorType.AUTOMATED,
-        evaluator_version="db-benchmark-v2",
+        evaluator_version="db-benchmark-v3",
         created_at=evaluated_at,
         evaluated_at=evaluated_at,
         metrics=[
@@ -127,16 +122,24 @@ def build_benchmark_evaluation(
                 id=uuid4(),
                 evaluation_id=evaluation_id,
                 metric_type=EvaluationMetricType.LATENCY,
-                # A measurement is not a PASS or FAIL without a defined threshold.
+                # A duration is an observation; no arbitrary PASS/FAIL threshold.
                 result=EvaluationResult.UNKNOWN,
                 is_required=False,
-                actual_value={"duration_ms": latency_ms} if latency_ms is not None else None,
+                actual_value={"active_duration_ms": active_ms} if active_ms is not None else None,
                 evidence={
-                    "definition": "end-to-end Chat wall-clock from benchmark USER_REQUEST to FINAL_RESPONSE",
-                    "source_message_created_at": source_at.isoformat() if source_at else None,
+                    "definition": (
+                        "AI workflow lifetime: Task created to FINAL_RESPONSE, "
+                        "minus human approval waiting; includes Planner, Network "
+                        "Agent, Analyst and orchestration overhead"
+                    ),
+                    "task_created_at": task.created_at.isoformat(),
                     "final_response_created_at": response_at.isoformat() if response_at else None,
-                    "includes_human_wait": True,
+                    "approval_wait_ms": approval_wait_ms,
+                    "approval_pause_count": len(observations.approval_wait_intervals),
+                    "approval_wait_incomplete": observations.approval_wait_open,
+                    "excludes_human_approval_wait": True,
                     "excludes_gns3_preparation": True,
+                    "model_only_inference_time": False,
                 },
                 created_at=evaluated_at,
             ),
