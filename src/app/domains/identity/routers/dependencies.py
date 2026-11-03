@@ -7,6 +7,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
+from app.core.database import DatabaseUnitOfWork
 from app.core.exceptions import AuthenticationError
 from app.domains.identity.repositories import IdentityRepository
 from app.domains.identity.schemas import User
@@ -32,17 +33,26 @@ def _build_identity_service() -> IdentityService:
 
 @lru_cache
 def _build_user_service() -> UserService:
-    return UserService(_build_identity_repository())
+    return UserService(
+        _build_identity_repository(),
+        uow=DatabaseUnitOfWork.from_url(get_settings().database_url),
+    )
 
 
 @lru_cache
 def _build_role_service() -> RoleService:
-    return RoleService(_build_identity_repository())
+    return RoleService(
+        _build_identity_repository(),
+        uow=DatabaseUnitOfWork.from_url(get_settings().database_url),
+    )
 
 
 @lru_cache
 def _build_access_control_service() -> AccessControlService:
-    return AccessControlService(_build_identity_repository())
+    return AccessControlService(
+        _build_identity_repository(),
+        uow=DatabaseUnitOfWork.from_url(get_settings().database_url),
+    )
 
 
 async def get_identity_service() -> IdentityService:

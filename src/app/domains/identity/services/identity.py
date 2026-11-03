@@ -6,7 +6,8 @@ from uuid import UUID
 import jwt
 
 from app.core.config import Settings
-from app.domains.audit.transaction import audit_mutation
+from app.domains.audit.transaction import audit_mutation, record_audit_in_session
+from app.core.database import DatabaseUnitOfWork
 
 from app.core.exceptions import (
     AuthenticationError,
@@ -150,8 +151,12 @@ class IdentityService:
 class UserService:
     """Tạo và cập nhật user, không để lộ password hash qua API."""
 
-    def __init__(self, repository: IdentityRepository) -> None:
+    def __init__(
+        self, repository: IdentityRepository,
+        uow: DatabaseUnitOfWork | None = None,
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     def create_user(self, payload: UserCreate) -> User:
         """Tạo mới dữ liệu theo nghiệp vụ của phương thức create_user."""
@@ -168,8 +173,16 @@ class UserService:
             last_updated_at=None,
             last_login_at=None,
         )
-        with audit_mutation("USER_CREATE", "USER", record.id):
-            self._repository.save_user(record)
+        if self._uow is None:
+            with audit_mutation("USER_CREATE", "USER", record.id):
+                self._repository.save_user(record)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_user_in_session(session, record)
+                record_audit_in_session(
+                    session, action="USER_CREATE", resource_type="USER",
+                    resource_id=record.id,
+                )
         return User.model_validate(record.model_dump())
 
     def list_users(self) -> list[User]:
@@ -204,8 +217,16 @@ class UserService:
         changes["last_updated_at"] = datetime.now(UTC)
 
         updated = current.model_copy(update=changes)
-        with audit_mutation("USER_UPDATE", "USER", updated.id):
-            self._repository.save_user(updated)
+        if self._uow is None:
+            with audit_mutation("USER_UPDATE", "USER", updated.id):
+                self._repository.save_user(updated)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_user_in_session(session, updated)
+                record_audit_in_session(
+                    session, action="USER_UPDATE", resource_type="USER",
+                    resource_id=updated.id,
+                )
         return User.model_validate(updated.model_dump())
 
     def _ensure_role_exists(self, role_id: str) -> None:
@@ -231,8 +252,12 @@ class UserService:
 class RoleService:
     """Tạo và cập nhật role cùng thông tin audit."""
 
-    def __init__(self, repository: IdentityRepository) -> None:
+    def __init__(
+        self, repository: IdentityRepository,
+        uow: DatabaseUnitOfWork | None = None,
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     def create_role(self, payload: RoleCreate, actor_id: str) -> Role:
         """Tạo mới dữ liệu theo nghiệp vụ của phương thức create_role."""
@@ -246,8 +271,16 @@ class RoleService:
             created_at=now,
             last_updated_at=now,
         )
-        with audit_mutation("ROLE_CREATE", "ROLE", role.id, actor_user_id=actor_id):
-            self._repository.save_role(role)
+        if self._uow is None:
+            with audit_mutation("ROLE_CREATE", "ROLE", role.id, actor_user_id=actor_id):
+                self._repository.save_role(role)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_role_in_session(session, role)
+                record_audit_in_session(
+                    session, action="ROLE_CREATE", resource_type="ROLE",
+                    resource_id=role.id, actor_user_id=actor_id,
+                )
         return role
 
     def list_roles(self) -> list[Role]:
@@ -282,8 +315,16 @@ class RoleService:
             last_updated_at=datetime.now(UTC),
         )
         updated = current.model_copy(update=changes)
-        with audit_mutation("ROLE_UPDATE", "ROLE", updated.id, actor_user_id=actor_id):
-            self._repository.save_role(updated)
+        if self._uow is None:
+            with audit_mutation("ROLE_UPDATE", "ROLE", updated.id, actor_user_id=actor_id):
+                self._repository.save_role(updated)
+        else:
+            with self._uow.begin() as session:
+                self._repository.save_role_in_session(session, updated)
+                record_audit_in_session(
+                    session, action="ROLE_UPDATE", resource_type="ROLE",
+                    resource_id=updated.id, actor_user_id=actor_id,
+                )
         return updated
 
     def _ensure_unique_name(
@@ -300,8 +341,12 @@ class RoleService:
 class AccessControlService:
     """Đọc catalog và thay thế ma trận quyền của từng role."""
 
-    def __init__(self, repository: IdentityRepository) -> None:
+    def __init__(
+        self, repository: IdentityRepository,
+        uow: DatabaseUnitOfWork | None = None,
+    ) -> None:
         self._repository = repository
+        self._uow = uow
 
     def get_catalog(self) -> PermissionCatalog:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_catalog."""
@@ -328,8 +373,18 @@ class AccessControlService:
             raise ResourceNotFoundError(
                 f"Không tìm thấy permission: {', '.join(unknown)}"
             )
-        with audit_mutation("ROLE_PERMISSIONS_REPLACE", "ROLE", role_id):
-            return self._repository.replace_role_permissions(role_id, requested)
+        if self._uow is None:
+            with audit_mutation("ROLE_PERMISSIONS_REPLACE", "ROLE", role_id):
+                return self._repository.replace_role_permissions(role_id, requested)
+        with self._uow.begin() as session:
+            self._repository.replace_role_permissions_in_session(
+                session, role_id, requested
+            )
+            record_audit_in_session(
+                session, action="ROLE_PERMISSIONS_REPLACE",
+                resource_type="ROLE", resource_id=role_id,
+            )
+        return self._repository.get_all_role_permissions_by_role_id(role_id)
 
     def _require_role(self, role_id: str, *, require_mutable: bool) -> Role:
         role = self._repository.get_role_by_id(role_id)
