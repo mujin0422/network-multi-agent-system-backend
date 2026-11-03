@@ -28,7 +28,7 @@ trước khi kết thúc transaction. Helper này gọi
 Các repository/Service cũ chưa chuyển sang Unit of Work explicit vẫn dùng
 `audit_mutation` và `append_audit_in_session` để tương thích. Đây là đường
 chuyển tiếp, không phải kiến trúc khuyến nghị cho tính năng mới.
-Xem [Unit of Work](../../../docs/architecture/database-unit-of-work.md).
+Xem [Unit of Work](../../../../docs/architecture/database-unit-of-work.md).
 
 ## Quy tắc bảo mật
 
