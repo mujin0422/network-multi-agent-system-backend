@@ -181,6 +181,17 @@ def test_builds_typed_configuration_fault_commands() -> None:
     ]
     assert build_benchmark_action_commands(acl)[-1] == "ip access-group 101 in"
 
+    cleanup_acl = BenchmarkAction(
+        device="PE1", action="acl_remove", interface="FastEthernet3/0",
+        acl_number=101, direction="in",
+    )
+    assert build_benchmark_action_commands(cleanup_acl) == [
+        "interface FastEthernet3/0",
+        "no ip access-group 101 in",
+        "exit",
+        "no access-list 101",
+    ]
+
 
 def test_benchmark_evaluation_waits_for_final_response_after_approval() -> None:
     """Pending approval must not become a false FAIL or a prematurely completed run."""
