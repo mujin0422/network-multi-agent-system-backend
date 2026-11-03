@@ -34,9 +34,10 @@ scoring by themselves.
 
 ## Apply safely
 
-**Fresh Docker DB volume:** the read-only SQL file is mounted at
-`/docker-entrypoint-initdb.d/03_benchmark_expansion.sql` and runs once after
-the base seed during PostgreSQL initialization.
+**Fresh Docker DB volume:** both read-only SQL files are mounted at
+`/docker-entrypoint-initdb.d/03_benchmark_expansion.sql` and
+`/docker-entrypoint-initdb.d/04_benchmark_bgp.sql`, executed in that order
+after the base seed during PostgreSQL initialization.
 
 **Existing database:** run migrations first, then use SQL input redirection
 (the migration runner intentionally does not own development seed data):
@@ -79,8 +80,9 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SEL
 - Some older seed cases refer to P3 interfaces or default routes not configured
   in the checked-in reference. These remain untouched; their suitability
   depends on your current lab state.
-- BGP cases assume the peer is defined and is not already shut down. The
-  preconditions verify both, then injection shuts down that BGP neighbor.
+- BGP cases require the neighbor to exist, not already be administratively
+  shut down, and have a session in **Established** state. Preconditions verify
+  all three before the BGP neighbor is shut down.
   Shutdown may affect production VPNv4/eBGP connectivity: use an isolated lab.
   Cleanup undoes the administrative shutdown; reconvergence can take time.
 - Cisco images, IOS versions, topology links, and actual CLI output can
