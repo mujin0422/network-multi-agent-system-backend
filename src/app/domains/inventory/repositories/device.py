@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import DeviceModel
 from app.domains.inventory.schemas import Device
 
@@ -29,6 +30,7 @@ class DeviceRepository:
         """
         values = device.model_dump()
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(DeviceModel, device.id)
             if model is None:
                 session.add(DeviceModel(**values))

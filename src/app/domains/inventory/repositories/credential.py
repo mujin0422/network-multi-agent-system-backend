@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import CredentialModel
 from app.domains.inventory.schemas import Credential
 from app.domains.inventory.utils import encrypted_credential
@@ -37,6 +38,7 @@ class CredentialRepository:
             ),
         )
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             session.add(model)
 
     def update(
@@ -65,6 +67,7 @@ class CredentialRepository:
             .values(**values)
         )
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             session.execute(statement)
 
     def get_by_id(self, credential_id: str) -> Credential | None:

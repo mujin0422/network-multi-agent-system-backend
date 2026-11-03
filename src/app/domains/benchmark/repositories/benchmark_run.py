@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.core.exceptions import ResourceNotFoundError
 from app.domains.benchmark.models import BenchmarkRunModel
 from app.domains.benchmark.schemas import BenchmarkRunRecord
@@ -91,6 +92,7 @@ class BenchmarkRunRepository:
         values["scenario_snapshot"] = run.scenario_snapshot.model_dump(mode="json")
         values["evaluation_id"] = UUID(run.evaluation_id) if run.evaluation_id else None
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(BenchmarkRunModel, run.id)
             if model is None:
                 session.add(BenchmarkRunModel(**values))

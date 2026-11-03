@@ -5,6 +5,7 @@ from typing import Protocol
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.core.exceptions import ResourceNotFoundError
 from app.domains.benchmark.models import BenchmarkScenarioModel
 from app.domains.benchmark.schemas import BenchmarkScenarioRecord
@@ -95,6 +96,7 @@ class BenchmarkScenarioRepository:
             include=definition_fields, mode="json"
         )
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(BenchmarkScenarioModel, scenario.id)
             if model is None:
                 session.add(BenchmarkScenarioModel(**values))

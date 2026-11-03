@@ -3,6 +3,7 @@
 from sqlalchemy import delete, select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import (
     ActionModel,
     ManagementFunctionModel,
@@ -91,6 +92,7 @@ class RolePermissionRepository:
     ) -> list[RolePermission]:
         """Cập nhật dữ liệu theo nghiệp vụ của phương thức replace_role_permissions."""
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             session.execute(
                 delete(RolePermissionModel).where(
                     RolePermissionModel.role_id == role_id

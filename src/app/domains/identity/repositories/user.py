@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import select, update
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import UserModel
 from app.domains.identity.schemas import User, UserRecord
 
@@ -51,6 +52,7 @@ class UserRepository:
     def save_user(self, record: UserRecord) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_user."""
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(UserModel, record.id)
             if model is None:
                 session.add(
@@ -83,4 +85,5 @@ class UserRepository:
             .values(last_login_at=logged_in_at)
         )
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             session.execute(statement)

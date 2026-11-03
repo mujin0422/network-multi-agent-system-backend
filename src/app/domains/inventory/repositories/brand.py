@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.inventory.models import BrandModel
 from app.domains.inventory.schemas import Brand
 
@@ -20,6 +21,7 @@ class BrandRepository:
         """Thêm mới hoặc cập nhật Brand theo primary key."""
 
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(BrandModel, brand.id)
             if model is None:
                 session.add(BrandModel(**brand.model_dump()))

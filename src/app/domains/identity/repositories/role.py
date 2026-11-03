@@ -3,6 +3,7 @@
 from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
+from app.domains.audit.transaction import append_audit_in_session
 from app.domains.identity.models import RoleModel
 from app.domains.identity.schemas import Role
 
@@ -39,6 +40,7 @@ class RoleRepository:
     def save_role(self, record: Role) -> None:
         """Lưu dữ liệu theo nghiệp vụ của phương thức save_role."""
         with self._sessions.begin() as session:
+            append_audit_in_session(session)
             model = session.get(RoleModel, record.id)
             if model is None:
                 session.add(RoleModel(**record.model_dump()))
