@@ -223,6 +223,25 @@ GNS3_PORT=3080
 GNS3_REQUEST_TIMEOUT=10
 ```
 
+## Database Session và Unit of Work
+
+Backend dùng một **Engine/connection pool theo database URL và theo process**
+được quản lý tập trung tại `app.core.database`; các repository không tạo
+Engine riêng nữa. Session được tạo theo từng transaction, không cache hay
+chia sẻ giữa các request hoặc worker.
+
+Các thao tác CRUD chính dùng `DatabaseUnitOfWork`: Service mở transaction,
+repository nhận Session có sẵn qua `save_in_session(...)`, và Audit Log được
+ghi trong cùng transaction. Cả nghiệp vụ và audit đều commit hoặc rollback.
+Luồng hoàn tất Benchmark Run cũng ghi Evaluation và Run cùng transaction.
+
+Đối với AI/Netmiko và GNS3, transaction chỉ mở trong đoạn ghi database, không
+giữ kết nối trong lúc gọi LLM, chờ approval hoặc thực thi lệnh mạng. Một số
+repository/auth/Conversation chưa được chuyển hoàn toàn sang UoW explicit
+và vẫn giữ transaction ngắn trong repository để tương thích.
+
+Chi tiết: [Database connection lifecycle và Unit of Work](docs/architecture/database-unit-of-work.md).
+
 ## Timeout phê duyệt tự động
 
 Mặc định, yêu cầu phê duyệt WRITE sẽ hết hạn sau 15 phút. Khi timeout,

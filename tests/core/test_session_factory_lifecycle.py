@@ -27,3 +27,17 @@ def test_disposing_factories_releases_engine_and_allows_recreation(tmp_path):
         assert second.kw["bind"] is not first_engine
     finally:
         dispose_session_factories()
+
+
+def test_distinct_repositories_reuse_the_same_process_pool(tmp_path):
+    from app.domains.identity.repositories.role import RoleRepository
+    from app.domains.inventory.repositories.device import DeviceRepository
+
+    database_url = f"sqlite:///{tmp_path / 'repos.sqlite3'}"
+    try:
+        roles = RoleRepository(database_url)
+        devices = DeviceRepository(database_url)
+        assert roles._sessions is devices._sessions
+        assert roles._sessions.kw["bind"] is devices._sessions.kw["bind"]
+    finally:
+        dispose_session_factories()

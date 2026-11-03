@@ -18,11 +18,17 @@ và sự kiện nghiệp vụ quan trọng trong hệ thống.
 - `GET /api/v1/device-action-logs/`: lịch sử command thực tế trên thiết bị;
   endpoint này thuộc Execution domain và không phải system audit log.
 
-API không cho phép client tạo, sửa hoặc xóa audit log. Với nghiệp vụ CRUD, Service
-khai báo `audit_mutation(action, resource_type, resource_id)` và repository gọi
-`append_audit_in_session(session)` trong cùng `session.begin()` dùng để ghi
-bản ghi nghiệp vụ. Hàm này gọi `AuditLogService.record_in_session(session, ...)`.
-**Cả hai cùng COMMIT hoặc cùng ROLLBACK**, không có commit riêng cho audit.
+API không cho phép client tạo, sửa hoặc xóa audit log. Trong luồng CRUD chính,
+Service sử dụng `DatabaseUnitOfWork.begin()`, gọi phương thức repository
+`save_in_session(session, ...)` và `record_audit_in_session(session, ...)`
+trước khi kết thúc transaction. Helper này gọi
+`AuditLogService.record_in_session(session, ...)` nhưng **không commit**.
+**Cả nghiệp vụ và audit cùng COMMIT hoặc cùng ROLLBACK**.
+
+Các repository/Service cũ chưa chuyển sang Unit of Work explicit vẫn dùng
+`audit_mutation` và `append_audit_in_session` để tương thích. Đây là đường
+chuyển tiếp, không phải kiến trúc khuyến nghị cho tính năng mới.
+Xem [Unit of Work](../../../docs/architecture/database-unit-of-work.md).
 
 ## Quy tắc bảo mật
 
