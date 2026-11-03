@@ -1,10 +1,9 @@
-"""Capture a safe, append-only audit trail for versioned business mutations.
+"""Capture independent security failures and legacy non-atomic mutations.
 
-No request/response bodies, credentials, authorization headers, or commands
-are persisted. The route allowlist makes audited actions explicit. The
-business operation finishes before this independent audit insert; a logging
-failure is surfaced to server logs, never misrepresented to the API caller as
-a failed business operation after it already committed.
+Successful CRUD events are written by application services and repositories
+inside their business transaction. HTTP capture is limited to failures/denials
+and routes that have not yet moved to a shared database Unit of Work. No
+request/response bodies, headers, credentials or commands are stored.
 """
 
 import logging
@@ -16,7 +15,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.domains.audit.routers.dependencies import get_audit_log_service
-from app.domains.audit.transaction import set_request_audit_actor, reset_request_audit_actor
+from app.domains.audit.transaction import (
+    reset_request_audit_actor,
+    set_request_audit_actor,
+)
 from app.domains.audit.schemas import (
     AuditActorType,
     AuditEventStatus,
@@ -81,7 +83,26 @@ AUDITED_ROUTES: dict[tuple[str, str], tuple[str, str, str | None]] = {
 
 # Successful mutations in this set are written inside the business transaction.
 # HTTP middleware is retained only for failed/denied requests, or legacy actions.
-TRANSACTIONAL_ACTIONS = {'USER_CREATE','USER_UPDATE','ROLE_CREATE','ROLE_UPDATE','ROLE_PERMISSIONS_REPLACE','BRAND_CREATE','BRAND_UPDATE','DEVICE_CREATE','DEVICE_UPDATE','CREDENTIAL_CREATE','CREDENTIAL_UPDATE','TASK_CREATE','OPERATION_CREATE','APPROVAL_DECISION','BENCHMARK_SCENARIO_CREATE','BENCHMARK_SCENARIO_UPDATE','BENCHMARK_RUN_START','BENCHMARK_RUN_CLEANUP'}
+TRANSACTIONAL_ACTIONS = {
+    "USER_CREATE",
+    "USER_UPDATE",
+    "ROLE_CREATE",
+    "ROLE_UPDATE",
+    "ROLE_PERMISSIONS_REPLACE",
+    "BRAND_CREATE",
+    "BRAND_UPDATE",
+    "DEVICE_CREATE",
+    "DEVICE_UPDATE",
+    "CREDENTIAL_CREATE",
+    "CREDENTIAL_UPDATE",
+    "TASK_CREATE",
+    "OPERATION_CREATE",
+    "APPROVAL_DECISION",
+    "BENCHMARK_SCENARIO_CREATE",
+    "BENCHMARK_SCENARIO_UPDATE",
+    "BENCHMARK_RUN_START",
+    "BENCHMARK_RUN_CLEANUP",
+}
 
 
 def _request_uuid(raw: str | None) -> UUID | None:

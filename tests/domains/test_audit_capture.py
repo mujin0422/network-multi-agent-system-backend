@@ -1,7 +1,6 @@
 """End-to-end HTTP audit capture tests, without a live PostgreSQL server."""
 
 import asyncio
-import json
 from types import SimpleNamespace
 
 import httpx
@@ -9,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.routing import APIRoute
 
 from app.domains.audit.http_capture import AUDITED_ROUTES, AuditCaptureMiddleware
-from app.domains.audit.schemas import AuditActorType, AuditEventStatus
+from app.domains.audit.schemas import AuditEventStatus
 from app.main import app as application
 from app.domains.inventory.routers.dependencies import get_brand_service
 from app.domains.inventory.schemas import Brand
@@ -96,7 +95,7 @@ def test_denied_write_creates_denied_event_without_read_log():
     assert service.events[0].action == "DEVICE_UPDATE"
 
 
-def test_audit_storage_outage_does_not_misreport_committed_mutation(caplog):
+def test_audit_storage_outage_does_not_change_denied_request(caplog):
     class UnavailableAuditService:
         def record(self, _event):
             raise ConnectionError("audit database unreachable")
@@ -120,8 +119,8 @@ def test_every_registered_mutating_business_endpoint_has_an_audit_action():
     assert uncovered == []
 
 
-def test_actual_app_wires_business_route_into_system_audit():
-    """Covers main.py middleware registration and real Brand create endpoint."""
+def test_actual_app_skips_duplicate_event_for_service_owned_transaction():
+    """The main app must not duplicate successful repository audit events."""
     service = MemoryAuditService()
 
     class StubBrandService:
