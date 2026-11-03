@@ -42,7 +42,7 @@ def build_benchmark_evaluation(
 
     # Count persisted agent-tool calls, not User/Agent chat messages or chain steps.
     interaction_turns = observations.agent_tool_calls
-        response_text = response.message if response else ""
+    response_text = response.message if response else ""
     normalized_response = response_text.casefold()
     required_terms = run.scenario_snapshot.evaluation_required_terms
     missing_terms = [
