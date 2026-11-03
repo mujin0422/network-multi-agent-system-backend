@@ -43,5 +43,7 @@ def build_benchmark_action_commands(action: BenchmarkAction) -> list[str]:
     return [
         f"interface {action.interface}",
         f"no ip access-group {action.acl_number} {action.direction}",
+        # Remove the global ACL from (config)#, not (config-if)#.
+        "exit",
         f"no access-list {action.acl_number}",
     ]
