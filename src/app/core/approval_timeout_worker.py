@@ -10,14 +10,16 @@ from app.domains.execution.repositories.approval_timeout import ApprovalTimeoutR
 logger = logging.getLogger(__name__)
 
 
-async def run_approval_timeout_worker(settings: Settings) -> None:
+async def run_approval_timeout_worker(
+    settings: Settings, stop_event: asyncio.Event | None = None
+) -> None:
     """Check immediately on startup, then periodically while FastAPI is running.
 
     Uses a thread for the synchronous SQLAlchemy repository so HTTP event loops
     remain responsive. The repository is idempotent and safe with many workers.
     """
     repository = ApprovalTimeoutRepository(settings.database_url)
-    while True:
+    while stop_event is None or not stop_event.is_set():
         try:
             task_ids = await asyncio.to_thread(
                 repository.expire_due_approvals,
@@ -34,4 +36,13 @@ async def run_approval_timeout_worker(settings: Settings) -> None:
             raise
         except Exception:
             logger.exception("Approval expiry sweep failed; retrying next interval")
-        await asyncio.sleep(settings.approval_sweep_interval_seconds)
+        if stop_event is None:
+            await asyncio.sleep(settings.approval_sweep_interval_seconds)
+        else:
+            try:
+                await asyncio.wait_for(
+                    stop_event.wait(),
+                    timeout=settings.approval_sweep_interval_seconds,
+                )
+            except TimeoutError:
+                pass

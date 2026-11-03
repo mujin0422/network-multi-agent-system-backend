@@ -37,10 +37,9 @@ async def lifespan(_app: FastAPI):
     # Worker starts with the API and reconciles overdue approvals on startup.
     # All mutations are guarded by PostgreSQL row locks across worker processes.
     import asyncio
-    from contextlib import suppress
-
+    stop_event = asyncio.Event()
     sweep_task = (
-        asyncio.create_task(run_approval_timeout_worker(settings))
+        asyncio.create_task(run_approval_timeout_worker(settings, stop_event))
         if settings.approval_sweep_enabled
         else None
     )
@@ -49,9 +48,10 @@ async def lifespan(_app: FastAPI):
     finally:
         try:
             if sweep_task:
-                sweep_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await sweep_task
+                # Do not cancel asyncio.to_thread mid-query: it cannot stop
+                # the synchronous DB thread, which must finish before disposal.
+                stop_event.set()
+                await sweep_task
         finally:
             # Background jobs must be stopped before closing pooled connections.
             dispose_session_factories()
