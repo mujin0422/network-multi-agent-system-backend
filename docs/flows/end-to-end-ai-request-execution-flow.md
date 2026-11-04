@@ -348,8 +348,11 @@ chế retry/recovery riêng cho Task bị dừng do lỗi hạ tầng hoặc LLM
 ## 12. Phản hồi và Analyst Agent
 
 Node `analyze` gọi `AnalystAgent` sau node `execute`. Khi Task đã kết thúc,
-Analyst tạo summary, findings, likely causes và recommendations; workflow lưu
-Message `AGENT/FINAL_RESPONSE` vào Conversation. Nếu Task đang
+Analyst tạo summary, findings, likely causes, recommendations, confidence và
+đề xuất kiểm tra bổ sung có cấu trúc. Nếu evidence chưa đủ, node `investigate`
+nối Operation READ-only, thực thi trên thiết bị hoặc láng giềng một hop và quay
+lại `analyze`. Node `finalize` chỉ lưu Message `AGENT/FINAL_RESPONSE` sau khi đủ
+bằng chứng hoặc đạt giới hạn vòng. Nếu Task đang
 `WAITING_APPROVAL`, analysis handler tạo Message `AGENT/APPROVAL_REQUEST` thay
 vì khẳng định Task đã hoàn tất.
 
@@ -359,6 +362,8 @@ và Messages để nhận kết quả từ background LangGraph workflow.
 ```text
 Execution results
   → AnalystAgent.analyze()
+  → [nếu thiếu evidence] investigate READ-only → AnalystAgent.analyze()
+  → finalize
   → tạo AGENT Message loại FINAL_RESPONSE
   → tạo FINAL_RESPONSE_CREATED activity event
   → frontend tải/nhận message trả lời
@@ -373,15 +378,9 @@ GET /api/v1/operations/{operation_id}/approvals
 GET /api/v1/conversations/{conversation_id}/messages
 ```
 
-`task_activity_events` và API timeline đã tồn tại, nhưng các Orchestrator hiện
-chưa ghi đầy đủ event ở từng bước. Vì vậy Chat UI chưa thể dựa hoàn toàn vào bảng
-này để hiển thị mọi hoạt động của Agent cho đến khi event writer được nối vào
-Planning/Execution/Analyst flow.
-
-Hai phần còn thiếu để toàn bộ trải nghiệm Chat UI hoàn chỉnh là:
-
-1. Tự tạo Approval Request và activity event khi WRITE bắt đầu chờ duyệt.
-2. Gọi Analyst Agent và lưu `FINAL_RESPONSE` sau khi Task đạt trạng thái cuối.
+`task_activity_events` ghi lại các mốc Planning, Execution, Approval, từng lệnh
+Network, mỗi lượt Analysis và phản hồi cuối. Các Operation investigation cũng
+được lưu trong cùng Task nên Chat UI có thể trình bày tuần tự toàn bộ evidence.
 
 ## 14. File code chính
 
@@ -395,5 +394,6 @@ Hai phần còn thiếu để toàn bộ trải nghiệm Chat UI hoàn chỉnh l
   credential theo nhu cầu.
 - `src/app/domains/execution/services/execution.py`: business state và
   persistence contract.
-- `src/app/agents/analyst/agent.py`: Analyst chưa được nối vào pipeline.
+- `src/app/agents/analyst/agent.py`: Analyst và structured diagnosis.
+- `src/app/agents/workflow.py`: conditional investigation loop và finalize.
 

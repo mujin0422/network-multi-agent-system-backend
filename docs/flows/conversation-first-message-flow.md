@@ -113,6 +113,11 @@ LangGraph: execute
         ▼
 LangGraph: analyze
         │
+        ├── thiếu evidence → investigate READ-only → analyze
+        │
+        ▼
+LangGraph: finalize
+        │
         ▼
 Trả Conversation + Message đầu tiên cho Frontend
 ```

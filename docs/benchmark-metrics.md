@@ -1,4 +1,4 @@
-# Benchmark Evaluation metrics (db-benchmark-v4)
+# Benchmark Evaluation metrics (db-benchmark-v5)
 
 ## AI workflow active time (LATENCY)
 
@@ -99,7 +99,7 @@ Check that the new evaluation reports `db-benchmark-v3` and
   unscored until a separate re-evaluation workflow is developed.
 
 
-## NIKA 0.2-inspired structured diagnosis scoring (db-benchmark-v4)
+## NIKA 0.2-inspired structured diagnosis scoring (db-benchmark-v5)
 
 NIKA 0.2 uses **set-based (resource_id, fault_type) pairs**. For each level,
 the primary diagnostic measures are precision, recall and F1; RCA
@@ -129,6 +129,20 @@ Analyst produces the usual Vietnamese report **and** these JSON fields:
 `root_causes` must be an explicit list. The Analyst sees only observed
 network CLI execution results and a **general failure-type vocabulary**,
 never the incident's `ground_truth` or `evaluation_required_terms`.
+
+### Canonical RCA taxonomy
+
+Analyst output và benchmark ground truth dùng chung `FaultType` đóng. Alias cũ
+được chuẩn hóa trước khi chấm, ví dụ `acl_block` thành `acl_traffic_block`,
+`wrong_netmask` thành `wrong_subnet_mask` và `bgp_neighbor_shutdown` thành
+`bgp_neighbor_admin_down`. Các lỗi cấp thiết bị như BGP neighbor shutdown,
+missing OSPF network và missing default route luôn được chấm ở resource `node`;
+interface triệu chứng không được tính thành một root cause khác.
+
+Evaluator vẫn giữ precision/recall/F1 theo cặp `(resource_id, fault_type)`, nhưng
+không còn tạo false negative chỉ vì Analyst dùng alias tương đương. Analyst prompt
+yêu cầu tập root cause tối thiểu có bằng chứng nhằm hạn chế false positive từ
+thiết bị láng giềng chỉ bị ảnh hưởng.
 
 `AnalysisOrchestrator` persists this submission under
 `task_activity_events.event_data.diagnosis_submission` in its
@@ -202,7 +216,7 @@ After merging backend/frontend code, rebuild the API and run a fresh
 Benchmark Scenario. Verify:
 
 1. `ANALYSIS_COMPLETED` has a JSON `diagnosis_submission`.
-2. The saved Evaluation is `db-benchmark-v4`.
+2. The saved Evaluation is `db-benchmark-v5`.
 3. RCA includes `rca_f1`, `localization_f1`, `fault_type_f1`,
    and FP/FN evidence; GOAL is based on detection + exact pairs.
 4. The frontend displays old runs as historical keyword rubric and new
