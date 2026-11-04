@@ -73,11 +73,28 @@ class Settings(BaseSettings):
     netmiko_cmd_verify: bool = False
     network_backend: Literal["netmiko", "nornir"] = "netmiko"
     nornir_num_workers: int = Field(default=20, gt=0, le=200)
+    benchmark_cleanup_retries: int = Field(default=2, ge=0, le=5)
+    benchmark_cleanup_retry_delay_seconds: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=30.0,
+    )
 
     # AI provider settings.
     nvidia_api_key: str = ""
     nvidia_model: str = ""
     conversation_title_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    planner_validation_retries: int = Field(default=2, ge=0, le=5)
+    planner_timeout_seconds: float = Field(default=90.0, gt=0, le=600)
+    analyst_validation_retries: int = Field(default=2, ge=0, le=5)
+    analyst_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+    analyst_max_completion_tokens: int = Field(default=4096, ge=512, le=32768)
+    agent_max_investigation_rounds: int = Field(default=2, ge=0, le=5)
+    agent_diagnosis_confidence_threshold: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+    )
 
     @property
     def gns3_base_url(self) -> str:

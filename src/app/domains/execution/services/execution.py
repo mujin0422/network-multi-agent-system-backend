@@ -24,6 +24,7 @@ from app.domains.execution.repositories import (
 from app.domains.execution.schemas import (
     ApprovalDecision,
     ApprovalStatus,
+    AccessMode,
     ActivityActorType,
     ActivityEventStatus,
     ActivityEventType,
@@ -433,6 +434,49 @@ class ExecutionService:
 
         records = build_execution_plan_records(task, plan, datetime.now(UTC))
         self._tasks.save_task(records.task)
+        for operation in records.operations:
+            self._operations.save_operation(operation)
+        self._dependencies.save(records.dependencies)
+        for mapping in records.operation_devices:
+            self._operation_devices.save_operation_device(mapping)
+        return self.get_task(task_id)
+
+    def append_investigation_plan(
+        self,
+        task_id: str,
+        plan: ExecutionPlanCreate,
+    ) -> TaskDetail:
+        """Nối kế hoạch điều tra READ-only vào Task sau một lượt phân tích."""
+
+        task = self._require_task(task_id)
+        if any(
+            device.access_mode != AccessMode.READ
+            for operation in plan.operations
+            for device in operation.devices
+        ):
+            raise InvalidStateTransitionError(
+                "Kế hoạch điều tra bổ sung chỉ được sử dụng READ access"
+            )
+
+        existing = self._operations.get_all_by_task_id(task_id)
+        records = build_execution_plan_records(
+            task,
+            plan,
+            datetime.now(UTC),
+            display_order_start=max(
+                (operation.display_order for operation in existing),
+                default=0,
+            ) + 1,
+        )
+        self._tasks.save_task(
+            records.task.model_copy(
+                update={
+                    "task_status": TaskStatus.PLANNING,
+                    "task_type": task.task_type,
+                    "completed_at": None,
+                }
+            )
+        )
         for operation in records.operations:
             self._operations.save_operation(operation)
         self._dependencies.save(records.dependencies)

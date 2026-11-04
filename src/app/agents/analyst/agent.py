@@ -1,5 +1,6 @@
 """Analyst Agent phân tích output, không kết nối thiết bị."""
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -13,14 +14,38 @@ from app.agents.analyst.schemas import AnalysisResult
 
 class AnalystAgent:
     name = "analyst-agent"
-    max_validation_retries = 2
 
-    def __init__(self, chat_model: Any) -> None:
+    def __init__(
+        self,
+        chat_model: Any,
+        max_validation_retries: int = 2,
+        timeout_seconds: float = 120.0,
+    ) -> None:
         # Dùng JSON thường vì NVIDIA NIM có model không hỗ trợ guided_json.
         self._analyst = chat_model
+        self.max_validation_retries = max_validation_retries
+        self.timeout_seconds = timeout_seconds
 
     # Phân tích output từ execution agent, trả về kết quả phân tích có cấu trúc.
     async def analyze(self, execution_outputs: list[dict[str, Any]]) -> AnalysisResult:
+        """Phân tích output trong thời hạn cấu hình cho toàn bộ các lần retry."""
+
+        try:
+            return await asyncio.wait_for(
+                self._analyze_with_retries(execution_outputs),
+                timeout=self.timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"Analyst Agent không phản hồi trong {self.timeout_seconds:g} giây"
+            ) from exc
+
+    async def _analyze_with_retries(
+        self,
+        execution_outputs: list[dict[str, Any]],
+    ) -> AnalysisResult:
+        """Gọi model và yêu cầu sửa structured output theo số retry cấu hình."""
+
         prompt = (
             "EXECUTION OUTPUTS:\n"
             f"{json.dumps(execution_outputs, ensure_ascii=False)}\n\n"
@@ -48,8 +73,9 @@ class AnalystAgent:
                             f"Lỗi: {exc.__cause__ or exc}\n"
                             "Giới hạn: summary <= 600 ký tự; mỗi danh sách <= 4 ý; "
                             "mỗi ý <= 240 ký tự. Không lặp dữ kiện giữa các phần.\n"
-                            "Dùng đủ 7 key summary, findings, likely_causes, "
-                            "recommendations, requires_more_data, is_anomaly, "
+                            "Dùng đủ các key summary, findings, likely_causes, "
+                            "recommendations, requires_more_data, confidence, "
+                            "evidence_gaps, suggested_checks, is_anomaly, "
                             "root_causes và luôn đặt mọi "
                             "key trong dấu ngoặc kép. Escape dấu ngoặc kép bên trong "
                             "chuỗi và không đặt dấu phẩy sau phần tử cuối.\n"
@@ -80,7 +106,7 @@ class AnalystAgent:
                 # thêm dấu phẩy cuối dù prompt đã yêu cầu JSON nghiêm ngặt.
                 # Chỉ sửa các key thuộc schema để không thay đổi nội dung lệnh.
                 repaired_json = re.sub(
-                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|is_anomaly|root_causes|device|interface|fault_type)(\s*:)',
+                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|confidence|evidence_gaps|suggested_checks|commands|reason|is_anomaly|root_causes|device|interface|fault_type)(\s*:)',
                     r'\1"\2"\3',
                     raw_json,
                 )
@@ -97,8 +123,17 @@ class AnalystAgent:
         """
         if not isinstance(payload, dict):
             raise ValueError("Analyst submission must be a JSON object")
-        if not {"is_anomaly", "root_causes"}.issubset(payload):
-            raise ValueError("Analyst must explicitly submit is_anomaly and root_causes")
+        required = {
+            "is_anomaly",
+            "root_causes",
+            "confidence",
+            "evidence_gaps",
+            "suggested_checks",
+        }
+        if not required.issubset(payload):
+            raise ValueError(
+                "Analyst must explicitly submit diagnosis confidence and evidence gaps"
+            )
         return AnalysisResult.model_validate(payload)
 
     @staticmethod

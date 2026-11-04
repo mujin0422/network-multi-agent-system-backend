@@ -3,6 +3,8 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from app.agents.analyst import AnalystAgent
 from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
@@ -45,6 +47,7 @@ def test_analyst_recreates_truncated_json_on_retry() -> None:
                 '"findings":["OSPF đã hội tụ"],'
                 '"likely_causes":[],"recommendations":[],'
                 '"requires_more_data":false,'
+                '"confidence":1,"evidence_gaps":[],"suggested_checks":[],'
                 '"is_anomaly":false,"root_causes":[]}'
             ),
         ]
@@ -58,6 +61,19 @@ def test_analyst_recreates_truncated_json_on_retry() -> None:
     assert "tạo lại một JSON MỚI" in model.calls[1][-1].content
 
 
+def test_analyst_validation_retries_can_be_disabled() -> None:
+    model = StubChatModel(['{"summary":"JSON bị cắt'])
+
+    with pytest.raises(ValueError, match="không đúng AnalysisResult"):
+        asyncio.run(
+            AnalystAgent(model, max_validation_retries=0).analyze(
+                [{"status": "SUCCESS"}]
+            )
+        )
+
+    assert len(model.calls) == 1
+
+
 def test_analyst_repairs_unquoted_schema_key_and_trailing_comma() -> None:
     model = StubChatModel(
         [
@@ -65,7 +81,8 @@ def test_analyst_repairs_unquoted_schema_key_and_trailing_comma() -> None:
                 'Phân tích:\n```json\n{"summary":"OSPF đã hội tụ",'
                 '"findings":["P1 và P2 có route OSPF"],'
                 'likely_causes:[],"recommendations":[],'
-                'requires_more_data:false,is_anomaly:false,root_causes:[],}\n```'
+                'requires_more_data:false,confidence:1,evidence_gaps:[],'
+                'suggested_checks:[],is_anomaly:false,root_causes:[],}\n```'
             )
         ]
     )
@@ -157,7 +174,8 @@ def test_analyst_retries_until_structured_submission_is_present() -> None:
     model = StubChatModel([
         '{"summary":"P1 interface down","findings":[],"likely_causes":[],"recommendations":[],"requires_more_data":false}',
         '{"summary":"P1 interface down","findings":[],"likely_causes":["P1 FastEthernet0/0 shutdown"],'
-        '"recommendations":[],"requires_more_data":false,"is_anomaly":true,'
+        '"recommendations":[],"requires_more_data":false,"confidence":0.95,'
+        '"evidence_gaps":[],"suggested_checks":[],"is_anomaly":true,'
         '"root_causes":[{"device":"P1","interface":"FastEthernet0/0","fault_type":"link_down"}]}',
     ])
 

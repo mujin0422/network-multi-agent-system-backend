@@ -25,13 +25,11 @@ from app.tools import NetmikoNetworkTool, NetworkTool, NornirNetworkTool
 @lru_cache
 def _build_gns3_provider() -> GNS3Provider:
     """Khởi tạo provider chỉ dùng để kiểm tra GNS3 Server."""
-
     return GNS3Provider(get_settings())
 
 
 async def get_gns3_provider() -> GNS3Provider:
     """FastAPI dependency cung cấp GNS3 availability provider."""
-
     return _build_gns3_provider()
 
 
@@ -52,15 +50,18 @@ def _build_planner_agent() -> PlannerAgent:
         api_key=settings.nvidia_api_key,
         temperature=0,
     )
-    # Planner cần JSON hoàn chỉnh trong content. Với Nemotron, thinking có thể
-    # dùng hết output budget và làm JSON bị cắt giữa chừng.
+    # Planner cần JSON hoàn chỉnh trong content. Với Nemotron, thinking có thể dùng hết output budget và làm JSON bị cắt giữa chừng.
     chat_model = chat_model.bind(
         chat_template_kwargs={"enable_thinking": False},
         parallel_tool_calls=False,
     )
 
     # Bước 3: Planner Agent chỉ biết chat model, không biết database hay FastAPI.
-    return PlannerAgent(chat_model)
+    return PlannerAgent(
+        chat_model,
+        max_validation_retries=settings.planner_validation_retries,
+        timeout_seconds=settings.planner_timeout_seconds,
+    )
 
 
 @lru_cache
@@ -78,7 +79,7 @@ def _build_analyst_agent() -> AnalystAgent:
         temperature=0,
         # Phân tích nhiều output thiết bị cần đủ chỗ để đóng JSON hoàn chỉnh.
         # Giới hạn mặc định của provider có thể cắt response giữa chuỗi.
-        max_completion_tokens=4096,
+        max_completion_tokens=settings.analyst_max_completion_tokens,
     )
     # Nemotron có thể đưa toàn bộ phản hồi vào reasoning_content và để content
     # rỗng khi thinking bật. Analyst cần JSON ở content để validate và lưu kết quả.
@@ -86,7 +87,11 @@ def _build_analyst_agent() -> AnalystAgent:
         chat_template_kwargs={"enable_thinking": False},
         parallel_tool_calls=False,
     )
-    return AnalystAgent(chat_model)
+    return AnalystAgent(
+        chat_model,
+        max_validation_retries=settings.analyst_validation_retries,
+        timeout_seconds=settings.analyst_timeout_seconds,
+    )
 
 
 @lru_cache
@@ -118,6 +123,7 @@ def _build_network_agent() -> NetworkAgent:
             settings.netmiko_read_timeout,
             settings.netmiko_cmd_verify,
         )
+
     # Bước 4: Inject backend đã chọn vào execution-only Network Agent.
     return NetworkAgent(tool)
 
@@ -151,12 +157,15 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
         execution_service,
         conversation_service,
         device_service,
+        _build_gns3_provider(),
     )
     return NetworkAutomationWorkflow(
         _build_gns3_provider(),
         planning,
         execution,
         analysis,
+        settings.agent_max_investigation_rounds,
+        settings.agent_diagnosis_confidence_threshold,
     )
 
 

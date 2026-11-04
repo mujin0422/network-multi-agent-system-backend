@@ -138,13 +138,26 @@ Execution Orchestrator/Execution domain, không đưa vào Network Agent hay too
 `NetworkAutomationWorkflow` biên dịch hai graph:
 
 ```text
-USER message:       check_gns3 → plan → execute → analyze → END
-Approval decision:               execute → analyze → END
+USER message:       check_gns3 → plan → execute → analyze ─┬→ finalize → END
+                                                           └→ investigate → analyze
+Approval decision:               execute → analyze ────────┬→ finalize → END
+                                                           └→ investigate → analyze
 ```
 
 Graph thứ hai khôi phục Task từ PostgreSQL bằng `operation_device_id`. Business
 state không được sao chép sang một checkpointer khác; các bảng Task, Operation,
 Approval và Activity Event vẫn là nguồn sự thật.
+
+Với Task `DIAGNOSIS`, node `analyze` có thể yêu cầu thêm evidence có cấu trúc.
+Node `investigate` chỉ nối Operation `READ` dùng `show`, `ping` hoặc
+`traceroute`, ưu tiên thiết bị/interface một hop trong topology GNS3. Evidence
+được cộng dồn rồi phân tích lại. Số vòng tối đa lấy từ
+`AGENT_MAX_INVESTIGATION_ROUNDS`; giá trị `0` tắt cơ chế này.
+Ngưỡng kết luận dùng `AGENT_DIAGNOSIS_CONFIDENCE_THRESHOLD`. Retry và timeout
+của hai LLM agent được cấu hình độc lập bằng
+`PLANNER_VALIDATION_RETRIES`, `PLANNER_TIMEOUT_SECONDS`,
+`ANALYST_VALIDATION_RETRIES` và `ANALYST_TIMEOUT_SECONDS`; timeout bao phủ toàn
+bộ lần gọi đầu cùng các lần sửa JSON.
 
 ## Dependency composition
 

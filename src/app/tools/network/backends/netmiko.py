@@ -33,6 +33,7 @@ class NetmikoNetworkTool:
         access_mode: AccessMode,
         commands: list[str],
     ) -> list[CommandResult]:
+        # Bước 1: Lấy credential an toàn và mở một connection riêng cho lần gọi.
         connection_result = self._network_service.connect(device_id)
         if not connection_result.get("success"):
             raise ConnectionError(
@@ -42,12 +43,14 @@ class NetmikoNetworkTool:
         connection: Any = connection_result["connection"]
         try:
             if access_mode == AccessMode.WRITE:
+                # Bước 2: Chuẩn hóa command cấu hình trước khi gửi vào config mode.
                 commands = normalize_config_commands(commands)
                 output = connection.send_config_set(
                     commands,
                     read_timeout=self._read_timeout,
                     cmd_verify=self._cmd_verify,
                 )
+                # Bước 3: Phát hiện lỗi CLI dù Netmiko không ném exception.
                 error_match = self._CONFIG_ERROR_PATTERN.search(str(output))
                 if error_match:
                     output_lines = str(output).splitlines()
@@ -59,10 +62,12 @@ class NetmikoNetworkTool:
                         "Thiết bị từ chối lệnh cấu hình:\n"
                         f"{context or error_match.group(0)}"
                     )
+                # Bước 4: Chỉ lưu cấu hình khi toàn bộ output không có lỗi CLI.
                 connection.save_config()
                 return [
                     CommandResult(command="\n".join(commands), output=str(output))
                 ]
+            # Bước 2: Với READ, chạy từng command và giữ nguyên output làm evidence.
             return [
                 CommandResult(
                     command=command,
@@ -76,4 +81,5 @@ class NetmikoNetworkTool:
                 for command in commands
             ]
         finally:
+            # Bước 5: Luôn đóng session để retry sau dùng connection sạch.
             connection.disconnect()

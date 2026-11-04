@@ -30,6 +30,8 @@ def build_execution_plan_records(
     task: Task,
     plan: ExecutionPlanCreate,
     created_at: datetime,
+    *,
+    display_order_start: int = 1,
 ) -> ExecutionPlanRecords:
     """Chuyển structured plan thành các record có ID và quan hệ đầy đủ."""
 
@@ -37,7 +39,8 @@ def build_execution_plan_records(
     dependencies: list[OperationDependency] = []
     operation_devices: list[TaskOperationDevice] = []
 
-    for display_order, planned_operation in enumerate(plan.operations, start=1):
+    for local_order, planned_operation in enumerate(plan.operations, start=1):
+        display_order = display_order_start + local_order - 1
         operation = Operation(
             id=generate_id(IdPrefix.OPERATION),
             task_id=task.id,
@@ -78,7 +81,7 @@ def build_execution_plan_records(
         update={
             "task_status": TaskStatus.PLANNING,
             "task_type": plan.task_type,
-            "started_at": created_at,
+            "started_at": task.started_at or created_at,
         }
     )
     return ExecutionPlanRecords(
