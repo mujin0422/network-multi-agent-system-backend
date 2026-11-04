@@ -14,7 +14,10 @@ from app.domains.benchmark.schemas import (
 from app.domains.benchmark.services import BenchmarkRunService, BenchmarkScenarioService
 from app.domains.benchmark.schemas import BenchmarkAction
 from app.domains.benchmark.schemas.benchmark_observation import BenchmarkObservation
-from app.domains.benchmark.utils import build_benchmark_action_commands
+from app.domains.benchmark.utils import (
+    build_benchmark_action_commands,
+    build_cleanup_verification_checks,
+)
 from app.domains.conversation.schemas import Message, MessageSender, MessageType
 from app.domains.evaluation.schemas import EvaluationMetricType, EvaluationResult
 from app.domains.execution.schemas import AccessMode, TaskDetail, TaskStatus, TaskType
@@ -207,6 +210,78 @@ def test_builds_typed_configuration_fault_commands() -> None:
         "exit",
         "no access-list 101",
     ]
+
+
+def test_cleanup_verification_is_derived_from_typed_action() -> None:
+    action = BenchmarkAction(
+        device="P1",
+        action="interface_ip_set",
+        interface="FastEthernet0/0",
+        ip_address="10.0.10.1",
+        subnet_mask="255.255.255.0",
+    )
+
+    check = build_cleanup_verification_checks([action])[0]
+
+    assert check.device == "P1"
+    assert check.command == (
+        "show running-config interface FastEthernet0/0 | include ip address"
+    )
+    assert check.assertion.contains == "ip address 10.0.10.1 255.255.255.0"
+
+
+def test_cleanup_retries_with_new_execution_and_verifies_before_marking_cleaned() -> None:
+    class FlakyCleanupTool:
+        def __init__(self) -> None:
+            self.write_attempts = 0
+
+        def execute(self, _device_id, access_mode, commands):
+            if access_mode == AccessMode.WRITE:
+                self.write_attempts += 1
+                if self.write_attempts < 3:
+                    raise ValueError("Failed to enter configuration mode.")
+                return [CommandResult(command="\n".join(commands), output="ok")]
+            return [
+                CommandResult(
+                    command=commands[0],
+                    output="FastEthernet2/0 is up, line protocol is up",
+                )
+            ]
+
+    scenarios = FakeScenarioRepository()
+    runs = FakeRunRepository()
+    now = datetime.now(UTC)
+    runs.save(
+        BenchmarkRunRecord.model_validate(
+            {
+                "id": "benr-021126-1234abcd",
+                "scenario_id": scenarios.scenario.id,
+                "scenario_version": scenarios.scenario.version,
+                "scenario_name": scenarios.scenario.name,
+                "scenario_snapshot": scenarios.scenario.model_dump(),
+                "status": BenchmarkRunStatus.COMPLETED,
+                "started_by": "user-1",
+                "initial_message": scenarios.scenario.initial_message,
+                "started_at": now,
+                "cleanup_required": True,
+            }
+        )
+    )
+    tool = FlakyCleanupTool()
+    service = BenchmarkRunService(
+        runs,
+        scenarios,
+        FakeEvaluationRepository(),
+        tool,
+        cleanup_retries=2,
+        cleanup_retry_delay_seconds=0,
+    )
+
+    cleaned = service.cleanup("benr-021126-1234abcd")
+
+    assert tool.write_attempts == 3
+    assert cleaned.status == BenchmarkRunStatus.CLEANED
+    assert cleaned.cleanup_required is False
 
 
 def test_benchmark_evaluation_waits_for_final_response_after_approval() -> None:

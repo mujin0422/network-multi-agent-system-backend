@@ -1,6 +1,10 @@
 """Chuyển benchmark action có kiểu thành lệnh cấu hình thiết bị."""
 
-from app.domains.benchmark.schemas import BenchmarkAction
+from app.domains.benchmark.schemas import (
+    BenchmarkAction,
+    BenchmarkAssertion,
+    BenchmarkCheck,
+)
 
 
 def build_benchmark_action_commands(action: BenchmarkAction) -> list[str]:
@@ -55,3 +59,82 @@ def build_benchmark_action_commands(action: BenchmarkAction) -> list[str]:
         "exit",
         f"no access-list {action.acl_number}",
     ]
+
+
+def build_cleanup_verification_checks(
+    actions: list[BenchmarkAction],
+) -> list[BenchmarkCheck]:
+    """Sinh READ check để xác nhận trạng thái thật sau khi cleanup."""
+
+    checks: list[BenchmarkCheck] = []
+    for action in actions:
+        contains: str | None = None
+        not_contains: str | None = None
+
+        if action.action in {"interface_shutdown", "interface_no_shutdown"}:
+            command = f"show interfaces {action.interface} | include line protocol"
+            if action.action == "interface_no_shutdown":
+                contains = f"{action.interface} is up, line protocol is up"
+            else:
+                contains = "administratively down"
+        elif action.action in {"mpls_enable", "mpls_disable"}:
+            command = (
+                f"show running-config interface {action.interface} | include mpls ip"
+            )
+            if action.action == "mpls_enable":
+                contains = "mpls ip"
+            else:
+                not_contains = "mpls ip"
+        elif action.action in {"ospf_network_add", "ospf_network_remove"}:
+            command = "show running-config | section router ospf"
+            statement = (
+                f"network {action.network} {action.wildcard} area {action.area}"
+            )
+            if action.action == "ospf_network_add":
+                contains = statement
+            else:
+                not_contains = statement
+        elif action.action in {"default_route_add", "default_route_remove"}:
+            command = "show running-config | include ^ip route 0.0.0.0"
+            statement = f"ip route 0.0.0.0 0.0.0.0 {action.next_hop}"
+            if action.action == "default_route_add":
+                contains = statement
+            else:
+                not_contains = statement
+        elif action.action == "interface_ip_set":
+            command = (
+                f"show running-config interface {action.interface} | include ip address"
+            )
+            contains = f"ip address {action.ip_address} {action.subnet_mask}"
+        elif action.action in {
+            "bgp_neighbor_shutdown",
+            "bgp_neighbor_no_shutdown",
+        }:
+            command = "show running-config | section router bgp"
+            statement = f"neighbor {action.neighbor_ip} shutdown"
+            if action.action == "bgp_neighbor_shutdown":
+                contains = statement
+            else:
+                not_contains = statement
+        elif action.action == "acl_block":
+            command = (
+                f"show running-config interface {action.interface} | include access-group"
+            )
+            contains = f"ip access-group {action.acl_number} {action.direction}"
+        else:
+            command = (
+                f"show running-config interface {action.interface} | include access-group"
+            )
+            not_contains = f"ip access-group {action.acl_number} {action.direction}"
+
+        checks.append(
+            BenchmarkCheck(
+                device=action.device,
+                command=command,
+                assertion=BenchmarkAssertion(
+                    contains=contains,
+                    not_contains=not_contains,
+                ),
+            )
+        )
+    return checks
