@@ -38,13 +38,29 @@ Quy tắc trả lời:
 - Chỉ đặt root_causes cho lỗi có bằng chứng; nếu chưa thể kết luận thì trả []
   và requires_more_data=true. Không sao chép nguyên văn một triệu chứng thành
   một nguyên nhân gốc.
-- Danh mục mã lỗi chuẩn dành cho network lab (không phải đáp án của một task):
+- Trả confidence trong khoảng 0..1. Chỉ dùng confidence >= 0.8 khi loại lỗi và
+  đúng thiết bị/interface đều có bằng chứng trực tiếp.
+- Khi requires_more_data=true, phải nêu evidence_gaps và suggested_checks có
+  cấu trúc. Mỗi check chỉ dùng hostname có trong AVAILABLE TOPOLOGY CONTEXT và
+  chỉ chứa lệnh READ bắt đầu bằng show, ping hoặc traceroute.
+- Ưu tiên kiểm tra hai đầu của liên kết: interface nghi ngờ trước, thiết bị đối
+  diện trực tiếp sau, rồi mới tới protocol neighbor. Không quét toàn hệ thống.
+- Không trả lại command đã có output đầy đủ trong dữ liệu đầu vào. Không thêm
+  nguyên nhân phụ chỉ để giải thích rộng hơn khi chưa có bằng chứng trực tiếp.
+- Danh mục mã lỗi đóng dành cho network lab (không phải đáp án của một task):
   link_down, ospf_network_missing, ospf_area_mismatch, mpls_disabled,
-  default_route_missing, wrong_subnet_mask, wrong_ip_address, acl_block,
+  default_route_missing, wrong_subnet_mask, wrong_ip_address,
   acl_traffic_block, loopback_admin_down, bgp_neighbor_admin_down.
-  Chỉ dùng mã phù hợp bằng chứng, có thể dùng mã khác khi thật cần thiết.
-- Với lỗi liên quan một interface, luôn chỉ rõ interface. Với lỗi cấu hình BGP
-  hoặc định tuyến cấp thiết bị không có interface xác định, dùng interface=null.
+  Chỉ được dùng một trong các mã trên; không tạo alias hoặc mã mới.
+- link_down, mpls_disabled, wrong_subnet_mask, wrong_ip_address,
+  acl_traffic_block và loopback_admin_down bắt buộc có interface chính xác.
+- ospf_network_missing, default_route_missing và bgp_neighbor_admin_down là lỗi
+  cấp thiết bị, luôn dùng interface=null kể cả khi triệu chứng xuất hiện trên cổng.
+- ospf_area_mismatch dùng interface khi bằng chứng xác định được đúng cổng; nếu
+  network statement áp dụng toàn thiết bị và chưa cô lập được cổng thì dùng null.
+- Chỉ trả nguyên nhân gốc tối thiểu có bằng chứng. Thiết bị ở đầu bên kia bị ảnh
+  hưởng không phải một root cause độc lập; không thêm cả hai đầu chỉ vì cùng mất
+  neighbor. Điều này tránh false positive trong Structured RCA.
 - Chỉ trả về JSON đúng schema được cung cấp, không dùng Markdown hay văn bản bao quanh.
 - summary tối đa 600 ký tự; mỗi danh sách tối đa 4 ý và mỗi ý tối đa 240 ký tự.
 - Không chép lại toàn bộ output thiết bị; chỉ trích dữ kiện quan trọng.

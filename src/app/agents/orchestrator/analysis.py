@@ -10,10 +10,17 @@ from app.domains.execution.schemas import (
     ActivityActorType,
     ActivityEventStatus,
     ActivityEventType,
+    AccessMode,
+    DeviceRole,
+    ExecutionPlanCreate,
+    PlannedDevice,
+    PlannedOperation,
     TaskDetail,
     TaskStatus,
+    TaskType,
 )
 from app.domains.execution.services import ExecutionService
+from app.domains.inventory.providers import GNS3Provider
 from app.domains.inventory.services import DeviceService
 
 
@@ -26,6 +33,7 @@ class AnalysisOrchestrator:
         execution_service: ExecutionService,
         conversation_service: ConversationService,
         device_service: DeviceService,
+        gns3_provider: GNS3Provider | None = None,
     ) -> None:
         """Khởi tạo Analyst Agent và các service lưu kết quả phân tích."""
 
@@ -33,18 +41,22 @@ class AnalysisOrchestrator:
         self._execution_service = execution_service
         self._conversation_service = conversation_service
         self._device_service = device_service
+        self._gns3_provider = gns3_provider
 
-    async def analyze_and_respond(
+
+    async def analyze(
         self,
         task: TaskDetail,
         execution_results: list[NetworkExecutionResult],
-    ) -> Message | None:
-        """Phân tích kết quả thực thi, lưu timeline và tạo phản hồi cuối."""
+    ) -> AnalysisResult | None:
+        """Phân tích evidence nhưng chưa tạo phản hồi cuối cho conversation."""
 
+        # Bước 1: Không phân tích khi Task vẫn đang chạy hoặc chờ approval.
         current_task = self._execution_service.get_task(task.id)
         if current_task.task_status == TaskStatus.RUNNING:
-            return self._save_waiting_response(current_task)
+            return None
 
+        # Bước 2: Ghi mốc ANALYSIS_STARTED để giao diện theo dõi tiến trình.
         analysis_started_at = datetime.now(UTC)
         self._execution_service.record_activity(
             task.id,
@@ -53,25 +65,27 @@ class AnalysisOrchestrator:
             ActivityEventStatus.RUNNING,
             started_at=analysis_started_at,
         )
+        # Bước 3: Chuẩn hóa output kỹ thuật và bổ sung topology context.
         analysis_inputs = self._build_analysis_inputs(execution_results)
         fallback_error: str | None = None
         try:
+            # Bước 4: Gọi Analyst; lỗi model/schema sẽ chuyển sang fallback an toàn.
             analysis = await self._analyst.analyze(analysis_inputs)
         except Exception as exc:
-            # Không để lỗi định dạng đầu ra của LLM làm mất toàn bộ phản hồi.
-            # Kết quả dự phòng chỉ mô tả trạng thái thực thi, không tự suy diễn
-            # nguyên nhân mạng khi chưa có phân tích hợp lệ.
             fallback_error = str(exc)
             analysis = self._build_fallback_analysis(analysis_inputs)
 
+        # Bước 5: Lưu structured diagnosis trước khi evaluator đọc kết quả.
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.ANALYST,
             ActivityEventType.ANALYSIS_COMPLETED,
             event_data={
                 "requires_more_data": analysis.requires_more_data,
+                "confidence": analysis.confidence,
+                "evidence_gaps": analysis.evidence_gaps,
+                "suggested_check_count": len(analysis.suggested_checks),
                 "used_fallback": fallback_error is not None,
-                # Persist only the Agent's submission, never benchmark ground truth.
                 "diagnosis_submission": {
                     "is_anomaly": analysis.is_anomaly,
                     "root_causes": [
@@ -84,15 +98,44 @@ class AnalysisOrchestrator:
             started_at=analysis_started_at,
             completed_at=datetime.now(UTC),
         )
+        return analysis
+
+
+    async def analyze_and_respond(
+        self,
+        task: TaskDetail,
+        execution_results: list[NetworkExecutionResult],
+    ) -> Message | None:
+        """Phân tích kết quả thực thi, lưu timeline và tạo phản hồi cuối."""
+
+        current_task = self._execution_service.get_task(task.id)
+        analysis = await self.analyze(task, execution_results)
+        if analysis is None:
+            return self._save_waiting_response(current_task)
+        return self.finalize_response(current_task, analysis)
+
+
+    def finalize_response(
+        self,
+        task: TaskDetail,
+        analysis: AnalysisResult | None,
+    ) -> Message:
+        """Tạo duy nhất một phản hồi sau khi vòng điều tra đã kết thúc."""
+
+        # Bước 1: Nếu Task chưa sẵn sàng, chỉ tạo thông báo chờ phê duyệt.
+        if analysis is None:
+            return self._save_waiting_response(task)
+        # Bước 2: Chuyển AnalysisResult thành FINAL_RESPONSE dễ đọc cho người dùng.
         message = self._conversation_service.create_message(
-            current_task.conversation_id,
+            task.conversation_id,
             MessageCreate(
                 sender_by=MessageSender.AGENT,
-                reply_to_message_id=current_task.source_message_id,
+                reply_to_message_id=task.source_message_id,
                 message_type=MessageType.FINAL_RESPONSE,
                 message=self._format_analysis(analysis),
             ),
         )
+        # Bước 3: Ghi message ID vào timeline để Benchmark liên kết chính xác.
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.ANALYST,
@@ -100,6 +143,44 @@ class AnalysisOrchestrator:
             event_data={"message_id": message.id},
         )
         return message
+
+
+    def build_investigation_plan(
+        self,
+        analysis: AnalysisResult,
+    ) -> ExecutionPlanCreate | None:
+        """Ánh xạ check của Analyst sang plan READ-only với device ID hợp lệ."""
+
+        # Bước 1: Chỉ ánh xạ hostname mà Inventory hiện đang quản lý.
+        devices = self._device_service.list_available_devices()
+        by_hostname = {device.hostname.casefold(): device.id for device in devices}
+        operations: list[PlannedOperation] = []
+        for check in analysis.suggested_checks:
+            device_id = by_hostname.get(check.device.casefold())
+            if device_id is None:
+                continue
+            # Bước 2: Ép mọi supplemental check thành operation READ-only.
+            operations.append(
+                PlannedOperation(
+                    operation_intent="COLLECT_ADDITIONAL_DIAGNOSTIC_EVIDENCE",
+                    operation_parameters={
+                        "commands": check.commands,
+                        "reason": check.reason,
+                    },
+                    devices=[
+                        PlannedDevice(
+                            device_id=device_id,
+                            device_role=DeviceRole.CONTEXT,
+                            access_mode=AccessMode.READ,
+                        )
+                    ],
+                )
+            )
+        # Bước 3: Không tạo vòng điều tra rỗng khi không ánh xạ được thiết bị.
+        if not operations:
+            return None
+        return ExecutionPlanCreate(task_type=TaskType.DIAGNOSIS, operations=operations)
+
 
     def _build_analysis_inputs(
         self,
@@ -111,7 +192,7 @@ class AnalysisOrchestrator:
             device.id: device.hostname
             for device in self._device_service.list_available_devices()
         }
-        return [
+        inputs = [
             {
                 "device": hostnames.get(result.device_id, result.device_id),
                 "access_mode": result.access_mode.value,
@@ -123,6 +204,19 @@ class AnalysisOrchestrator:
             }
             for result in execution_results
         ]
+        if self._gns3_provider is not None:
+            try:
+                inputs.append(
+                    {
+                        "context_type": "AVAILABLE TOPOLOGY CONTEXT",
+                        "neighbors": self._gns3_provider.list_topology_neighbors(),
+                    }
+                )
+            except Exception:
+                # Phân tích evidence đã thu thập vẫn tiếp tục nếu topology API lỗi.
+                pass
+        return inputs
+
 
     @staticmethod
     def _build_fallback_analysis(analysis_inputs: list[dict]) -> AnalysisResult:
@@ -159,6 +253,7 @@ class AnalysisOrchestrator:
             requires_more_data=True,
         )
 
+
     def _save_waiting_response(self, task: TaskDetail) -> Message:
         """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
 
@@ -171,6 +266,7 @@ class AnalysisOrchestrator:
                 message="Kế hoạch đã được tạo. Một hoặc nhiều thao tác cấu hình đang chờ bạn phê duyệt.",
             ),
         )
+
 
     @staticmethod
     def _format_analysis(analysis: AnalysisResult) -> str:

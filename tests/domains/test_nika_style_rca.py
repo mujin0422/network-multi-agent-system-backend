@@ -114,3 +114,22 @@ def test_correct_rca_but_wrong_detection_is_not_goal_success() -> None:
 def test_no_ground_truth_raises_grading_error() -> None:
     with pytest.raises(ValueError, match="ground truth"):
         score_structured_rca([], _submission())
+
+
+def test_fault_alias_and_node_scope_are_canonicalized_before_scoring() -> None:
+    acl = score_structured_rca(
+        _truth(("PE1", "FastEthernet4/0", "acl_traffic_block")),
+        _submission(("PE1", "FastEthernet4/0", "acl_block")),
+    )
+    bgp = score_structured_rca(
+        _truth(("CE-2A", None, "bgp_neighbor_admin_down")),
+        _submission(
+            ("CE-2A", "FastEthernet0/0", "bgp_neighbor_shutdown")
+        ),
+    )
+
+    assert acl["task_goal_met"] is True
+    assert bgp["task_goal_met"] is True
+    assert bgp["predicted_root_causes"] == [
+        {"resource_id": "node/ce-2a", "fault_type": "bgp_neighbor_admin_down"}
+    ]

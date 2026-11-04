@@ -12,11 +12,17 @@ flowchart LR
     GNS3 --> PLAN[plan]
     PLAN --> EXECUTE[execute]
     EXECUTE --> ANALYZE[analyze]
-    ANALYZE --> END
+    ANALYZE -->|đủ evidence / đạt giới hạn| FINALIZE[finalize]
+    ANALYZE -->|thiếu evidence| INVESTIGATE[investigate READ-only]
+    INVESTIGATE --> ANALYZE
+    FINALIZE --> END
 
     APPROVAL[approval decision] --> RESUME[execute]
     RESUME --> RESPONSE[analyze]
-    RESPONSE --> RESUME_END[END]
+    RESPONSE --> RESUME_FINALIZE[finalize]
+    RESPONSE --> RESUME_INVESTIGATE[investigate READ-only]
+    RESUME_INVESTIGATE --> RESPONSE
+    RESUME_FINALIZE --> RESUME_END[END]
 ```
 
 ## Hai điểm vào
@@ -44,11 +50,21 @@ flowchart LR
 
 | Thành phần | Trách nhiệm |
 | --- | --- |
-| LangGraph | Chuyển bước `check_gns3 → plan → execute → analyze` |
+| LangGraph | Chuyển bước `check_gns3 → plan → execute → analyze`, rẽ nhánh sang `investigate` hoặc `finalize` |
 | Planning handler | Tạo Task, gọi Planner Agent, kiểm tra và lưu plan |
 | Execution handler | Chạy operation DAG, approval gate và audit |
-| Analysis handler | Gọi Analyst Agent và lưu conversation response |
+| Analysis handler | Gọi Analyst, tạo check READ-only khi thiếu evidence và chỉ lưu response tại `finalize` |
 | Domain service/PostgreSQL | Nguồn sự thật cho business state |
+
+Với tác vụ chẩn đoán, `analyze` trả thêm `confidence`, `evidence_gaps` và
+`suggested_checks`. Nếu bằng chứng chưa đủ, workflow nối các Operation READ vào
+Task hiện tại, thu thập dữ liệu trên thiết bị nghi ngờ hoặc láng giềng một hop
+từ topology GNS3 rồi quay lại `analyze`. Workflow dừng khi đủ bằng chứng, không
+còn check hợp lệ hoặc đạt `AGENT_MAX_INVESTIGATION_ROUNDS` (mặc định 2, tối đa
+5). Lệnh bổ sung bị giới hạn ở `show`, `ping` và `traceroute`.
+Ngưỡng đủ tin cậy lấy từ `AGENT_DIAGNOSIS_CONFIDENCE_THRESHOLD` (mặc định
+`0.8`). Các lần Analyst sửa JSON dùng `ANALYST_VALIDATION_RETRIES` và toàn bộ
+lượt phân tích bị giới hạn bởi `ANALYST_TIMEOUT_SECONDS`.
 
 Graph hiện không dùng checkpointer riêng. Việc chờ approval có thể kéo dài nên
 Task được phục hồi từ PostgreSQL trong một graph invocation mới. Cách này tránh

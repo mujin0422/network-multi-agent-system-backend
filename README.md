@@ -55,6 +55,8 @@ Các nhóm cấu hình chính trong `.env.example`:
 
 - Application và logging
 - NVIDIA AI provider
+- Agent investigation loop (`AGENT_MAX_INVESTIGATION_ROUNDS`, mặc định `2`;
+  đặt `0` để tắt vòng thu thập evidence bổ sung)
 - Identity token signing secret and token lifetimes
 - GNS3
 - PostgreSQL device inventory
@@ -62,6 +64,18 @@ Các nhóm cấu hình chính trong `.env.example`:
 - Human approval timeout and automatic Task finalization
 
 Không commit `.env` vì file này chứa secret.
+
+Các tham số điều phối AI có thể điều chỉnh mà không sửa code:
+
+| Biến | Mặc định | Ý nghĩa |
+| --- | ---: | --- |
+| `PLANNER_VALIDATION_RETRIES` | `2` | Số lần yêu cầu Planner sửa structured output sau lần đầu |
+| `PLANNER_TIMEOUT_SECONDS` | `90` | Thời hạn chung cho một lượt lập kế hoạch, gồm retry |
+| `ANALYST_VALIDATION_RETRIES` | `2` | Số lần yêu cầu Analyst sửa structured output sau lần đầu |
+| `ANALYST_TIMEOUT_SECONDS` | `120` | Thời hạn chung cho một lượt phân tích, gồm retry |
+| `ANALYST_MAX_COMPLETION_TOKENS` | `4096` | Giới hạn output token của Analyst tại NVIDIA endpoint |
+| `AGENT_MAX_INVESTIGATION_ROUNDS` | `2` | Số vòng thu thập evidence bổ sung; `0` để tắt |
+| `AGENT_DIAGNOSIS_CONFIDENCE_THRESHOLD` | `0.8` | Ngưỡng confidence để workflow có thể kết luận RCA |
 
 ## Cấu hình thiết bị
 
@@ -214,6 +228,40 @@ thời trên cùng topology. Các bài ACL sử dụng số 102/103 và chỉ n�
 ACL đó chưa được dùng bởi cấu hình khác.
 
 Danh sách và lưu ý từng nhóm lỗi: `docker/postgres/seed/README.md`.
+
+### Chạy Benchmark Scenarios tự động
+
+Runner gọi đúng luồng API của giao diện để tạo đầy đủ Benchmark Run,
+Conversation, Message, Task, Operations, Execution records và Task Evaluation.
+Các scenario được chạy tuần tự và Cleanup trước khi chuyển sang scenario tiếp theo.
+Cleanup được retry bằng connection mới và phải vượt qua READ verification trước
+khi run chuyển sang `CLEANED`. Nếu không thể xác nhận trạng thái đã khôi phục,
+runner dừng ngay để fault cũ không làm nhiễm scenario tiếp theo.
+
+```bash
+export BENCHMARK_API_URL=http://localhost:8000
+export BENCHMARK_EMAIL=admin@example.com
+export BENCHMARK_PASSWORD='your-password'
+
+./scripts/run_benchmark_scenarios.py \
+  --date "$(date +%F)" \
+  --approve-writes
+```
+
+`--date` nhận ngày hiện tại hoặc một ngày trong quá khứ. Sau Cleanup, runner dịch
+đồng bộ timestamp của Benchmark Run và toàn bộ Conversation, Message, Task,
+Operation, Execution, Approval, Activity, Evaluation, Metric và Audit Log liên
+quan về ngày được chọn, đồng thời giữ nguyên thời lượng giữa các bước. Runner nghỉ
+15 giây giữa hai scenario; có thể đổi bằng `--cooldown-seconds`.
+Retry phía runner có thể điều chỉnh bằng `--cleanup-retries` và
+`--cleanup-retry-delay-seconds`. Backend dùng `BENCHMARK_CLEANUP_RETRIES` và
+`BENCHMARK_CLEANUP_RETRY_DELAY_SECONDS` cho retry/verification trong API.
+
+Runner bỏ qua scenario đã có kết quả thành công trong ngày; dùng `--force` nếu
+cần chạy lại. Có thể giới hạn bằng cách truyền nhiều lần `--scenario benc-...`.
+`--approve-writes` chỉ được dùng trong lab và chỉ tự phê duyệt approval thuộc Task
+của Benchmark Run đang chạy. Backfill cần kết nối database từ `DATABASE_URL` trong
+`.env`, hoặc truyền riêng bằng `--database-url`.
 
 ### Initial migration
 

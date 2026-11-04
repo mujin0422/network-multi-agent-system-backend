@@ -6,6 +6,7 @@ from app.domains.evaluation.schemas.common import (
     EvaluationStatus,
     EvaluatorType,
 )
+from app.domains.evaluation.schemas.diagnosis import FaultType, PredictedRootCause
 from app.domains.evaluation.schemas.task_evaluation import (
     TaskEvaluation,
     TaskEvaluationDetail,
@@ -20,6 +21,8 @@ __all__ = [
     "EvaluationResult",
     "EvaluationStatus",
     "EvaluatorType",
+    "FaultType",
+    "PredictedRootCause",
     "TaskEvaluation",
     "TaskEvaluationDetail",
     "TaskEvaluationMetric",

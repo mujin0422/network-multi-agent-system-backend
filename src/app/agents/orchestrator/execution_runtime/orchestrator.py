@@ -20,6 +20,7 @@ from app.domains.execution.schemas import (
     OperationStatus,
     TaskDetail,
     TaskStatus,
+    ExecutionPlanCreate,
 )
 from app.domains.execution.services import ExecutionService
 
@@ -42,6 +43,7 @@ class ExecutionOrchestrator:
     async def execute_task(self, task: TaskDetail) -> list[NetworkExecutionResult]:
         """Chạy Task theo thứ tự DAG và chốt trạng thái cuối."""
 
+        # Bước 1: Chặn callback muộn làm sống lại Task đã ở trạng thái kết thúc.
         # A late approval callback must not revive a Task already finalized by
         # the approval expiry worker.
         if task.task_status in {
@@ -57,6 +59,7 @@ class ExecutionOrchestrator:
         ):
             return []
 
+        # Bước 2: Chuyển Task sang RUNNING và ghi mốc bắt đầu vào timeline.
         started_at = datetime.now(UTC)
         running_task = task.model_copy(
             update={"task_status": TaskStatus.RUNNING, "completed_at": None}
@@ -70,6 +73,7 @@ class ExecutionOrchestrator:
         results: list[NetworkExecutionResult] = []
         statuses: dict[str, OperationStatus] = {}
 
+        # Bước 3: Duyệt operation theo display_order và kiểm tra dependency DAG.
         try:
             for operation in sorted(
                 task.operations,
@@ -92,11 +96,13 @@ class ExecutionOrchestrator:
                     statuses[operation.id] = OperationStatus.SKIPPED
                     continue
 
+                # Bước 4: Thực thi các device mapping đã vượt qua Approval Gate.
                 operation_results = await self.execute_network_operation(operation.id)
                 results.extend(operation_results)
                 persisted = self._execution_service.get_operation(operation.id)
                 statuses[operation.id] = persisted.operation_status
                 if persisted.operation_status == OperationStatus.WAITING_APPROVAL:
+                    # Bước 5: Tạm dừng an toàn; graph sẽ tiếp tục sau quyết định.
                     self._pause_for_approval(running_task, operation, started_at)
                     return results
         except Exception as exc:
@@ -110,8 +116,19 @@ class ExecutionOrchestrator:
             }
         ):
             return results
+        # Bước 6: Tổng hợp trạng thái operation để chốt trạng thái cuối của Task.
         self._complete_task(running_task, started_at, statuses)
         return results
+
+    async def execute_investigation(
+        self,
+        task_id: str,
+        plan: ExecutionPlanCreate,
+    ) -> list[NetworkExecutionResult]:
+        """Nối và thực thi một lượt thu thập evidence READ-only."""
+
+        task = self._execution_service.append_investigation_plan(task_id, plan)
+        return await self.execute_task(task)
 
     def load_task_for_operation_device(
         self,
@@ -129,6 +146,7 @@ class ExecutionOrchestrator:
     ) -> list[NetworkExecutionResult]:
         """Chạy một operation trên mọi device mapping và cập nhật status."""
 
+        # Bước 1: Tải operation và toàn bộ ánh xạ thiết bị từ database.
         operation = self._execution_service.get_operation(operation_id)
         mappings = self._execution_service.list_operation_devices(operation_id)
         if not mappings:
@@ -136,6 +154,7 @@ class ExecutionOrchestrator:
             return []
 
         operation_started_at = operation.started_at or datetime.now(UTC)
+        # Bước 2: Chuẩn hóa command và lọc mapping theo quyền/approval.
         commands = self._network_agent.extract_commands(
             operation.operation_parameters
         )
@@ -156,10 +175,12 @@ class ExecutionOrchestrator:
                 )
             )
 
+        # Bước 3: Thực thi từng mapping và lưu execution/action log tương ứng.
         results = [
             await self._mapping_executor.execute(operation, mapping, step_order)
             for step_order, mapping in enumerate(executable_mappings, start=1)
         ]
+        # Bước 4: Tính lại trạng thái operation từ trạng thái mapping đã lưu.
         current_mappings = self._execution_service.list_operation_devices(operation_id)
         status = operation_status(current_mappings)
         self._execution_service.update_operation(

@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.domains.evaluation.schemas.diagnosis import PredictedRootCause
+from app.domains.evaluation.schemas.diagnosis import canonical_fault_type
 from app.domains.benchmark.schemas.common import BenchmarkRootCause
 
 
@@ -26,7 +27,10 @@ def resource_id(device: str, interface: str | None) -> str:
 
 
 def _pair(cause: BenchmarkRootCause | PredictedRootCause) -> tuple[str, str]:
-    return resource_id(cause.device, cause.interface), cause.fault_type.strip().casefold()
+    return (
+        resource_id(cause.device, cause.interface),
+        canonical_fault_type(cause.fault_type).value,
+    )
 
 
 def _prf(predicted: set, truth: set) -> dict[str, float]:
@@ -63,14 +67,17 @@ def score_structured_rca(
     Invalid / missing agent submissions score zero, as in NIKA. A corrupt
     ground-truth object raises instead of silently fabricating a FAIL.
     """
+    # Bước 1: Từ chối chấm khi benchmark không có Ground Truth hợp lệ.
     if not ground_truth:
         raise ValueError("Cannot grade structured RCA without ground truth")
 
+    # Bước 2: Chuẩn hóa Ground Truth thành tập (resource_id, fault_type).
     truth_pairs = {_pair(item) for item in ground_truth}
     status = "scored"
     anomaly: bool | None = None
     predicted_causes: list[PredictedRootCause] = []
 
+    # Bước 3: Validate structured submission độc lập do Analyst tạo ra.
     if submission is None:
         status = "no_submission"
     elif not isinstance(submission, dict):
@@ -91,17 +98,20 @@ def score_structured_rca(
             anomaly = None
             status = "invalid_submission"
 
+    # Bước 4: Chuẩn hóa alias và phạm vi node/interface của dự đoán.
     pred_pairs = {_pair(item) for item in predicted_causes}
     truth_resources = {resource for resource, _ in truth_pairs}
     pred_resources = {resource for resource, _ in pred_pairs}
     truth_types = {fault for _, fault in truth_pairs}
     pred_types = {fault for _, fault in pred_pairs}
 
+    # Bước 5: Tính riêng joint RCA, localization và fault-type PRF.
     joint = _prf(pred_pairs, truth_pairs)
     localization = _prf(pred_resources, truth_resources)
     fault_types = _prf(pred_types, truth_types)
     # Current diagnosis scenarios explicitly inject a fault, so GT anomaly=True.
     detection_score = 1.0 if anomaly is True else 0.0
+    # Bước 6: GOAL chỉ PASS khi detection đúng và tập nguyên nhân khớp hoàn toàn.
     exact_match = bool(pred_pairs == truth_pairs)
     task_goal_met = bool(exact_match and detection_score == 1.0)
     return {
@@ -129,5 +139,5 @@ def score_structured_rca(
         "tp": len(pred_pairs & truth_pairs),
         "fp": len(pred_pairs - truth_pairs),
         "fn": len(truth_pairs - pred_pairs),
-        "scoring_method": "nika-0.2-inspired-set-pair-prf",
+        "scoring_method": "nika-0.2-inspired-canonical-set-pair-prf-v2",
     }

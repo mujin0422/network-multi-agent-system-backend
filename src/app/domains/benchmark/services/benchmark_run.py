@@ -1,5 +1,6 @@
 """Use cases điều phối benchmark_runs mà không lộ ground truth cho Agent/UI."""
 
+import time
 from datetime import UTC, datetime
 
 from app.core.utils import IdPrefix, generate_id
@@ -21,6 +22,7 @@ from app.domains.benchmark.schemas import (
 from app.domains.benchmark.utils import (
     build_benchmark_action_commands,
     build_benchmark_evaluation,
+    build_cleanup_verification_checks,
     to_public_benchmark_run,
 )
 from app.domains.conversation.schemas import Conversation, Message, MessageType
@@ -37,6 +39,8 @@ class BenchmarkRunService:
         evaluation_service: TaskEvaluationService,
         network_tool: NetworkTool,
         observation_reader: BenchmarkObservationRepository | None = None,
+        cleanup_retries: int = 2,
+        cleanup_retry_delay_seconds: float = 2.0,
     ) -> None:
         """Khởi tạo BenchmarkRunService cùng các phụ thuộc cần thiết."""
         self._runs = run_repository
@@ -44,6 +48,8 @@ class BenchmarkRunService:
         self._evaluations = evaluation_service
         self._network_tool = network_tool
         self._observation_reader = observation_reader
+        self._cleanup_retries = cleanup_retries
+        self._cleanup_retry_delay_seconds = cleanup_retry_delay_seconds
 
     def get_summary(self) -> BenchmarkRunSummary:
         """Compute Task Success Rate for all Benchmark Runs from GOAL metrics."""
@@ -59,6 +65,7 @@ class BenchmarkRunService:
 
     def start(self, scenario_id: str, user_id: str) -> BenchmarkRun:
         """Tạo mới dữ liệu theo nghiệp vụ của phương thức start."""
+        # Bước 1: Lấy scenario active và đóng băng snapshot cho lần chạy này.
         scenario = self._scenarios.get_by_id(scenario_id)
         if not scenario.is_active:
             raise ValueError("Benchmark scenario đang bị vô hiệu hóa")
@@ -75,9 +82,11 @@ class BenchmarkRunService:
             started_at=now,
             scenario_snapshot=snapshot,
         )
+        # Bước 2: Lưu PREPARING trước khi tác động lên topology để có audit trail.
         self._runs.save(run)
         injection_started = False
         try:
+            # Bước 3: Kiểm tra baseline, tiêm fault rồi xác nhận fault đã xuất hiện.
             self._execute_checks(scenario.preconditions)
             injection_started = True
             self._execute_actions(scenario.injection)
@@ -89,10 +98,11 @@ class BenchmarkRunService:
                 }
             )
         except Exception as exc:
+            # Bước 4: Nếu chuẩn bị lỗi, ưu tiên khôi phục lab trước khi ghi FAILED.
             cleanup_error: str | None = None
             if injection_started:
                 try:
-                    self._execute_actions(scenario.cleanup)
+                    self._cleanup_actions(scenario.cleanup)
                 except Exception as cleanup_exc:
                     cleanup_error = str(cleanup_exc)
             run = run.model_copy(
@@ -107,6 +117,7 @@ class BenchmarkRunService:
                     "completed_at": datetime.now(UTC),
                 }
             )
+        # Bước 5: Lưu READY hoặc FAILED cùng trạng thái cleanup thực tế.
         self._runs.save(run)
         return to_public_benchmark_run(run)
 
@@ -137,17 +148,20 @@ class BenchmarkRunService:
         response: Message | None,
     ) -> None:
         """Xử lý trạng thái nghiệp vụ trong phương thức complete."""
+        # Bước 1: Chỉ chấm run đang RUNNING và đã có FINAL_RESPONSE.
         run = self._runs.get_by_id(run_id)
         if run.status != BenchmarkRunStatus.RUNNING:
             return
         if response is None or response.message_type != MessageType.FINAL_RESPONSE:
             return
         now = datetime.now(UTC)
+        # Bước 2: Đọc structured diagnosis độc lập với Ground Truth.
         observations = (
             self._observation_reader.get_for_task(task.id, run.source_message_id)
             if self._observation_reader is not None and run.source_message_id
             else BenchmarkObservation()
         )
+        # Bước 3: Tạo Evaluation/Metric bằng evaluator version hiện hành.
         evaluation, rca_result = build_benchmark_evaluation(
             run,
             task,
@@ -156,6 +170,7 @@ class BenchmarkRunService:
             observations=observations,
         )
         self._evaluations.save(evaluation)
+        # Bước 4: Liên kết Evaluation và chốt kết quả Run.
         self._runs.save(
             run.model_copy(
                 update={
@@ -200,9 +215,12 @@ class BenchmarkRunService:
 
     def cleanup(self, run_id: str) -> BenchmarkRun:
         """Kết thúc hoặc loại bỏ dữ liệu theo nghiệp vụ của phương thức cleanup."""
+        # Bước 1: Đọc snapshot cleanup đúng với scenario tại thời điểm bắt đầu run.
         run = self._runs.get_by_id(run_id)
         if run.cleanup_required:
-            self._execute_actions(run.scenario_snapshot.cleanup)
+            # Bước 2: Thực thi, retry và READ-verify trạng thái thiết bị.
+            self._cleanup_actions(run.scenario_snapshot.cleanup)
+        # Bước 3: Chỉ đánh dấu CLEANED sau khi cleanup đã được xác nhận.
         cleaned = run.model_copy(
             update={
                 "status": BenchmarkRunStatus.CLEANED,
@@ -243,3 +261,26 @@ class BenchmarkRunService:
                 AccessMode.WRITE,
                 build_benchmark_action_commands(action),
             )
+
+    def _cleanup_actions(self, actions: list[BenchmarkAction]) -> None:
+        """Retry cleanup bằng connection mới và xác minh trạng thái bằng READ."""
+
+        # Bước 1: Sinh post-check READ-only trực tiếp từ action có kiểu.
+        checks = build_cleanup_verification_checks(actions)
+        last_error: Exception | None = None
+        attempts = self._cleanup_retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                # Bước 2: Mỗi lượt execute mở connection Netmiko mới.
+                self._execute_actions(actions)
+                # Bước 3: Xác nhận cấu hình/trạng thái thực, không chỉ tin WRITE.
+                self._execute_checks(checks)
+                return
+            except Exception as error:
+                # Bước 4: Chờ rồi retry có giới hạn; hết lượt sẽ giữ cleanup_required.
+                last_error = error
+                if attempt < attempts:
+                    time.sleep(self._cleanup_retry_delay_seconds)
+        raise RuntimeError(
+            f"Cleanup không thành công sau {attempts} lần: {last_error}"
+        ) from last_error

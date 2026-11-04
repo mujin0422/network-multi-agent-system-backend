@@ -16,14 +16,19 @@ from app.tools.network.commands import normalize_config_commands
 
 class PlannerAgent:
     name = "planner-agent"
-    max_validation_retries = 2
-    timeout_seconds = 90
 
-    def __init__(self, chat_model: Any) -> None:
+    def __init__(
+        self,
+        chat_model: Any,
+        max_validation_retries: int = 2,
+        timeout_seconds: float = 90.0,
+    ) -> None:
         # Gọi model theo chế độ chat thông thường. Không dùng
         # ``with_structured_output`` vì một số NVIDIA NIM không hỗ trợ tham số
         # ``guided_json`` do LangChain tự động gửi lên endpoint.
         self._planner = chat_model
+        self.max_validation_retries = max_validation_retries
+        self.timeout_seconds = timeout_seconds
 
     async def plan(
         self,

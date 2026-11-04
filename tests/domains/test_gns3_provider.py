@@ -52,3 +52,63 @@ def test_provider_lists_node_interface_names(monkeypatch) -> None:
     assert provider.list_node_interfaces() == {
         "P3": ["FastEthernet0/0", "FastEthernet1/0"]
     }
+
+
+def test_provider_maps_links_to_one_hop_neighbors(monkeypatch) -> None:
+    settings = Settings(gns3_project_id="project-1", _env_file=None)
+    provider = GNS3Provider(settings)
+    nodes = [
+        {
+            "node_id": "node-p1",
+            "name": "P1",
+            "ports": [
+                {
+                    "name": "FastEthernet1/0",
+                    "adapter_number": 1,
+                    "port_number": 0,
+                }
+            ],
+        },
+        {
+            "node_id": "node-p2",
+            "name": "P2",
+            "ports": [
+                {
+                    "name": "FastEthernet0/0",
+                    "adapter_number": 0,
+                    "port_number": 0,
+                }
+            ],
+        },
+    ]
+    links = [
+        {
+            "nodes": [
+                {"node_id": "node-p1", "adapter_number": 1, "port_number": 0},
+                {"node_id": "node-p2", "adapter_number": 0, "port_number": 0},
+            ]
+        }
+    ]
+
+    monkeypatch.setattr(
+        provider,
+        "_request",
+        lambda url: links if url.endswith("/links") else nodes,
+    )
+
+    assert provider.list_topology_neighbors() == {
+        "P1": [
+            {
+                "device": "P2",
+                "local_interface": "FastEthernet1/0",
+                "peer_interface": "FastEthernet0/0",
+            }
+        ],
+        "P2": [
+            {
+                "device": "P1",
+                "local_interface": "FastEthernet0/0",
+                "peer_interface": "FastEthernet1/0",
+            }
+        ],
+    }

@@ -43,6 +43,8 @@ def _build_benchmark_run_service() -> BenchmarkRunService:
         build_task_evaluation_service(settings.database_url),
         network_tool,
         BenchmarkObservationRepository(settings.database_url),
+        cleanup_retries=settings.benchmark_cleanup_retries,
+        cleanup_retry_delay_seconds=settings.benchmark_cleanup_retry_delay_seconds,
     )
 
 
