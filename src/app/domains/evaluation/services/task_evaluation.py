@@ -88,7 +88,8 @@ class TaskEvaluationService:
             actual = metric.actual_value
             if (
                 metric.metric_type == EvaluationMetricType.RCA
-                and evaluation.evaluator_version == "db-benchmark-v4"
+                and evaluation.evaluator_version
+                in {"db-benchmark-v4", "db-benchmark-v5"}
                 and isinstance(actual, dict)
             ):
                 for field in (
@@ -106,7 +107,7 @@ class TaskEvaluationService:
                 measurement_key = (
                     "active_duration_ms"
                     if evaluation.evaluator_version
-                    in {"db-benchmark-v3", "db-benchmark-v4"}
+                    in {"db-benchmark-v3", "db-benchmark-v4", "db-benchmark-v5"}
                     else "duration_ms"
                 )
             elif metric.metric_type == EvaluationMetricType.INTERACTION_TURNS:

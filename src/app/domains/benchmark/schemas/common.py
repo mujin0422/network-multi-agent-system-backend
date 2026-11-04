@@ -3,7 +3,13 @@
 from ipaddress import IPv4Address
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.domains.evaluation.schemas.diagnosis import (
+    FaultType,
+    NODE_SCOPED_FAULT_TYPES,
+    canonical_fault_type,
+)
 
 
 class BenchmarkAssertion(BaseModel):
@@ -99,6 +105,21 @@ class BenchmarkAction(BaseModel):
 
 
 class BenchmarkRootCause(BaseModel):
-    fault_type: str = Field(min_length=1)
+    fault_type: FaultType
     device: str = Field(min_length=1)
     interface: str | None = None
+
+    @field_validator("fault_type", mode="before")
+    @classmethod
+    def normalize_fault_type(cls, value: object) -> FaultType:
+        """Dùng cùng taxonomy với output có cấu trúc của Analyst."""
+
+        return canonical_fault_type(value)
+
+    @model_validator(mode="after")
+    def normalize_resource_scope(self) -> "BenchmarkRootCause":
+        """Ngăn ground truth node/interface mâu thuẫn với taxonomy."""
+
+        if self.fault_type in NODE_SCOPED_FAULT_TYPES:
+            self.interface = None
+        return self

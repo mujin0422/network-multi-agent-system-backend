@@ -64,7 +64,7 @@ def build_benchmark_evaluation(
         task_id=task.id,
         evaluation_status=EvaluationStatus.COMPLETED,
         evaluator_type=EvaluatorType.AUTOMATED,
-        evaluator_version="db-benchmark-v4",
+        evaluator_version="db-benchmark-v5",
         created_at=evaluated_at,
         evaluated_at=evaluated_at,
         metrics=[
