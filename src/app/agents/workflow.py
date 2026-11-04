@@ -154,7 +154,7 @@ class NetworkAutomationWorkflow:
         return {"analysis": analysis}
 
 
-    def _route_after_analysis(self, state: NetworkWorkflowState) -> str:
+    async def _route_after_analysis(self, state: NetworkWorkflowState) -> str:
         """Quyết định kết luận hay mở rộng điều tra dựa trên evidence hiện có."""
 
         # Bước 5: Đánh giá confidence, root cause và khoảng trống bằng chứng.
