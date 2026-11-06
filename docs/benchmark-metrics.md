@@ -152,6 +152,17 @@ natural-language response**, and never reconstructs predictions from GT.
 When the Analyst falls back due to a model or JSON error, there is no
 valid submission and RCA scores zero, not PASS.
 
+### Diagnostic evidence coverage
+
+Trước khi `finalize`, workflow chọn playbook phù hợp, chuẩn hóa output CLI thành
+evidence có cấu trúc và so sánh `observed` với `required_evidence`. Coverage
+thiếu sẽ tạo vòng investigation READ-only theo playbook; command đã có output
+không được chạy lại. Workflow dừng khi coverage hoàn tất, không còn check hợp lệ
+hoặc đạt giới hạn vòng. Activity `EVIDENCE_COVERAGE_EVALUATED` lưu coverage,
+missing evidence, số vòng và stop reason. Snapshot này được chép vào
+`Task_Evaluation_Metrics.evidence.diagnostic_evidence_coverage` để phân tích
+benchmark mà không cần bảng evidence riêng.
+
 ### Resource normalization and scoring
 
 Existing GNS3 scenario `ground_truth` requires
@@ -194,9 +205,21 @@ rather than silently receiving a prediction.
 - Evaluations **v1/v2/v3** remain unchanged and use keyword scoring.
 - Evaluations **v4** score structured diagnoses; their numeric RCA F1 is
   exposed in `GET /api/v1/evaluations` via an optional `scores` object.
-- No database migration is required: the Analyst submission is saved in
-  existing Task Activity JSONB; numeric scores are saved in existing
-  Evaluation JSONB.
+- Migration `0008_add_evidence_coverage_activity.sql` chỉ bổ sung một giá trị
+  cho enum `activity_event_type`; không tạo bảng mới. Evidence và coverage vẫn
+  được lưu trong JSONB hiện có của Activity/Evaluation.
+
+### Causal Evidence Gate
+
+Evidence coverage chỉ cho biết hệ thống đã thu thập đủ loại dữ liệu, không tự
+chứng minh root cause. Trước khi lưu `ANALYSIS_COMPLETED`, Causal Evidence Gate
+đối chiếu từng root cause của Analyst với rule theo `FaultType` và đúng
+device/interface. Kết luận đủ bằng chứng được giữ trong
+`diagnosis_submission.root_causes`; kết luận chưa đủ được chuyển sang
+`suspected_causes`, đặt `requires_more_data=true` và không được evaluator xem là
+RCA prediction. Mỗi quyết định lưu execution ID, command, evidence type,
+resource ID và tối đa bốn supporting lines trong `causal_evidence_gate` để kiểm
+toán false positive mà không cần tạo bảng mới.
 - Existing scenarios/seeds are compatible, because they already have
   `ground_truth` device/interface/fault_type.
 - The existing all-runs TSR still spans historical evaluation versions;
@@ -216,12 +239,14 @@ After merging backend/frontend code, rebuild the API and run a fresh
 Benchmark Scenario. Verify:
 
 1. `ANALYSIS_COMPLETED` has a JSON `diagnosis_submission`.
-2. The saved Evaluation is `db-benchmark-v5`.
-3. RCA includes `rca_f1`, `localization_f1`, `fault_type_f1`,
+2. `EVIDENCE_COVERAGE_EVALUATED` có playbook, coverage, missing evidence,
+   investigation round và stop reason.
+3. The saved Evaluation is `db-benchmark-v5`.
+4. RCA includes `rca_f1`, `localization_f1`, `fault_type_f1`,
    and FP/FN evidence; GOAL is based on detection + exact pairs.
-4. The frontend displays old runs as historical keyword rubric and new
+5. The frontend displays old runs as historical keyword rubric and new
    runs with v4 RCA scores.
-5. Run `pytest tests/domains/test_nika_style_rca.py tests/domains/test_benchmark_observations.py tests/domains/test_benchmark_service.py tests/agents/test_analyst_agent.py`.
+6. Run `pytest tests/diagnostics tests/domains/test_nika_style_rca.py tests/domains/test_benchmark_observations.py tests/domains/test_benchmark_service.py tests/agents`.
 
 NVIDIA NIM model responses may require additional JSON retries. This change
 does not benchmark the model's ability to generate structured diagnoses; run

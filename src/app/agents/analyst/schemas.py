@@ -49,4 +49,6 @@ class AnalysisResult(BaseModel):
     # Defaults preserve older non-benchmark Agent callers.
     is_anomaly: bool | None = None
     root_causes: list[PredictedRootCause] = Field(default_factory=list, max_length=8)
+    # Gate backend chuyển các kết luận chưa đủ evidence sang danh sách này.
+    suspected_causes: list[PredictedRootCause] = Field(default_factory=list, max_length=8)
 

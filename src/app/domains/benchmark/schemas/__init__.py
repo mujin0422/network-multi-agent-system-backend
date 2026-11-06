@@ -8,6 +8,7 @@ from app.domains.benchmark.schemas.common import (
 )
 from app.domains.benchmark.schemas.benchmark_run import (
     BenchmarkRun,
+    BenchmarkRunPage,
     BenchmarkRunRecord,
     BenchmarkRunStatus,
     BenchmarkStartRequest,
@@ -25,6 +26,7 @@ __all__ = [
     "BenchmarkCheck",
     "BenchmarkRootCause",
     "BenchmarkRun",
+    "BenchmarkRunPage",
     "BenchmarkRunRecord",
     "BenchmarkRunStatus",
     "BenchmarkScenario",

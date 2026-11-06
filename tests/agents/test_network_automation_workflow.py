@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from app.agents.analyst import AnalysisResult
 from app.agents.workflow import NetworkAutomationWorkflow
+from app.diagnostics import EvidenceCoverage, EvidenceType
 from app.domains.execution.schemas import TaskType
 
 
@@ -47,7 +48,7 @@ class StubAnalysis:
     def __init__(self, calls):
         self.calls = calls
 
-    async def analyze(self, task, results):
+    async def analyze(self, task, results, evidence_coverage=None):
         self.calls.append("analyze")
         return AnalysisResult(
             summary="Không phát hiện bất thường.",
@@ -55,8 +56,21 @@ class StubAnalysis:
             confidence=1.0,
         )
 
-    def build_investigation_plan(self, analysis):
+    def build_investigation_plan(self, analysis, **kwargs):
         return object()
+
+    def evaluate_evidence_coverage(self, results, playbook_keys):
+        return EvidenceCoverage(
+            applicable=False,
+            playbook_keys=[],
+            required=[],
+            observed=[],
+            missing=[],
+            coverage=1.0,
+        )
+
+    def record_evidence_gate(self, task_id, coverage, investigation_round, stop_reason):
+        pass
 
     def finalize_response(self, task, analysis):
         return {"task": task, "result_count": 1}
@@ -111,7 +125,7 @@ def test_workflow_collects_more_evidence_before_finalizing() -> None:
             super().__init__(calls)
             self.round = 0
 
-        async def analyze(self, task, results):
+        async def analyze(self, task, results, evidence_coverage=None):
             self.calls.append("analyze")
             self.round += 1
             if self.round == 1:
@@ -160,3 +174,65 @@ def test_workflow_collects_more_evidence_before_finalizing() -> None:
     ]
     assert state["investigation_round"] == 1
     assert state["analysis"].confidence == 0.9
+
+
+def test_workflow_blocks_finalize_until_playbook_evidence_is_complete() -> None:
+    calls = []
+
+    class GateAnalysis(StubAnalysis):
+        def __init__(self, calls):
+            super().__init__(calls)
+            self.coverage_checks = 0
+            self.gate_record = None
+
+        def evaluate_evidence_coverage(self, results, playbook_keys):
+            self.coverage_checks += 1
+            missing = (
+                [EvidenceType.LDP_NEIGHBOR]
+                if self.coverage_checks <= 2
+                else []
+            )
+            return EvidenceCoverage(
+                applicable=True,
+                playbook_keys=["mpls_disabled"],
+                required=[EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR],
+                observed=(
+                    [EvidenceType.MPLS_INTERFACE]
+                    if missing
+                    else [EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR]
+                ),
+                missing=missing,
+                coverage=0.5 if missing else 1.0,
+            )
+
+        def record_evidence_gate(
+            self, task_id, coverage, investigation_round, stop_reason
+        ):
+            self.gate_record = (coverage.coverage, investigation_round, stop_reason)
+
+    analysis = GateAnalysis(calls)
+    workflow = NetworkAutomationWorkflow(
+        StubGNS3Provider(calls),
+        StubPlanning(calls),
+        StubExecution(calls),
+        analysis,
+        max_investigation_rounds=2,
+    )
+
+    state = asyncio.run(
+        workflow.run_message(
+            "conversation",
+            SimpleNamespace(message="Chẩn đoán MPLS trên P1"),
+        )
+    )
+
+    assert calls == [
+        "check_gns3",
+        "plan",
+        "execute",
+        "analyze",
+        "investigate",
+        "analyze",
+    ]
+    assert state["evidence_coverage"].complete is True
+    assert analysis.gate_record == (1.0, 1, "EVIDENCE_COMPLETE")

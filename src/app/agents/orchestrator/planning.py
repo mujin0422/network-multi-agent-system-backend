@@ -96,10 +96,16 @@ class PlanningOrchestrator:
                 if self._gns3_provider is not None
                 else {}
             )
+            topology_neighbors = (
+                self._gns3_provider.list_topology_neighbors()
+                if self._gns3_provider is not None
+                else {}
+            )
             plan = await self._planner.plan(
                 message.message,
                 devices,
                 node_interfaces=node_interfaces,
+                topology_neighbors=topology_neighbors,
             )
         except Exception as exc:
             self._execution_service.update_task(
@@ -169,7 +175,9 @@ class PlanningOrchestrator:
             ActivityActorType.PLANNER,
             ActivityEventType.DEPENDENCIES_CREATED,
             event_data={
-                "count": sum(len(operation.dependencies) for operation in plan.operations)
+                "count": sum(
+                    len(operation.dependencies) for operation in plan.operations
+                )
             },
         )
         self._execution_service.record_activity(

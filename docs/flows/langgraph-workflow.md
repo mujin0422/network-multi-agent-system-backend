@@ -57,11 +57,18 @@ flowchart LR
 | Domain service/PostgreSQL | Nguồn sự thật cho business state |
 
 Với tác vụ chẩn đoán, `analyze` trả thêm `confidence`, `evidence_gaps` và
-`suggested_checks`. Nếu bằng chứng chưa đủ, workflow nối các Operation READ vào
-Task hiện tại, thu thập dữ liệu trên thiết bị nghi ngờ hoặc láng giềng một hop
-từ topology GNS3 rồi quay lại `analyze`. Workflow dừng khi đủ bằng chứng, không
-còn check hợp lệ hoặc đạt `AGENT_MAX_INVESTIGATION_ROUNDS` (mặc định 2, tối đa
-5). Lệnh bổ sung bị giới hạn ở `show`, `ping` và `traceroute`.
+`suggested_checks`. Backend đồng thời chọn diagnostic playbook từ yêu cầu hoặc
+fault type do Analyst dự đoán, parse CLI output thành `DiagnosticEvidence` và
+so sánh tập `EvidenceType` đã có với `required_evidence`. Khi coverage chưa đủ,
+workflow ưu tiên tạo Operation READ từ command template của playbook, loại bỏ
+command đã chạy, rồi mới bổ sung check hợp lệ do Analyst đề nghị. Check cho
+`NEIGHBOR` dùng mapping hai đầu link từ topology GNS3.
+
+Workflow chỉ finalize khi coverage hoàn tất, không còn check có thể vật hóa hoặc
+đạt `AGENT_MAX_INVESTIGATION_ROUNDS` (mặc định 2, tối đa 5). Quyết định cuối
+được ghi bằng Activity Event `EVIDENCE_COVERAGE_EVALUATED`, gồm playbook,
+required/observed/missing evidence, tỷ lệ coverage, số vòng và stop reason.
+Lệnh bổ sung bị giới hạn ở `show`, `ping` và `traceroute`.
 Ngưỡng đủ tin cậy lấy từ `AGENT_DIAGNOSIS_CONFIDENCE_THRESHOLD` (mặc định
 `0.8`). Các lần Analyst sửa JSON dùng `ANALYST_VALIDATION_RETRIES` và toàn bộ
 lượt phân tích bị giới hạn bởi `ANALYST_TIMEOUT_SECONDS`.

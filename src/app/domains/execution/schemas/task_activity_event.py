@@ -29,6 +29,7 @@ class ActivityEventType(StrEnum):
     APPROVAL_REJECTED = "APPROVAL_REJECTED"
     ANALYSIS_STARTED = "ANALYSIS_STARTED"
     ANALYSIS_COMPLETED = "ANALYSIS_COMPLETED"
+    EVIDENCE_COVERAGE_EVALUATED = "EVIDENCE_COVERAGE_EVALUATED"
     FINAL_RESPONSE_CREATED = "FINAL_RESPONSE_CREATED"
     TASK_COMPLETED = "TASK_COMPLETED"
     TASK_FAILED = "TASK_FAILED"
@@ -48,8 +49,12 @@ class TaskActivityEvent(BaseModel):
 
     id: str = Field(description="Khóa chính của activity event.")
     task_id: str = Field(description="ID Task sở hữu timeline event.")
-    operation_id: str | None = Field(default=None, description="ID Operation liên quan.")
-    execution_id: str | None = Field(default=None, description="ID Execution liên quan.")
+    operation_id: str | None = Field(
+        default=None, description="ID Operation liên quan."
+    )
+    execution_id: str | None = Field(
+        default=None, description="ID Execution liên quan."
+    )
     actor_type: ActivityActorType = Field(description="Thành phần tạo event.")
     event_type: ActivityEventType = Field(description="Loại event nghiệp vụ.")
     event_status: ActivityEventStatus = Field(description="Trạng thái event.")
@@ -59,5 +64,7 @@ class TaskActivityEvent(BaseModel):
         description="Dữ liệu có cấu trúc phục vụ Chat UI.",
     )
     started_at: datetime | None = Field(default=None, description="Thời điểm bắt đầu.")
-    completed_at: datetime | None = Field(default=None, description="Thời điểm kết thúc.")
+    completed_at: datetime | None = Field(
+        default=None, description="Thời điểm kết thúc."
+    )
     created_at: datetime = Field(description="Thời điểm tạo event.")

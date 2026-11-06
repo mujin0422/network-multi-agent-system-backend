@@ -48,5 +48,15 @@ class BenchmarkRunRecord(BenchmarkRun):
     scenario_snapshot: BenchmarkScenario
 
 
+class BenchmarkRunPage(BaseModel):
+    """Một trang benchmark run cùng metadata phân trang."""
+
+    items: list[BenchmarkRun]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+
+
 class BenchmarkStartRequest(BaseModel):
     scenario_id: str = Field(pattern=r"^benc-\d{6}-[0-9a-f]{8}$")

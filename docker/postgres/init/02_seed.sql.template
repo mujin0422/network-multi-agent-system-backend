@@ -171,11 +171,11 @@ VALUES
         'user-221026-00000001', 'user-221026-00000001'
     ),
     (
-        'benc-021126-10000002', 'p3-fa2-0-link-down', '1.0',
-        'P3 FastEthernet2/0 link-down diagnosis',
-        'Chẩn đoán FastEthernet2/0 trên P3 bị shutdown.', 'mpls-core',
-        'Hãy chẩn đoán nguyên nhân P3 mất kết nối trên FastEthernet2/0. Không khắc phục.',
-        '{"preconditions":[{"device":"P3","command":"show interfaces FastEthernet2/0 | include line protocol","assertion":{"contains":"FastEthernet2/0 is up, line protocol is up"}}],"injection":[{"device":"P3","action":"interface_shutdown","interface":"FastEthernet2/0"}],"fault_verification":[{"device":"P3","command":"show interfaces FastEthernet2/0 | include line protocol","assertion":{"contains":"administratively down"}}],"ground_truth":[{"fault_type":"link_down","device":"P3","interface":"FastEthernet2/0"}],"evaluation_required_terms":["P3","FastEthernet2/0","shutdown"],"cleanup":[{"device":"P3","action":"interface_no_shutdown","interface":"FastEthernet2/0"}]}'::jsonb,
+        'benc-021126-10000002', 'p3-fa1-0-link-down', '1.1',
+        'P3 FastEthernet1/0 link-down diagnosis',
+        'Chẩn đoán FastEthernet1/0 trên P3 bị shutdown.', 'mpls-core',
+        'Hãy chẩn đoán nguyên nhân P3 mất kết nối trên FastEthernet1/0. Không khắc phục.',
+        '{"preconditions":[{"device":"P3","command":"show interfaces FastEthernet1/0 | include line protocol","assertion":{"contains":"FastEthernet1/0 is up, line protocol is up"}}],"injection":[{"device":"P3","action":"interface_shutdown","interface":"FastEthernet1/0"}],"fault_verification":[{"device":"P3","command":"show interfaces FastEthernet1/0 | include line protocol","assertion":{"contains":"administratively down"}}],"ground_truth":[{"fault_type":"link_down","device":"P3","interface":"FastEthernet1/0"}],"evaluation_required_terms":["P3","FastEthernet1/0","shutdown"],"cleanup":[{"device":"P3","action":"interface_no_shutdown","interface":"FastEthernet1/0"}]}'::jsonb,
         'user-221026-00000001', 'user-221026-00000001'
     ),
     (

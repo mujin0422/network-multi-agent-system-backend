@@ -10,7 +10,8 @@ from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
 from app.agents.network import NetworkExecutionResult, NetworkExecutionStatus
 from app.agents.orchestrator import AnalysisOrchestrator
-from app.domains.execution.schemas import AccessMode
+from app.diagnostics import EvidenceCoverage, EvidenceType
+from app.domains.execution.schemas import AccessMode, TaskStatus, TaskType
 from app.tools import CommandResult
 
 
@@ -33,9 +34,28 @@ class StubDeviceService:
 
 
 def test_analyst_prompt_interprets_bad_mask_and_avoids_rejected_command() -> None:
-    assert 'Bad mask /N for address X' in ANALYST_SYSTEM_PROMPT
+    assert "Bad mask /N for address X" in ANALYST_SYSTEM_PROMPT
     assert "không gọi netmask hợp lệ" in ANALYST_SYSTEM_PROMPT
     assert "Không đề xuất chạy lại nguyên văn command" in ANALYST_SYSTEM_PROMPT
+
+
+def test_analyst_schema_does_not_allow_model_owned_suspected_causes() -> None:
+    model = StubChatModel(
+        [
+            '{"summary":"Đã phân tích.","findings":[],"likely_causes":[],'
+            '"recommendations":[],"requires_more_data":false,"confidence":1,'
+            '"evidence_gaps":[],"suggested_checks":[],"is_anomaly":true,'
+            '"root_causes":[],"suspected_causes":[{"device":"P1",'
+            '"interface":"FastEthernet0/0","fault_type":"link_down"}]}'
+        ]
+    )
+
+    result = asyncio.run(AnalystAgent(model).analyze([{"status": "SUCCESS"}]))
+
+    assert result.suspected_causes == []
+    assert "suspected_causes" not in model.calls[0][-1].content.split(
+        "RESPONSE JSON SCHEMA:", 1
+    )[1].split("Chỉ trả về", 1)[0]
 
 
 def test_analyst_recreates_truncated_json_on_retry() -> None:
@@ -81,8 +101,8 @@ def test_analyst_repairs_unquoted_schema_key_and_trailing_comma() -> None:
                 'Phân tích:\n```json\n{"summary":"OSPF đã hội tụ",'
                 '"findings":["P1 và P2 có route OSPF"],'
                 'likely_causes:[],"recommendations":[],'
-                'requires_more_data:false,confidence:1,evidence_gaps:[],'
-                'suggested_checks:[],is_anomaly:false,root_causes:[],}\n```'
+                "requires_more_data:false,confidence:1,evidence_gaps:[],"
+                "suggested_checks:[],is_anomaly:false,root_causes:[],}\n```"
             )
         ]
     )
@@ -139,18 +159,160 @@ def test_analysis_input_replaces_internal_device_id_with_hostname() -> None:
 
     payload = orchestrator._build_analysis_inputs(results)
 
-    assert payload == [
-        {
-            "device": "P1",
-            "access_mode": "READ",
-            "status": "SUCCESS",
-            "command_results": [
-                {"command": "show ip route", "output": "O 10.0.0.0/8"}
-            ],
-            "error_message": None,
-        }
+    assert payload[0]["device"] == "P1"
+    assert payload[0]["access_mode"] == "READ"
+    assert payload[0]["status"] == "SUCCESS"
+    assert payload[0]["command_results"] == [
+        {"command": "show ip route", "output": "O 10.0.0.0/8"}
     ]
+    assert payload[0]["structured_evidence"][0]["evidence_type"] == "ROUTE"
+    assert payload[0]["structured_evidence"][0]["resource_id"] == "node/p1"
+    assert payload[0]["error_message"] is None
     assert "devc-" not in str(payload)
+
+
+def test_complete_evidence_retries_empty_diagnosis_and_applies_scope_gate() -> None:
+    class SequenceAnalyst:
+        def __init__(self):
+            self.calls = 0
+
+        async def analyze(self, _inputs):
+            self.calls += 1
+            if self.calls == 1:
+                return AnalysisResult(
+                    summary="Có bất thường nhưng chưa kết luận.",
+                    is_anomaly=True,
+                    confidence=0.7,
+                )
+            return AnalysisResult(
+                summary="P1 FastEthernet0/0 bị shutdown.",
+                is_anomaly=True,
+                confidence=0.95,
+                root_causes=[
+                    {
+                        "device": "P1",
+                        "interface": "FastEthernet0/0",
+                        "fault_type": "link_down",
+                    },
+                    {
+                        "device": "P2",
+                        "interface": "FastEthernet3/0",
+                        "fault_type": "link_down",
+                    },
+                ],
+            )
+
+    class ExecutionService:
+        def __init__(self):
+            self.events = []
+
+        def get_task(self, _task_id):
+            return SimpleNamespace(task_status=TaskStatus.SUCCESS)
+
+        def record_activity(self, *args, **kwargs):
+            self.events.append((args, kwargs))
+
+    analyst = SequenceAnalyst()
+    execution = ExecutionService()
+    orchestrator = AnalysisOrchestrator(
+        analyst=analyst,
+        execution_service=execution,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+    )
+    task = SimpleNamespace(
+        id="task-1",
+        task_type=TaskType.DIAGNOSIS,
+        input_message="Chẩn đoán P1 FastEthernet0/0 bị mất kết nối",
+    )
+    results = [
+        NetworkExecutionResult(
+            operation_id="oper-1",
+            operation_device_id="opdv-1",
+            device_id="devc-221026-00000001",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show interfaces FastEthernet0/0",
+                    output=(
+                        "FastEthernet0/0 is administratively down, "
+                        "line protocol is down"
+                    ),
+                )
+            ],
+        ),
+        NetworkExecutionResult(
+            operation_id="oper-2",
+            operation_device_id="opdv-2",
+            device_id="devc-221026-00000002",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show interfaces FastEthernet3/0",
+                    output=(
+                        "FastEthernet3/0 is administratively down, "
+                        "line protocol is down"
+                    ),
+                )
+            ],
+        ),
+    ]
+    coverage = EvidenceCoverage(
+        applicable=True,
+        playbook_keys=["interface_link_down"],
+        required=[EvidenceType.INTERFACE_STATUS],
+        observed=[EvidenceType.INTERFACE_STATUS],
+        missing=[],
+        coverage=1,
+    )
+
+    result = asyncio.run(orchestrator.analyze(task, results, coverage))
+
+    assert analyst.calls == 2
+    assert result is not None
+    assert [cause.device for cause in result.root_causes] == ["P1"]
+    assert [cause.device for cause in result.suspected_causes] == ["P2"]
+    completed_event = execution.events[-1][1]["event_data"]
+    assert completed_event["causal_interpretation_retry"] is True
+
+
+def test_investigation_plan_adds_missing_playbook_command_without_duplicates() -> None:
+    orchestrator = AnalysisOrchestrator(
+        analyst=None,
+        execution_service=None,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+    )
+    results = [
+        NetworkExecutionResult(
+            operation_id="oper-1",
+            operation_device_id="opdv-1",
+            device_id="devc-221026-00000001",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show mpls interfaces",
+                    output="FastEthernet0/0 Yes (ldp) Operational",
+                )
+            ],
+        )
+    ]
+
+    plan = orchestrator.build_investigation_plan(
+        AnalysisResult(summary="Thiếu LDP evidence."),
+        playbook_keys=["mpls_disabled"],
+        missing_evidence=[EvidenceType.LDP_NEIGHBOR],
+        execution_results=results,
+    )
+
+    assert plan is not None
+    assert len(plan.operations) == 1
+    assert plan.operations[0].operation_parameters["commands"] == [
+        "show mpls ldp neighbor"
+    ]
 
 
 def test_analysis_fallback_uses_device_names_without_guessing_root_cause() -> None:
@@ -171,13 +333,15 @@ def test_analysis_fallback_uses_device_names_without_guessing_root_cause() -> No
 
 
 def test_analyst_retries_until_structured_submission_is_present() -> None:
-    model = StubChatModel([
-        '{"summary":"P1 interface down","findings":[],"likely_causes":[],"recommendations":[],"requires_more_data":false}',
-        '{"summary":"P1 interface down","findings":[],"likely_causes":["P1 FastEthernet0/0 shutdown"],'
-        '"recommendations":[],"requires_more_data":false,"confidence":0.95,'
-        '"evidence_gaps":[],"suggested_checks":[],"is_anomaly":true,'
-        '"root_causes":[{"device":"P1","interface":"FastEthernet0/0","fault_type":"link_down"}]}',
-    ])
+    model = StubChatModel(
+        [
+            '{"summary":"P1 interface down","findings":[],"likely_causes":[],"recommendations":[],"requires_more_data":false}',
+            '{"summary":"P1 interface down","findings":[],"likely_causes":["P1 FastEthernet0/0 shutdown"],'
+            '"recommendations":[],"requires_more_data":false,"confidence":0.95,'
+            '"evidence_gaps":[],"suggested_checks":[],"is_anomaly":true,'
+            '"root_causes":[{"device":"P1","interface":"FastEthernet0/0","fault_type":"link_down"}]}',
+        ]
+    )
 
     result = asyncio.run(AnalystAgent(model).analyze([{"status": "SUCCESS"}]))
 

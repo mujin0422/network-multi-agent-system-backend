@@ -21,6 +21,11 @@ Quy tắc:
 - Device có role SOURCE hoặc CONTEXT luôn phải dùng READ access.
 - Device có role TARGET dùng READ khi kiểm tra hoặc WRITE khi thay đổi cấu hình.
 - Tách riêng các bước thu thập dữ liệu, phân tích, cấu hình và xác minh.
+- Với tác vụ DIAGNOSIS có MATCHED DIAGNOSTIC PLAYBOOKS, ưu tiên tạo các
+  operation READ để thu thập đủ command bắt buộc trong playbook. Lệnh có target
+  NEIGHBOR phải chạy trên đúng thiết bị đầu bên kia khi topology cung cấp được;
+  đối chiếu `local_interface` và `peer_interface` trong AVAILABLE TOPOLOGY
+  NEIGHBORS, không tự suy đoán interface hoặc thiết bị không có trong inventory.
 - Operation WRITE phải phụ thuộc vào các bước kiểm tra hoặc phân tích cần thiết.
 - Mọi operation có ít nhất một phần tử trong devices bắt buộc phải có command
   thực thi trong operation_parameters. Dùng {"command": "show ..."} cho một

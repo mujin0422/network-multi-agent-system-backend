@@ -12,7 +12,9 @@ from app.domains.execution.models import TaskActivityEventModel, TaskExecutionMo
 from app.domains.execution.schemas import ActivityEventType
 
 
-def approval_pauses_from_events(events: list[tuple[ActivityEventType, object]]) -> tuple[list[ApprovalWaitInterval], bool]:
+def approval_pauses_from_events(
+    events: list[tuple[ActivityEventType, object]],
+) -> tuple[list[ApprovalWaitInterval], bool]:
     """Pair REQUESTED -> next EXECUTION_STARTED, not approval decision alone.
 
     Resume may happen after the user approves. Waiting ends when orchestration
@@ -33,17 +35,19 @@ def approval_pauses_from_events(events: list[tuple[ActivityEventType, object]]) 
 
 
 class BenchmarkObservationRepository:
-
     def __init__(self, database_url: str) -> None:
         """Khởi tạo repository đọc bằng chứng benchmark."""
         self._sessions = create_session_factory(database_url)
 
-
-    def get_for_task(self, task_id: str, source_message_id: str) -> BenchmarkObservation:
+    def get_for_task(
+        self, task_id: str, source_message_id: str
+    ) -> BenchmarkObservation:
         """Lấy thời gian, số tool call và kết quả phân tích của Task."""
         with self._sessions() as session:
             request_created_at = session.scalar(
-                select(MessageModel.created_at).where(MessageModel.id == source_message_id)
+                select(MessageModel.created_at).where(
+                    MessageModel.id == source_message_id
+                )
             )
             tool_calls = session.scalar(
                 select(func.count(TaskExecutionModel.id)).where(
@@ -57,7 +61,18 @@ class BenchmarkObservationRepository:
                 select(TaskActivityEventModel.event_data)
                 .where(
                     TaskActivityEventModel.task_id == task_id,
-                    TaskActivityEventModel.event_type == ActivityEventType.ANALYSIS_COMPLETED,
+                    TaskActivityEventModel.event_type
+                    == ActivityEventType.ANALYSIS_COMPLETED,
+                )
+                .order_by(TaskActivityEventModel.sequence_number.desc())
+                .limit(1)
+            )
+            coverage_event = session.scalar(
+                select(TaskActivityEventModel.event_data)
+                .where(
+                    TaskActivityEventModel.task_id == task_id,
+                    TaskActivityEventModel.event_type
+                    == ActivityEventType.EVIDENCE_COVERAGE_EVALUATED,
                 )
                 .order_by(TaskActivityEventModel.sequence_number.desc())
                 .limit(1)
@@ -69,10 +84,12 @@ class BenchmarkObservationRepository:
                 )
                 .where(
                     TaskActivityEventModel.task_id == task_id,
-                    TaskActivityEventModel.event_type.in_([
-                        ActivityEventType.APPROVAL_REQUESTED,
-                        ActivityEventType.EXECUTION_STARTED,
-                    ]),
+                    TaskActivityEventModel.event_type.in_(
+                        [
+                            ActivityEventType.APPROVAL_REQUESTED,
+                            ActivityEventType.EXECUTION_STARTED,
+                        ]
+                    ),
                 )
                 .order_by(
                     TaskActivityEventModel.sequence_number,
@@ -91,5 +108,8 @@ class BenchmarkObservationRepository:
                 and isinstance(analysis_event.get("diagnosis_submission"), dict)
                 and not analysis_event.get("used_fallback", False)
                 else None
+            ),
+            evidence_coverage=(
+                coverage_event if isinstance(coverage_event, dict) else None
             ),
         )
