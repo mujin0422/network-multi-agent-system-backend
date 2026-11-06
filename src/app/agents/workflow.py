@@ -195,6 +195,11 @@ class NetworkAutomationWorkflow:
             or task.task_type not in {TaskType.DIAGNOSIS, TaskType.COMPOSITE}
         ):
             return "finalize"
+        # Root cause đã vượt qua Causal Evidence Gate và playbook evidence đã
+        # đầy đủ thì kết luận ngay. Không để các khoảng trống phụ làm vòng sau
+        # thay thế một RCA đã được xác nhận bằng suspected/unknown.
+        if analysis.root_causes and coverage is not None and coverage.complete:
+            return "finalize"
         playbook_incomplete = bool(
             coverage is not None and coverage.applicable and not coverage.complete
         )
