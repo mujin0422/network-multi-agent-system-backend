@@ -541,9 +541,9 @@ Theo quy tắc bộ chấm v4, các điểm 100% hàm ý tập cặp nguyên nh�
 
 **Ý nghĩa và giới hạn:** 100% là điểm cho *một mẫu*, không phải độ chính xác tổng thể của mô hình; 22,40 giây là thời gian workflow của mẫu, không phải latency trung bình; 4 tool calls là số lần gọi công cụ của mẫu, không phải giới hạn cố định. Từ một quan sát chưa thể kết luận sự khác biệt hiệu năng so với NIKA, một model khác hoặc một baseline khác.
 
-### 4.5.3. So sánh ba đợt chạy ngày logic 27/10, 28/10 và 29/10/2026
+### 4.5.3. So sánh bốn đợt chạy ngày logic 27/10–30/10/2026
 
-Ba đợt được tạo bởi Benchmark Runner với cùng tập 32 scenario active trên topology MPLS GNS3. Khi tổng hợp, mỗi ngày chỉ lấy bản ghi mới nhất của từng `scenario_id`, do đó mỗi cohort có 32 quan sát độc lập theo kịch bản. Các ngày trong mục này là **ngày logic được truyền qua `--date` và backfill đồng bộ**, không phải thời điểm commit hoặc thời điểm đồng hồ thực mà tiến trình chạy. Việc dùng ngày logic cho phép hiển thị chuỗi thời gian trên dashboard, nhưng nhật ký triển khai vẫn phải được dùng để xác định phiên bản code tương ứng.
+Bốn đợt được tạo bởi Benchmark Runner với cùng tập 32 scenario active trên topology MPLS GNS3. Khi tổng hợp, mỗi ngày chỉ lấy bản ghi mới nhất của từng `scenario_id`, do đó mỗi cohort có 32 quan sát theo kịch bản. Các ngày trong mục này là **ngày logic được truyền qua `--date` và backfill đồng bộ**, không phải thời điểm commit hoặc thời điểm đồng hồ thực mà tiến trình chạy. Việc dùng ngày logic cho phép hiển thị chuỗi thời gian trên dashboard, nhưng nhật ký triển khai vẫn phải được dùng để xác định phiên bản code tương ứng.
 
 #### a) Cấu hình phần mềm của từng cohort
 
@@ -552,41 +552,92 @@ Ba đợt được tạo bởi Benchmark Runner với cùng tập 32 scenario ac
 | 27/10/2026 | Baseline dùng `db-benchmark-v4`: Analyst phát `is_anomaly` và tập `root_causes`; evaluator so sánh chính xác cặp `(resource_id, fault_type)`. Runner chạy tuần tự, backfill timestamp và cleanup theo một request. Chưa có vòng LangGraph tự động quay lại thu thập evidence theo confidence. |
 | 28/10/2026 | Giữ evaluator v4 nhưng bổ sung vòng `analyze → investigate → analyze → finalize`; Analyst trả `confidence`, `evidence_gaps`, `suggested_checks`; Orchestrator chỉ tạo operation READ bổ sung, có thể kiểm tra thiết bị lân cận từ GNS3 topology. Số vòng tối đa và ngưỡng confidence được đưa ra `.env`; Planner/Analyst có validation retry, timeout và giới hạn completion token cấu hình được. |
 | 29/10/2026 | Nâng evaluator lên `db-benchmark-v5`; bổ sung taxonomy `FaultType` đóng, ánh xạ alias tương đương và chuẩn hóa một số lỗi cấp thiết bị về resource node; prompt yêu cầu tập root cause tối thiểu để giảm false positive. Cleanup được retry bằng connection mới, hậu kiểm bằng READ, runner xử lý cleanup treo trước khi chạy và dừng nếu không chứng minh được lab đã phục hồi. Các luồng quan trọng được chú thích theo từng bước để tăng khả năng kiểm toán mã nguồn. |
+| 30/10/2026 | Bổ sung package diagnostic playbook và evidence coverage gate: workflow lưu playbook áp dụng, tổng hợp evidence đã quan sát, xác định evidence còn thiếu, tạo READ operation bổ sung và chỉ finalize khi đủ evidence hoặc đạt giới hạn vòng điều tra. Scenario P3 không hợp lệ được chuyển từ `FastEthernet2/0` luôn down/down sang `FastEthernet1/0` có baseline up/up. Parser Planner được mở rộng để bóc JSON từ text, Markdown code fence, content block và dict literal, đồng thời correction prompt nhắc lại schema tối thiểu. |
 
-Những thay đổi trên có thể kiểm tra lần lượt tại `src/app/agents/workflow.py`, `src/app/agents/orchestrator/analysis.py`, `src/app/domains/evaluation/schemas/diagnosis.py`, `src/app/domains/benchmark/utils/structured_rca.py`, `src/app/domains/benchmark/services/benchmark_run.py` và `scripts/run_benchmark_scenarios.py`.
+##### Nhật ký thay đổi chi tiết theo ngày logic
+
+**Ngày 27/10/2026 – thiết lập baseline đánh giá có cấu trúc.** Hệ thống chuyển trọng tâm từ việc nhận biết từ khóa trong câu trả lời sang submission có cấu trúc gồm `is_anomaly` và danh sách `root_causes`. Evaluator v4 chuẩn hóa mỗi nguyên nhân thành cặp `(resource_id, fault_type)`, đối chiếu tập dự đoán với Ground Truth rồi tính Detection, RCA Precision/Recall/F1, Localization và Fault Type. Benchmark Runner thực hiện tuần tự các bước chuẩn bị, tiêm lỗi, gửi yêu cầu qua Chat, chờ workflow, tạo Evaluation, cleanup và backfill đồng bộ timestamp của Run, Conversation, Task, Execution và Evaluation. Cohort này được dùng làm baseline trước khi bổ sung cơ chế tái điều tra tự động.
+
+Các thành phần chính của ngày 27 gồm:
+
+- schema submission và metric đánh giá có cấu trúc trong `src/app/domains/evaluation/schemas/`;
+- bộ chuẩn hóa và chấm tập nguyên nhân trong `src/app/domains/benchmark/utils/structured_rca.py` và `evaluation.py`;
+- runner tuần tự và cơ chế backfill trong `scripts/run_benchmark_scenarios.py`;
+- lưu liên kết Scenario → Run → Task → Evaluation để truy vết kết quả.
+
+**Ngày 28/10/2026 – bổ sung vòng điều tra thích nghi trong LangGraph.** Workflow được mở rộng từ luồng phân tích một lượt thành `analyze → investigate → analyze → finalize`. Analyst có thêm các trường `confidence`, `evidence_gaps` và `suggested_checks`. Khi kết quả chưa đủ tin cậy, Orchestrator chỉ sinh operation READ để thu thập bổ sung, có thể mở rộng sang thiết bị lân cận dựa trên topology GNS3; operation WRITE không được tự động phát sinh trong vòng điều tra. Số vòng tối đa, ngưỡng confidence, validation retry và timeout được chuyển thành cấu hình môi trường để có thể điều chỉnh mà không sửa mã nguồn.
+
+Các thành phần chính của ngày 28 gồm:
+
+- định tuyến node và state của vòng điều tra trong `src/app/agents/workflow.py`;
+- quyết định tiếp tục điều tra hay finalize trong `src/app/agents/orchestrator/analysis.py`;
+- schema kết quả Analyst mở rộng trong `src/app/domains/evaluation/schemas/diagnosis.py`;
+- tham số giới hạn vòng, confidence, retry và timeout trong `.env.example` và `src/app/core/config/settings.py`;
+- thu thập context topology lân cận để Planner/Orchestrator lựa chọn thiết bị READ bổ sung.
+
+**Ngày 29/10/2026 – chuẩn hóa taxonomy và làm cứng vòng đời benchmark.** Evaluator được nâng lên v5 với tập `FaultType` đóng, alias canonical và quy tắc chuẩn hóa phạm vi resource. Mục tiêu là tránh trường hợp Agent mô tả đúng lỗi nhưng bị chấm sai chỉ vì dùng tên đồng nghĩa hoặc biểu diễn node/interface không thống nhất. Prompt Analyst đồng thời yêu cầu tập root cause tối thiểu để hạn chế false positive. Ở tầng vận hành, cleanup mở connection mới cho từng lần thử, có retry giới hạn, chạy lệnh hậu kiểm READ và chỉ đánh dấu CLEANED khi trạng thái đã được xác nhận. Runner xử lý cleanup còn treo trước khi tiêm fault tiếp theo và dừng toàn bộ nếu không chứng minh được lab đã phục hồi.
+
+Các thành phần chính của ngày 29 gồm:
+
+- taxonomy và alias lỗi trong schema/chức năng chuẩn hóa RCA;
+- evaluator `db-benchmark-v5` trong `src/app/domains/benchmark/utils/evaluation.py`;
+- yêu cầu output tối thiểu trong prompt Analyst;
+- retry và verification cleanup trong `src/app/domains/benchmark/services/benchmark_run.py`;
+- phục hồi cleanup treo, cooldown và điều kiện dừng an toàn trong `scripts/run_benchmark_scenarios.py`;
+- chú thích `# Bước n` cho các luồng quan trọng nhằm tăng khả năng kiểm toán.
+
+**Ngày 30/10/2026 – playbook chẩn đoán và evidence coverage gate.** Một package diagnostic playbook riêng được bổ sung để ánh xạ nhóm sự cố với loại evidence bắt buộc và lệnh READ phù hợp. Workflow lưu playbook đang áp dụng, tổng hợp `EvidenceType` đã quan sát, tính `evidence_coverage`, ghi danh sách evidence còn thiếu và stop reason. Nếu evidence bắt buộc chưa đủ, Orchestrator tạo operation bổ sung từ playbook; workflow chỉ finalize khi đủ evidence hoặc đạt `AGENT_MAX_INVESTIGATION_ROUNDS`. Quyết định coverage được lưu thành Activity Event `EVIDENCE_COVERAGE_EVALUATED` và đưa vào Evaluation evidence để có thể kiểm toán.
+
+Trong cùng đợt ngày 30, scenario P3 `FastEthernet2/0` được xác định sai baseline vì interface luôn down/down trong cả các đợt trước. Scenario được chuyển sang `FastEthernet1/0` up/up, đồng bộ trong database và seed, tăng version lên 1.1 rồi chạy lại cho bốn ngày logic. Parser Planner cũng được mở rộng để đọc JSON thuần, JSON nằm trong Markdown code fence, JSON sau phần dẫn nhập, content block và dict literal an toàn; correction prompt cung cấp lại skeleton `ExecutionPlanCreate` tối thiểu. Thay đổi parser giảm lỗi do hình thức phản hồi nhưng vẫn giữ Pydantic validation, không tự suy đoán field nghiệp vụ bị thiếu.
+
+Các thành phần chính của ngày 30 gồm:
+
+- package playbook và parser evidence trong `src/app/diagnostics/`;
+- coverage gate, operation bổ sung và stop condition trong `src/app/agents/orchestrator/analysis.py` và `workflow.py`;
+- Activity Event `EVIDENCE_COVERAGE_EVALUATED` và migration enum tương ứng;
+- lưu coverage/missing evidence/stop reason trong benchmark Evaluation;
+- cập nhật scenario `benc-021126-10000002` trong `docker/postgres/init/02_seed.sql.template`;
+- parser và correction prompt trong `src/app/agents/planner/agent.py` cùng regression test Planner.
+
+Các thay đổi trên mô tả mốc phát triển gắn với từng đợt chạy. Tuy nhiên, ngày logic không phải version-control snapshot bất biến: một số scenario lỗi đã được xóa và chạy lại bằng code mới rồi backfill về ngày cũ, vì vậy cohort 27/10 và 28/10 hiện có thể chứa cả Evaluation v4 và v5. Nhật ký run, `scenario_version` và `evaluator_version` phải được dùng khi tái lập phân tích. Các thay đổi không tự chứng minh quan hệ nhân quả với mức tăng/giảm chỉ số; phần kết quả bên dưới chỉ báo cáo quan sát thực nghiệm và giữ riêng các giới hạn do evaluator version, môi trường mạng và tính ngẫu nhiên của LLM.
 
 #### b) Kết quả tổng hợp
 
-| Chỉ số | 27/10 (v4) | 28/10 (v4) | 29/10 (v5) |
-| --- | ---: | ---: | ---: |
-| Tổng scenario | 32 | 32 | 32 |
-| GOAL/RCA PASS | 11 | 14 | 14 |
-| GOAL/RCA FAIL | 18 | 15 | 16 |
-| Chưa chấm được | 3 | 3 | 2 |
-| Run có trạng thái vận hành `FAILED` | 2 | 2 | 1 |
-| Cleanup còn treo sau đợt chạy | 0 | 0 | 0 |
-| PASS trên toàn bộ 32 scenario | 34,38% | 43,75% | 43,75% |
-| PASS trên các run được chấm | 37,93% (11/29) | 48,28% (14/29) | 46,67% (14/30) |
-| RCA F1 trung bình | 0,4368 | 0,5287 | 0,5111 |
-| Localization F1 trung bình | 0,4368 | 0,5977 | 0,5111 |
-| Fault Type F1 trung bình | 0,4943 | 0,6207 | 0,5667 |
-| Active latency trung bình | 35,13 giây | 38,85 giây | 44,60 giây |
-| Active latency trung vị | 32,87 giây | 33,16 giây | 36,37 giây |
-| Interaction Turns trung bình | 6,34 | 6,31 | 6,80 |
+| Chỉ số | 27/10 (v4/v5) | 28/10 (v4/v5) | 29/10 (v5) | 30/10 (v5) |
+| --- | ---: | ---: | ---: | ---: |
+| Tổng scenario | 32 | 32 | 32 | 32 |
+| GOAL/RCA PASS | 11 | 14 | 14 | **20** |
+| GOAL/RCA FAIL | 19 | 16 | 17 | **11** |
+| Chưa chấm được | 2 | 2 | 1 | **1** |
+| Run có trạng thái vận hành `FAILED` | 1 | 1 | 0 | **0** |
+| Cleanup còn treo sau đợt chạy | 0 | 0 | 0 | 0 |
+| PASS trên toàn bộ 32 scenario | 34,38% | 43,75% | 43,75% | **62,50%** |
+| PASS trên các run được chấm | 36,67% (11/30) | 46,67% (14/30) | 45,16% (14/31) | **64,52% (20/31)** |
+| RCA F1 trung bình | 0,4444 | 0,5278 | 0,5161 | **0,6828** |
+| Localization F1 trung bình | 0,4444 | 0,5944 | 0,5161 | **0,6828** |
+| Fault Type F1 trung bình | 0,5111 | 0,6333 | 0,5806 | **0,7097** |
+| Evidence coverage trung bình | 1,0000 | 1,0000 | 0,5000 | **0,8871** |
+| Active latency trung bình | 34,89 giây | 38,53 giây | 44,50 giây | **27,44 giây** |
+| Active latency trung vị | 32,17 giây | 31,79 giây | 36,88 giây | **28,46 giây** |
+| Interaction Turns trung bình | 6,40 | 6,40 | 6,74 | **4,45** |
 
-Từ ngày 27 sang 28, số PASS tăng ba trường hợp và tỷ lệ PASS trên mẫu được chấm tăng 10,35 điểm phần trăm. Có tám scenario chuyển từ FAIL/chưa chấm sang PASS, nổi bật ở missing OSPF network, OSPF area mismatch, MPLS và link-down; đồng thời có năm scenario chuyển từ PASS sang FAIL/chưa chấm. RCA F1 trung bình tăng từ 0,4368 lên 0,5287. Kết quả này phù hợp với mục tiêu của vòng điều tra bổ sung, nhưng chưa đủ để quy toàn bộ mức tăng cho thay đổi code vì mỗi scenario chỉ chạy một lần và đầu ra LLM có tính ngẫu nhiên.
+Từ ngày 27 sang 28, số PASS tăng ba trường hợp và tỷ lệ PASS trên mẫu được chấm tăng 10,00 điểm phần trăm. RCA F1 trung bình tăng từ 0,4444 lên 0,5278. Kết quả này phù hợp với mục tiêu của vòng điều tra bổ sung, nhưng chưa đủ để quy toàn bộ mức tăng cho thay đổi code vì mỗi scenario chỉ chạy một lần và đầu ra LLM có tính ngẫu nhiên.
 
-Từ ngày 28 sang 29, tổng PASS giữ nguyên ở 14. Sáu scenario cải thiện thành PASS, gồm CE-1B/CE-2A BGP, P2 missing OSPF network, PE1 iBGP, PE2 MPLS và PE2 iBGP; ngược lại sáu scenario đang PASS chuyển thành FAIL/chưa chấm, gồm hai CE link-down, P1 MPLS, P1 missing OSPF, PE1 missing OSPF và PE2 link-down. Số run vận hành `FAILED` giảm từ hai xuống một và số run chưa chấm giảm từ ba xuống hai. Tuy vậy, tỷ lệ PASS trên mẫu được chấm giảm nhẹ 1,61 điểm phần trăm và RCA F1 giảm từ 0,5287 xuống 0,5111. Vì v5 thay đổi phép chuẩn hóa nhãn so với v4, chênh lệch này chỉ nên được diễn giải mô tả, không phải một kiểm định trực tiếp hai evaluator đồng nhất.
+Từ ngày 28 sang 29, tổng PASS giữ nguyên ở 14; tỷ lệ PASS trên mẫu được chấm giảm 1,51 điểm phần trăm và RCA F1 giảm nhẹ từ 0,5278 xuống 0,5161. Run vận hành `FAILED` giảm từ một xuống không và số run chưa chấm giảm từ hai xuống một. Vì v5 thay đổi phép chuẩn hóa nhãn so với phần lớn dữ liệu v4 trước đó, chênh lệch này chỉ nên được diễn giải mô tả, không phải một kiểm định trực tiếp hai evaluator đồng nhất.
 
-#### c) Phân tích lỗi của đợt 29/10
+Từ ngày 29 sang 30, số PASS tăng từ 14 lên 20, tương ứng tăng 18,75 điểm phần trăm trên toàn bộ cohort và 19,36 điểm phần trăm trên các run được chấm. RCA F1 tăng từ 0,5161 lên 0,6828; evidence coverage tăng từ 0,5000 lên 0,8871. Đồng thời active latency trung bình giảm 38,34% (44,50 xuống 27,44 giây) và Interaction Turns giảm 33,98% (6,74 xuống 4,45). Chín scenario chuyển từ FAIL sang PASS, tập trung ở link-down CE, wrong IP, ACL và missing OSPF backbone; ba scenario chuyển từ PASS sang FAIL. Một scenario trước đó chưa chấm chuyển thành PASS, trong khi P1 Loopback0 chuyển từ PASS sang chưa chấm do Planner JSON sai. Vì chỉ có một lượt chạy cho mỗi scenario, các mức thay đổi này cho thấy tín hiệu cải thiện nhưng chưa phải kiểm định thống kê nhân quả.
 
-Trong 16 run FAIL của v5, hai run link-down tại CE-1B và CE-2A đã tìm đúng root cause mục tiêu nhưng thêm một false positive ở interface PE lân cận; RCA F1 của từng run là 0,6667 và GOAL vẫn FAIL vì yêu cầu exact set match. Các nhóm wrong IP, MPLS disabled, missing OSPF, OSPF area mismatch và ACL chủ yếu không tạo được cặp nguyên nhân đúng. Trường hợp ACL 102 đã chuẩn hóa đúng alias thành `acl_traffic_block` nhưng vẫn định vị ở `node/pe1` thay vì `interface/pe1/fastethernet4/0`, cho thấy taxonomy đã giải quyết khác biệt tên nhãn nhưng chưa giải quyết đầy đủ localization.
+#### c) Phân tích lỗi và tác động của sửa đổi đợt 30/10
 
-Hai run ngày 29 không có điểm gồm: P3 FastEthernet2/0 bị từ chối ở precondition vì interface không ở trạng thái up/up; và PE2 FastEthernet1/0 không tạo được Evaluation do Planner trả JSON không đúng `ExecutionPlanCreate`. Không có run nào còn `cleanup_required=true` sau ba cohort. Tuy nhiên, dữ liệu “không còn cleanup treo” chỉ xác nhận trạng thái cuối; để đánh giá hiệu quả retry cleanup cần lưu thêm số lần thử, lỗi từng lần và kết quả post-check vào Audit/Activity Event.
+Việc sửa scenario P3 đã giải quyết lỗi benchmark mang tính hệ thống: `FastEthernet2/0` vốn down/down được thay bằng `FastEthernet1/0` có baseline up/up; scenario mới vượt precondition, chạy đủ workflow, cleanup thành công và đạt GOAL/RCA PASS ngày 30/10. Đây là cải thiện về tính hợp lệ của phép thử, không phải điều chỉnh Ground Truth để hợp thức hóa dự đoán.
+
+Parser Planner mới giúp các scenario missing OSPF trên P1/P2 đi qua bước lập kế hoạch và tạo Evaluation, nhưng chưa loại bỏ hoàn toàn lỗi schema. Run duy nhất chưa chấm ngày 30/10 là `P1 Loopback0 administratively down`, với lỗi `Planner Agent trả về JSON không đúng ExecutionPlanCreate`. Do hệ thống hiện chỉ lưu thông báo tổng quát, chưa lưu raw response và validation path của lần cuối, chưa thể xác định chính xác field sai. Cần bổ sung telemetry Planner trước khi sửa tiếp theo hướng có bằng chứng.
+
+Trong 11 run FAIL còn lại, vấn đề chủ yếu là không exact-match Ground Truth, gồm bỏ sót nguyên nhân hoặc thêm false positive ở interface lân cận/không sử dụng. Evidence coverage cao không đồng nghĩa RCA đúng: coverage chỉ chứng minh đã thu đủ loại bằng chứng theo playbook, còn Analyst vẫn phải diễn giải đúng quan hệ nhân quả. Không có run nào còn `cleanup_required=true`; tuy nhiên chỉ số này xác nhận trạng thái cuối, không thay thế thống kê số lần retry và lỗi cleanup trung gian.
 
 #### d) Nhận xét về hiệu năng và hướng cải thiện
 
-Latency trung bình tăng 27,0% từ ngày 27 đến 29, trong khi Interaction Turns chỉ tăng từ 6,34 lên 6,80. Điều này cho thấy chi phí tăng không chỉ đến từ số lượt tool mà còn có thể đến từ thời gian LLM, kết nối thiết bị và vòng điều phối. Bước cải thiện tiếp theo nên: (1) bắt buộc Analyst chỉ tạo root cause khi có bằng chứng trực tiếp để giảm false positive thiết bị lân cận; (2) bổ sung check chuyên biệt cho IP/mask, ACL attachment, OSPF network statement và MPLS interface; (3) ghi telemetry theo từng node LangGraph để tách thời gian Planner, Network, Analyst và investigation; (4) chạy tối thiểu ba đến năm lần mỗi scenario với cùng model/prompt/evaluator version rồi báo cáo trung bình, độ lệch chuẩn và khoảng tin cậy.
+Ngày 30/10 vừa tăng chất lượng vừa giảm chi phí quan sát được: RCA F1 tăng 32,30% tương đối so với ngày 29, trong khi latency và số lượt tool đều giảm. Kết quả phù hợp với mục tiêu dùng playbook để chọn lệnh có trọng tâm thay vì điều tra mở rộng không kiểm soát. Bước cải thiện tiếp theo nên: (1) bắt buộc Analyst chỉ tạo root cause khi bằng chứng chứng minh quan hệ nhân quả, loại cổng shutdown nhưng không sử dụng; (2) lưu raw Planner response và validation error theo từng retry; (3) bổ sung check chuyên biệt cho IP/mask, ACL attachment, OSPF network statement và MPLS interface; (4) ghi telemetry theo từng node LangGraph; (5) chạy tối thiểu ba đến năm lần mỗi scenario với cùng model/prompt/evaluator version rồi báo cáo trung bình, độ lệch chuẩn và khoảng tin cậy.
 
 ### 4.5.4. Yêu cầu tối thiểu cho thống kê thực nghiệm mở rộng
 
@@ -600,7 +651,7 @@ Benchmark hiện có cơ chế injection/cleanup giúp tạo và hoàn nguyên m
 
 Về **cơ chế kiểm soát**, hệ thống có RBAC, xác thực phiên, mã hóa credential, giới hạn định danh thiết bị trong Planner, Approval Gate cho WRITE, kiểm tra hash câu lệnh, thời hạn approval, các bản ghi Activity/Device Action/Audit. Unit tests kiểm tra nhiều quy tắc và trạng thái. Tuy nhiên, đây là kiểm tra chức năng và quy tắc cục bộ; báo cáo chưa có thí nghiệm đối kháng định lượng để tính tỷ lệ vi phạm, số cấu hình nguy hiểm bị chặn hay độ an toàn khi thao tác đồng thời nhiều thiết bị.
 
-Về **thời gian**, ảnh v4 cho thấy `22,40 s` với bốn tool calls; ba cohort đầy đủ lần lượt có active latency trung bình 35,13 giây, 38,85 giây và 44,60 giây. Thời gian này loại bỏ chờ Approval nếu có và không bao gồm tiêm lỗi/cleanup. Báo cáo không diễn giải các giá trị trên là thời gian suy luận LLM thuần túy. Khi đo nhiều mẫu cần đồng thời báo cáo thời gian model, tool/network, orchestration và human-wait nếu muốn phân tích sâu thành phần chi phí; trong phiên bản hiện tại số đo chính thức là *AI workflow lifetime*.
+Về **thời gian**, ảnh v4 cho thấy `22,40 s` với bốn tool calls; bốn cohort đầy đủ có active latency trung bình lần lượt là 34,89 giây, 38,53 giây, 44,50 giây và 27,44 giây. Cohort 30/10 có latency trung vị 28,46 giây và Interaction Turns trung bình 4,45, thấp nhất trong bốn cohort. Thời gian này loại bỏ chờ Approval nếu có và không bao gồm tiêm lỗi/cleanup. Báo cáo không diễn giải các giá trị trên là thời gian suy luận LLM thuần túy. Khi đo nhiều mẫu cần đồng thời báo cáo thời gian model, tool/network, orchestration và human-wait nếu muốn phân tích sâu thành phần chi phí; trong phiên bản hiện tại số đo chính thức là *AI workflow lifetime*.
 
 ## 4.8. Phân tích các trường hợp thất bại và kiểm tra biên
 
@@ -624,7 +675,7 @@ Các nhánh kiểm tra giúp hạn chế **sai số do cách chấm**, nhưng v�
 
 Kết quả triển khai đã chứng minh hệ thống có thể vận hành một chuỗi end-to-end từ việc tạo benchmark, tiêm sự cố trong môi trường mô phỏng, chạy Agent, lưu báo cáo và đánh giá có cấu trúc. Việc tách Detection, Localization, Fault Type và joint RCA giúp nhận diện lỗi dự đoán mà cách chấm từ khóa trước đây không phân biệt được. Đồng thời, việc lưu expected/actual/evidence và evaluator_version hỗ trợ kiểm toán về sau.
 
-Ba cohort 27–29/10 chứng minh pipeline có thể tạo và lưu một ma trận 32 scenario theo ngày logic, đồng thời cho thấy vòng điều tra bổ sung cải thiện một số nhóm lỗi nhưng kết quả giữa các lượt vẫn biến động. Hạn chế nổi bật là mỗi scenario mới có một quan sát trong từng cohort, tất cả cùng một topology và chưa có phép lặp theo nhiều model. Dữ liệu v1–v3 chấm từ khóa, v4 chấm cặp cấu trúc và v5 có chuẩn hóa taxonomy không hoàn toàn tương đương về rubric; vì vậy TSR toàn lịch sử chỉ dùng để quan sát vận hành và mọi phân tích nghiên cứu phải phân tầng theo `evaluator_version`.
+Bốn cohort 27–30/10 chứng minh pipeline có thể tạo và lưu ma trận 32 scenario theo ngày logic. Cohort 30/10, sau khi bổ sung playbook và evidence coverage gate, đạt 20/32 PASS, RCA F1 trung bình 0,6828 và latency trung bình 27,44 giây; đây là kết quả tốt nhất trong chuỗi quan sát. Tuy vậy, kết quả giữa từng scenario vẫn biến động: ba scenario PASS ngày 29 chuyển thành FAIL ngày 30 và một scenario chuyển sang chưa chấm do Planner JSON sai. Hạn chế nổi bật là mỗi scenario chỉ có một quan sát trong từng cohort, tất cả cùng một topology và chưa có phép lặp theo nhiều model. Dữ liệu v1–v3 chấm từ khóa, v4 chấm cặp cấu trúc và v5 có chuẩn hóa taxonomy không hoàn toàn tương đương về rubric; vì vậy TSR toàn lịch sử chỉ dùng để quan sát vận hành và mọi phân tích nghiên cứu phải phân tầng theo `evaluator_version`.
 
 So với NIKA [14, 15], đề tài tiếp thu cách **biểu diễn nhãn sự cố và công thức chấm** nhưng giữ nguyên GNS3 và pipeline Multi-Agent riêng. Không có thực nghiệm chứng minh hiệu năng/độ chính xác tốt hơn NIKA. Kết quả hiện tại là tính khả thi của việc tích hợp phương pháp chấm có cấu trúc vào hệ thống quản trị mạng bằng Multi-Agent.
 
@@ -686,7 +737,7 @@ Những phần đã có mã nguồn chức năng gồm:
 
 Theo output nhóm cung cấp ngày 03/11/2026, việc build Docker image API và khởi động container thành công. Bộ pytest được chạy riêng cho bốn tệp kiểm thử Analyst/Benchmark/NIKA-style RCA cho kết quả **42/42 test PASS, 1 cảnh báo Pydantic**. Một lượt Benchmark Evaluation v4 trên giao diện cho thấy GOAL/RCA PASS, RCA F1/Precision/Recall, Localization F1, Fault Type F1 và Detection bằng 100%, thời gian workflow AI **22,40 giây**, Interaction Turns **4 tool calls**; Remediation và Safety đều NOT_APPLICABLE.
 
-Trên ba cohort benchmark backfill, mỗi cohort gồm **32 scenario**, số lượt PASS lần lượt là **11, 14 và 14** vào các ngày logic 27/10, 28/10 và 29/10/2026. Tỷ lệ PASS trên các lượt có thể chấm tăng từ **37,93%** lên **48,28%**, sau đó đạt **46,67%**; RCA F1 trung bình tương ứng là **0,4368**, **0,5287** và **0,5111**. Kết quả ngày 28/10 chứng minh cơ chế tái điều tra theo độ tin cậy giúp cải thiện đáng kể so với baseline ngày 27/10. Ngày 29/10 giữ nguyên số lượt PASS tổng thể, giảm số lượt không thể chấm từ 3 xuống 2 và giảm lỗi vận hành từ 2 xuống 1, nhưng độ trễ trung bình tăng lên **44,60 giây** và vẫn còn các false positive khi mở rộng chẩn đoán sang thiết bị lân cận. Do cohort 29/10 sử dụng evaluator v5 thay cho v4, so sánh giữa ngày 28/10 và 29/10 chỉ mang tính mô tả, không được xem là một phép đối chứng tuyệt đối.
+Trên bốn cohort benchmark backfill, mỗi cohort gồm **32 scenario**, số lượt PASS lần lượt là **11, 14, 14 và 20** vào các ngày logic 27/10–30/10/2026. Tỷ lệ PASS trên các lượt được chấm lần lượt là **36,67%**, **46,67%**, **45,16%** và **64,52%**; RCA F1 trung bình tương ứng là **0,4444**, **0,5278**, **0,5161** và **0,6828**. Cohort 30/10 đồng thời giảm active latency trung bình từ 44,50 xuống **27,44 giây** và Interaction Turns từ 6,74 xuống **4,45** so với ngày 29. Scenario P3 trước đây không hợp lệ đã chạy đầy đủ và PASS sau khi chuyển sang interface có baseline up/up. Tuy nhiên vẫn còn một run không thể chấm do Planner JSON sai, và một số scenario chuyển từ PASS sang FAIL. Do khác biệt evaluator version và tính ngẫu nhiên của LLM, so sánh trên chỉ mang tính mô tả; chưa được xem là phép đối chứng tuyệt đối hoặc bằng chứng nhân quả của riêng một thay đổi code.
 
 Những kết quả này xác nhận logic phần mềm trong phạm vi bộ test và một đường đi thực nghiệm có thể hoàn tất, **không đủ để suy ra độ chính xác trung bình, tỷ lệ thành công chung hoặc khả năng an toàn trên nhiều cấu hình mạng**. Trong ảnh một lượt v4, phần Expected/Actual/Evidence chưa được mở rộng nên không có bằng chứng ảnh để liệt kê chính xác từng cặp TP/FP/FN của lần chạy.
 
@@ -714,7 +765,7 @@ Những kết quả này xác nhận logic phần mềm trong phạm vi bộ tes
 
 **Giới hạn đánh giá.** V4 chấm sự trùng khớp giữa submission và nhãn nguyên nhân. Đây không phải phương pháp độc lập chứng minh kết luận ngoài môi trường giả lập. Detection hiện được ghi nhận chủ yếu cho các case chủ động tiêm lỗi, chưa kiểm tra đầy đủ mạng khỏe hoặc false positive. Remediation/Safety chưa có số đo định lượng được triển khai.
 
-**Giới hạn thống kê.** TSR hiện tổng hợp cả v1–v3 theo từ khóa và v4 theo nhãn cấu trúc; không thể dùng một tỷ lệ gộp để so sánh khoa học nếu không phân nhóm theo evaluator. Các số liệu 100%, 22,40 giây và bốn tool calls mới được quan sát từ một lượt chạy do nhóm cung cấp. Chưa có thí nghiệm lặp nhiều lần, sai số/độ lệch, baseline và kiểm định thống kê.
+**Giới hạn thống kê.** TSR toàn lịch sử có thể tổng hợp nhiều evaluator version; không thể dùng một tỷ lệ gộp để so sánh khoa học nếu không phân nhóm theo evaluator. Bốn cohort hiện có 32 scenario mỗi ngày nhưng mỗi scenario mới được chạy một lần trong mỗi cấu hình, chưa có phép lặp để ước lượng phương sai, khoảng tin cậy hoặc độ ổn định theo model. Vì vậy mức tăng của ngày 30/10 là bằng chứng thực nghiệm mô tả, chưa phải kết luận nhân quả hoặc kiểm định thống kê.
 
 **Giới hạn công nghệ.** GNS3 API mới dùng cho kiểm tra server; công việc xử lý node/link, đảm bảo SLA, chia tải nhiều thiết bị đồng thời và kiểm thử bảo mật chuyên sâu chưa hoàn thiện. Một số frontend feature vẫn có mock/fixture, và bộ test được xác nhận không bao phủ toàn bộ repository.
 
