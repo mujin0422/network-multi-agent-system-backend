@@ -3,10 +3,11 @@
 import re
 from datetime import UTC, datetime
 
-from app.agents.analyst import AnalystAgent, AnalysisResult
+from app.agents.analyst import AnalystAgent, AnalysisResult, DiagnosticCheck
 from app.agents.network import NetworkExecutionResult
 from app.diagnostics import (
     CausalGateResult,
+    CausalScope,
     DiagnosticEvidence,
     EvidenceCoverage,
     EvidenceSource,
@@ -39,6 +40,7 @@ from app.domains.execution.schemas import (
     TaskType,
 )
 from app.domains.execution.services import ExecutionService
+from app.domains.evaluation.schemas import PredictedRootCause
 from app.domains.inventory.providers import GNS3Provider
 from app.domains.inventory.services import DeviceService
 
@@ -96,6 +98,7 @@ class AnalysisOrchestrator:
         fallback_error: str | None = None
         causal_gate: CausalGateResult | None = None
         interpretation_retry = False
+        causal_candidate_source = "ANALYST"
         try:
             # Bước 4: Gọi Analyst; lỗi model/schema sẽ chuyển sang fallback an toàn.
             analysis = await self._analyst.analyze(analysis_inputs)
@@ -132,12 +135,13 @@ class AnalysisOrchestrator:
                 # Giữ kết quả đầu tiên để workflow vẫn dừng an toàn và có audit trail.
                 pass
 
-        # Bước 6: Chỉ giữ root cause có evidence trực tiếp; giả thuyết chưa đủ
-        # bằng chứng vẫn được lưu để điều tra tiếp nhưng evaluator không chấm nó.
+        # Bước 6: Chuẩn hóa evidence và phạm vi ngay cả khi Analyst trả về
+        # is_anomaly=false. Khi playbook đã đủ evidence, backend có thể dựng tập
+        # candidate giới hạn từ đúng thiết bị/interface trong yêu cầu rồi đưa qua
+        # cùng Causal Evidence Gate; không suy đoán từ Ground Truth benchmark.
         if (
             fallback_error is None
             and task.task_type in {TaskType.DIAGNOSIS, TaskType.COMPOSITE}
-            and analysis.root_causes
         ):
             hostnames = {
                 device.id: device.hostname
@@ -155,27 +159,53 @@ class AnalysisOrchestrator:
                 list(hostnames.values()),
                 topology_neighbors,
             )
-            causal_gate = evaluate_causal_claims(
-                analysis.root_causes,
-                parsed_evidence,
-                scope,
-            )
+            candidate_causes = analysis.root_causes
+            if (
+                not candidate_causes
+                and evidence_coverage is not None
+                and evidence_coverage.complete
+            ):
+                candidate_causes = self._playbook_causal_candidates(
+                    evidence_coverage.playbook_keys,
+                    scope,
+                )
+                if candidate_causes:
+                    causal_candidate_source = "PLAYBOOK_SCOPE"
+            if candidate_causes:
+                causal_gate = evaluate_causal_claims(
+                    candidate_causes,
+                    parsed_evidence,
+                    scope,
+                )
+        if causal_gate is not None:
             rejected_reasons = [
                 f"{item.cause.device}/{item.cause.interface or '-'} "
                 f"{item.cause.fault_type.value}: {item.reason}"
                 for item in causal_gate.decisions
                 if item.status.value == "SUSPECTED"
             ]
+            causal_checks = self._causal_investigation_checks(causal_gate)
             analysis = analysis.model_copy(
                 update={
                     "root_causes": causal_gate.confirmed,
                     "suspected_causes": causal_gate.suspected,
+                    "is_anomaly": (
+                        True
+                        if causal_gate.confirmed
+                        else None
+                        if causal_gate.suspected
+                        else analysis.is_anomaly
+                    ),
                     "requires_more_data": (
                         analysis.requires_more_data or bool(causal_gate.suspected)
                     ),
                     "evidence_gaps": list(
                         dict.fromkeys([*analysis.evidence_gaps, *rejected_reasons])
                     )[:4],
+                    "suggested_checks": [
+                        *analysis.suggested_checks,
+                        *causal_checks,
+                    ][:4],
                 }
             )
 
@@ -201,6 +231,7 @@ class AnalysisOrchestrator:
                     if causal_gate is not None
                     else None
                 ),
+                "causal_candidate_source": causal_candidate_source,
                 "diagnosis_submission": {
                     "is_anomaly": analysis.is_anomaly,
                     "root_causes": [
@@ -217,6 +248,68 @@ class AnalysisOrchestrator:
             completed_at=datetime.now(UTC),
         )
         return analysis
+
+    @staticmethod
+    def _playbook_causal_candidates(
+        playbook_keys: list[str],
+        scope: CausalScope,
+    ) -> list[PredictedRootCause]:
+        """Dựng candidate đóng từ playbook và phạm vi được nêu trong yêu cầu."""
+
+        if not scope.primary_devices or not scope.primary_interfaces:
+            return []
+        candidates: list[PredictedRootCause] = []
+        for playbook_key in playbook_keys:
+            playbook = get_playbook(playbook_key)
+            if playbook is None:
+                continue
+            for device in sorted(scope.primary_devices):
+                for interface in sorted(scope.primary_interfaces):
+                    for fault_type in playbook.fault_types:
+                        # Chỉ MPLS hiện có matcher âm tính đủ chặt để phục hồi
+                        # candidate khi LLM kết luận không có anomaly.
+                        if fault_type.value != "mpls_disabled":
+                            continue
+                        candidates.append(
+                            PredictedRootCause(
+                                device=device,
+                                interface=interface,
+                                fault_type=fault_type,
+                            )
+                        )
+        return candidates
+
+    @staticmethod
+    def _causal_investigation_checks(
+        causal_gate: CausalGateResult,
+    ) -> list[DiagnosticCheck]:
+        """Tạo lệnh READ theo evidence còn thiếu của prediction bị gate giữ lại."""
+
+        checks: list[DiagnosticCheck] = []
+        for decision in causal_gate.decisions:
+            if not decision.missing_evidence or decision.cause.interface is None:
+                continue
+            commands: list[str] = []
+            interface = decision.cause.interface
+            if EvidenceType.INTERFACE_STATUS in decision.missing_evidence:
+                commands.append(f"show interfaces {interface}")
+            if EvidenceType.INTERFACE_CONFIG in decision.missing_evidence:
+                commands.append(f"show running-config interface {interface}")
+            if EvidenceType.MPLS_INTERFACE in decision.missing_evidence:
+                commands.extend(("show mpls interfaces", "show mpls ldp discovery"))
+            if not commands:
+                continue
+            checks.append(
+                DiagnosticCheck(
+                    device=decision.cause.device,
+                    commands=list(dict.fromkeys(commands))[:4],
+                    reason=(
+                        "Thu thập evidence theo interface còn thiếu sau Causal "
+                        "Evidence Gate."
+                    ),
+                )
+            )
+        return checks
 
     async def analyze_and_respond(
         self,

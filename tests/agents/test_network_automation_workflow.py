@@ -188,21 +188,29 @@ def test_workflow_blocks_finalize_until_playbook_evidence_is_complete() -> None:
         def evaluate_evidence_coverage(self, results, playbook_keys):
             self.coverage_checks += 1
             missing = (
-                [EvidenceType.LDP_NEIGHBOR]
+                [EvidenceType.INTERFACE_CONFIG]
                 if self.coverage_checks <= 2
                 else []
             )
             return EvidenceCoverage(
                 applicable=True,
                 playbook_keys=["mpls_disabled"],
-                required=[EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR],
+                required=[
+                    EvidenceType.INTERFACE_STATUS,
+                    EvidenceType.INTERFACE_CONFIG,
+                    EvidenceType.MPLS_INTERFACE,
+                ],
                 observed=(
-                    [EvidenceType.MPLS_INTERFACE]
+                    [EvidenceType.INTERFACE_STATUS, EvidenceType.MPLS_INTERFACE]
                     if missing
-                    else [EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR]
+                    else [
+                        EvidenceType.INTERFACE_STATUS,
+                        EvidenceType.INTERFACE_CONFIG,
+                        EvidenceType.MPLS_INTERFACE,
+                    ]
                 ),
                 missing=missing,
-                coverage=0.5 if missing else 1.0,
+                coverage=2 / 3 if missing else 1.0,
             )
 
         def record_evidence_gate(
