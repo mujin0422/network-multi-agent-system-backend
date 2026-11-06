@@ -76,7 +76,7 @@ WRONG_IP_ADDRESS = Playbook(
         "trao đổi lưu lượng đúng",
     ),
     commands=IP_COMMANDS,
-    required_evidence=(Evidence.IP_CONFIGURATION, Evidence.ROUTE),
+    required_evidence=(Evidence.IP_CONFIGURATION,),
 )
 WRONG_SUBNET_MASK = Playbook(
     key="wrong_subnet_mask",
@@ -84,7 +84,7 @@ WRONG_SUBNET_MASK = Playbook(
     fault_types=(FaultType.WRONG_SUBNET_MASK,),
     keywords=("subnet mask", "netmask", "sai mask", "bad mask", "mask mismatch"),
     commands=IP_COMMANDS,
-    required_evidence=(Evidence.IP_CONFIGURATION, Evidence.ROUTE),
+    required_evidence=(Evidence.IP_CONFIGURATION,),
 )
 
 OSPF_COMMANDS = (

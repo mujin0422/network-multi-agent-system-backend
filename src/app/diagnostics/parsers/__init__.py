@@ -8,8 +8,8 @@ from app.diagnostics.parsers.common import node_resource
 
 def _parser_name(command: str) -> str | None:
     normalized = command.strip().casefold()
-    if "interface" in normalized:
-        return "interface"
+    # Protocol-specific commands must win before the generic word "interface".
+    # Examples: show mpls interfaces, show ip ospf interface FastEthernet0/0.
     if "ospf" in normalized:
         return "ospf"
     if "mpls" in normalized or "ldp" in normalized:
@@ -20,6 +20,8 @@ def _parser_name(command: str) -> str | None:
         return "route"
     if "access-list" in normalized or "access list" in normalized:
         return "acl"
+    if "interface" in normalized:
+        return "interface"
     return None
 
 

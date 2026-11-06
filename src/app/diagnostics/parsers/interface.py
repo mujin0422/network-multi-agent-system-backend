@@ -1,5 +1,6 @@
 """Parser trạng thái, cấu hình và địa chỉ interface Cisco IOS."""
 
+import ipaddress
 import re
 
 from app.diagnostics.parsers.common import clean_lines, interface_resource
@@ -13,6 +14,10 @@ _STATUS = re.compile(
 _BRIEF = re.compile(
     r"^(?P<interface>\S+)\s+(?P<ip>\S+)\s+\S+\s+\S+\s+"
     r"(?P<status>administratively down|up|down)\s+(?P<protocol>up|down)$",
+    re.IGNORECASE,
+)
+_INTERNET_ADDRESS = re.compile(
+    r"^Internet address is (?P<address>\d+\.\d+\.\d+\.\d+)/(?P<prefix>\d+)$",
     re.IGNORECASE,
 )
 
@@ -67,6 +72,42 @@ def parse_interface(
                     source=source,
                     attributes=attributes,
                     supporting_lines=[line],
+                    raw_output=output,
+                )
+            )
+
+    # `show interfaces X` chứa IP dạng CIDR; giữ nó thành evidence cấu hình để
+    # đối chiếu mask hai đầu ngay cả khi Planner không gọi running-config.
+    status_evidence = next(
+        (
+            item
+            for item in evidence
+            if item.evidence_type == EvidenceType.INTERFACE_STATUS
+        ),
+        None,
+    )
+    internet_line = next(
+        (line for line in lines if _INTERNET_ADDRESS.match(line)),
+        None,
+    )
+    if status_evidence is not None and internet_line is not None:
+        address_match = _INTERNET_ADDRESS.match(internet_line)
+        if address_match is not None:
+            address = address_match.group("address")
+            prefix = int(address_match.group("prefix"))
+            netmask = str(ipaddress.IPv4Network(f"0.0.0.0/{prefix}").netmask)
+            evidence.append(
+                DiagnosticEvidence(
+                    evidence_type=EvidenceType.IP_CONFIGURATION,
+                    resource_id=status_evidence.resource_id,
+                    source=source,
+                    attributes={
+                        "interface": status_evidence.attributes.get("interface"),
+                        "ip_address": address,
+                        "subnet_mask": netmask,
+                        "prefix_length": prefix,
+                    },
+                    supporting_lines=[internet_line],
                     raw_output=output,
                 )
             )
