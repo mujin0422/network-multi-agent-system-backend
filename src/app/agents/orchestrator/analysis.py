@@ -1,10 +1,26 @@
 """Điều phối kết quả thực thi thành phản hồi cuối trong conversation."""
 
+import re
 from datetime import UTC, datetime
 
 from app.agents.analyst import AnalystAgent, AnalysisResult
 from app.agents.network import NetworkExecutionResult
-from app.domains.conversation.schemas import Message, MessageCreate, MessageSender, MessageType
+from app.diagnostics import (
+    DiagnosticEvidence,
+    EvidenceCoverage,
+    EvidenceSource,
+    EvidenceType,
+    PlaybookTarget,
+    evaluate_evidence_coverage,
+    get_playbook,
+    parse_command_output,
+)
+from app.domains.conversation.schemas import (
+    Message,
+    MessageCreate,
+    MessageSender,
+    MessageType,
+)
 from app.domains.conversation.services import ConversationService
 from app.domains.execution.schemas import (
     ActivityActorType,
@@ -43,11 +59,11 @@ class AnalysisOrchestrator:
         self._device_service = device_service
         self._gns3_provider = gns3_provider
 
-
     async def analyze(
         self,
         task: TaskDetail,
         execution_results: list[NetworkExecutionResult],
+        evidence_coverage: EvidenceCoverage | None = None,
     ) -> AnalysisResult | None:
         """Phân tích evidence nhưng chưa tạo phản hồi cuối cho conversation."""
 
@@ -67,6 +83,13 @@ class AnalysisOrchestrator:
         )
         # Bước 3: Chuẩn hóa output kỹ thuật và bổ sung topology context.
         analysis_inputs = self._build_analysis_inputs(execution_results)
+        if evidence_coverage is not None:
+            analysis_inputs.append(
+                {
+                    "context_type": "DIAGNOSTIC EVIDENCE COVERAGE",
+                    **evidence_coverage.model_dump(mode="json"),
+                }
+            )
         fallback_error: str | None = None
         try:
             # Bước 4: Gọi Analyst; lỗi model/schema sẽ chuyển sang fallback an toàn.
@@ -85,12 +108,16 @@ class AnalysisOrchestrator:
                 "confidence": analysis.confidence,
                 "evidence_gaps": analysis.evidence_gaps,
                 "suggested_check_count": len(analysis.suggested_checks),
+                "evidence_coverage": (
+                    evidence_coverage.model_dump(mode="json")
+                    if evidence_coverage is not None
+                    else None
+                ),
                 "used_fallback": fallback_error is not None,
                 "diagnosis_submission": {
                     "is_anomaly": analysis.is_anomaly,
                     "root_causes": [
-                        cause.model_dump(mode="json")
-                        for cause in analysis.root_causes
+                        cause.model_dump(mode="json") for cause in analysis.root_causes
                     ],
                 },
                 **({"fallback_reason": fallback_error} if fallback_error else {}),
@@ -99,7 +126,6 @@ class AnalysisOrchestrator:
             completed_at=datetime.now(UTC),
         )
         return analysis
-
 
     async def analyze_and_respond(
         self,
@@ -113,7 +139,6 @@ class AnalysisOrchestrator:
         if analysis is None:
             return self._save_waiting_response(current_task)
         return self.finalize_response(current_task, analysis)
-
 
     def finalize_response(
         self,
@@ -144,28 +169,78 @@ class AnalysisOrchestrator:
         )
         return message
 
+    def record_evidence_gate(
+        self,
+        task_id: str,
+        coverage: EvidenceCoverage,
+        investigation_round: int,
+        stop_reason: str,
+    ) -> None:
+        """Lưu quyết định cuối của evidence gate vào timeline để đánh giá."""
+
+        self._execution_service.record_activity(
+            task_id,
+            ActivityActorType.ORCHESTRATOR,
+            ActivityEventType.EVIDENCE_COVERAGE_EVALUATED,
+            event_data={
+                **coverage.model_dump(mode="json"),
+                "investigation_round": investigation_round,
+                "stop_reason": stop_reason,
+            },
+        )
 
     def build_investigation_plan(
         self,
         analysis: AnalysisResult,
+        *,
+        playbook_keys: list[str] | None = None,
+        missing_evidence: list[EvidenceType] | None = None,
+        execution_results: list[NetworkExecutionResult] | None = None,
     ) -> ExecutionPlanCreate | None:
-        """Ánh xạ check của Analyst sang plan READ-only với device ID hợp lệ."""
+        """Ưu tiên check thiếu từ playbook rồi bổ sung đề nghị hợp lệ của Analyst."""
 
         # Bước 1: Chỉ ánh xạ hostname mà Inventory hiện đang quản lý.
         devices = self._device_service.list_available_devices()
         by_hostname = {device.hostname.casefold(): device.id for device in devices}
-        operations: list[PlannedOperation] = []
+        hostname_by_id = {device.id: device.hostname for device in devices}
+        execution_results = execution_results or []
+        commands_by_host = self._playbook_missing_commands(
+            playbook_keys or [],
+            set(missing_evidence or []),
+            execution_results,
+            hostname_by_id,
+        )
+        executed = {
+            (
+                hostname_by_id.get(result.device_id, result.device_id).casefold(),
+                item.command.strip().casefold(),
+            )
+            for result in execution_results
+            for item in result.results
+        }
         for check in analysis.suggested_checks:
-            device_id = by_hostname.get(check.device.casefold())
-            if device_id is None:
+            hostname = check.device.casefold()
+            if hostname not in by_hostname:
                 continue
-            # Bước 2: Ép mọi supplemental check thành operation READ-only.
+            commands_by_host.setdefault(hostname, [])
+            commands_by_host[hostname].extend(
+                command
+                for command in check.commands
+                if (hostname, command.strip().casefold()) not in executed
+            )
+
+        operations: list[PlannedOperation] = []
+        for hostname, commands in commands_by_host.items():
+            unique_commands = list(dict.fromkeys(commands))
+            device_id = by_hostname.get(hostname)
+            if device_id is None or not unique_commands:
+                continue
             operations.append(
                 PlannedOperation(
                     operation_intent="COLLECT_ADDITIONAL_DIAGNOSTIC_EVIDENCE",
                     operation_parameters={
-                        "commands": check.commands,
-                        "reason": check.reason,
+                        "commands": unique_commands,
+                        "reason": "Thu thập evidence bắt buộc còn thiếu theo diagnostic playbook.",
                     },
                     devices=[
                         PlannedDevice(
@@ -181,6 +256,89 @@ class AnalysisOrchestrator:
             return None
         return ExecutionPlanCreate(task_type=TaskType.DIAGNOSIS, operations=operations)
 
+    def evaluate_evidence_coverage(
+        self,
+        execution_results: list[NetworkExecutionResult],
+        playbook_keys: list[str],
+    ) -> EvidenceCoverage:
+        """Parse toàn bộ output và tính coverage cho các playbook đang áp dụng."""
+
+        hostnames = {
+            device.id: device.hostname
+            for device in self._device_service.list_available_devices()
+        }
+        evidence = self._parse_evidence(execution_results, hostnames)
+        return evaluate_evidence_coverage(playbook_keys, evidence)
+
+    def _playbook_missing_commands(
+        self,
+        playbook_keys: list[str],
+        missing: set[EvidenceType],
+        execution_results: list[NetworkExecutionResult],
+        hostname_by_id: dict[str, str],
+    ) -> dict[str, list[str]]:
+        """Vật hóa command template còn thiếu trên primary/neighbor hợp lệ."""
+
+        executed: dict[str, set[str]] = {}
+        interfaces: dict[str, list[str]] = {}
+        for result in execution_results:
+            hostname = hostname_by_id.get(result.device_id, result.device_id).casefold()
+            executed.setdefault(hostname, set())
+            interfaces.setdefault(hostname, [])
+            for item in result.results:
+                executed[hostname].add(item.command.strip().casefold())
+                match = re.search(r"\binterfaces?\s+(\S+)", item.command, re.IGNORECASE)
+                if match and match.group(1).casefold() not in {"brief", "status"}:
+                    interfaces[hostname].append(match.group(1))
+
+        topology = {}
+        if self._gns3_provider is not None:
+            try:
+                topology = self._gns3_provider.list_topology_neighbors()
+            except Exception:
+                topology = {}
+        topology_by_hostname = {
+            hostname.casefold(): neighbors for hostname, neighbors in topology.items()
+        }
+
+        planned: dict[str, list[str]] = {}
+        primary_hosts = list(executed)
+        for key in playbook_keys:
+            playbook = get_playbook(key)
+            if playbook is None:
+                continue
+            for command_spec in playbook.commands:
+                if not missing.intersection(command_spec.produces):
+                    continue
+                targets: list[tuple[str, str | None]] = []
+                if command_spec.target == PlaybookTarget.PRIMARY:
+                    targets = [
+                        (hostname, (interfaces.get(hostname) or [None])[0])
+                        for hostname in primary_hosts
+                    ]
+                else:
+                    for hostname in primary_hosts:
+                        for neighbor in topology_by_hostname.get(hostname, []):
+                            targets.append(
+                                (
+                                    str(neighbor.get("device", "")).casefold(),
+                                    neighbor.get("peer_interface"),
+                                )
+                            )
+                for hostname, interface in targets:
+                    if not hostname:
+                        continue
+                    command = command_spec.command_template
+                    if "{interface}" in command or "{peer_interface}" in command:
+                        if not interface:
+                            continue
+                        command = command.replace("{interface}", interface).replace(
+                            "{peer_interface}", interface
+                        )
+                    if command.strip().casefold() in executed.get(hostname, set()):
+                        continue
+                    planned.setdefault(hostname, []).append(command)
+        return planned
 
     def _build_analysis_inputs(
         self,
@@ -192,18 +350,28 @@ class AnalysisOrchestrator:
             device.id: device.hostname
             for device in self._device_service.list_available_devices()
         }
-        inputs = [
-            {
-                "device": hostnames.get(result.device_id, result.device_id),
-                "access_mode": result.access_mode.value,
-                "status": result.status.value,
-                "command_results": [
-                    item.model_dump(mode="json") for item in result.results
-                ],
-                "error_message": result.error_message,
-            }
-            for result in execution_results
-        ]
+        evidence = self._parse_evidence(execution_results, hostnames)
+        evidence_by_execution: dict[str, list[dict]] = {}
+        for item in evidence:
+            evidence_by_execution.setdefault(item.source.execution_id, []).append(
+                item.model_dump(mode="json", exclude={"source": {"device_id"}})
+            )
+        inputs = []
+        for result in execution_results:
+            inputs.append(
+                {
+                    "device": hostnames.get(result.device_id, result.device_id),
+                    "access_mode": result.access_mode.value,
+                    "status": result.status.value,
+                    "command_results": [
+                        item.model_dump(mode="json") for item in result.results
+                    ],
+                    "structured_evidence": evidence_by_execution.get(
+                        result.operation_device_id, []
+                    ),
+                    "error_message": result.error_message,
+                }
+            )
         if self._gns3_provider is not None:
             try:
                 inputs.append(
@@ -217,6 +385,30 @@ class AnalysisOrchestrator:
                 pass
         return inputs
 
+    @staticmethod
+    def _parse_evidence(
+        execution_results: list[NetworkExecutionResult],
+        hostnames: dict[str, str],
+    ) -> list[DiagnosticEvidence]:
+        """Chuyển toàn bộ CommandResult thành evidence model để tái sử dụng."""
+
+        evidence: list[DiagnosticEvidence] = []
+        for result in execution_results:
+            hostname = hostnames.get(result.device_id, result.device_id)
+            for item in result.results:
+                evidence.extend(
+                    parse_command_output(
+                        item.command,
+                        item.output,
+                        EvidenceSource(
+                            execution_id=result.operation_device_id,
+                            device_id=result.device_id,
+                            device_name=hostname,
+                            command=item.command,
+                        ),
+                    )
+                )
+        return evidence
 
     @staticmethod
     def _build_fallback_analysis(analysis_inputs: list[dict]) -> AnalysisResult:
@@ -253,7 +445,6 @@ class AnalysisOrchestrator:
             requires_more_data=True,
         )
 
-
     def _save_waiting_response(self, task: TaskDetail) -> Message:
         """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
 
@@ -266,7 +457,6 @@ class AnalysisOrchestrator:
                 message="Kế hoạch đã được tạo. Một hoặc nhiều thao tác cấu hình đang chờ bạn phê duyệt.",
             ),
         )
-
 
     @staticmethod
     def _format_analysis(analysis: AnalysisResult) -> str:

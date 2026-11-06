@@ -11,6 +11,7 @@ from app.agents.orchestrator import (
     ExecutionOrchestrator,
     PlanningOrchestrator,
 )
+from app.diagnostics import EvidenceCoverage, get_playbook, select_playbooks
 from app.domains.conversation.schemas import Conversation, Message
 from app.domains.execution.schemas import TaskDetail, TaskType
 from app.domains.inventory.providers import GNS3Provider
@@ -31,6 +32,9 @@ class NetworkWorkflowState(TypedDict):
     response: NotRequired[Message | None]
     analysis: NotRequired[AnalysisResult | None]
     investigation_round: NotRequired[int]
+    playbook_keys: NotRequired[list[str]]
+    evidence_coverage: NotRequired[EvidenceCoverage]
+    evidence_stop_reason: NotRequired[str]
 
 
 class NetworkAutomationWorkflow:
@@ -55,7 +59,6 @@ class NetworkAutomationWorkflow:
         self._diagnosis_confidence_threshold = diagnosis_confidence_threshold
         self._message_graph = self._build_message_graph()
         self._approval_graph = self._build_approval_graph()
-
 
     def _build_message_graph(self):
         """Tạo graph đầy đủ dành cho một message mới từ người dùng."""
@@ -87,7 +90,6 @@ class NetworkAutomationWorkflow:
         builder.add_edge("finalize", END)
         return builder.compile()
 
-
     def _build_approval_graph(self):
         """Tạo graph tiếp tục thực thi sau khi cấu hình được phê duyệt."""
 
@@ -107,15 +109,16 @@ class NetworkAutomationWorkflow:
         builder.add_edge("finalize", END)
         return builder.compile()
 
-
-    async def _check_gns3(self, _state: NetworkWorkflowState,) -> dict:
+    async def _check_gns3(
+        self,
+        _state: NetworkWorkflowState,
+    ) -> dict:
         """Kiểm tra nhanh khả năng truy cập GNS3 trước khi lập kế hoạch."""
 
         # Bước 1: Kiểm tra GNS3 Controller trước khi tạo Task và gọi thiết bị.
         # Đây chỉ là health probe; lệnh thiết bị vẫn do NetworkAgent thực hiện.
         self._gns3_provider.check_server_available()
         return {}
-
 
     async def _plan(self, state: NetworkWorkflowState) -> dict:
         """Đọc Conversation và Message từ state để tạo Task có kế hoạch."""
@@ -126,8 +129,13 @@ class NetworkAutomationWorkflow:
         if conversation is None or message is None:
             raise ValueError("Workflow lập kế hoạch cần Conversation và Message")
         task = await self._planning.plan_user_message(conversation, message)
-        return {"task": task}
-
+        message_text = getattr(message, "message", str(message))
+        return {
+            "task": task,
+            "playbook_keys": [
+                playbook.key for playbook in select_playbooks(message_text)
+            ],
+        }
 
     async def _execute(self, state: NetworkWorkflowState) -> dict:
         """Thực thi Task trong state và trả kết quả mạng cho node kế tiếp."""
@@ -139,7 +147,6 @@ class NetworkAutomationWorkflow:
         results = await self._execution.execute_task(task)
         return {"execution_results": results}
 
-
     async def _analyze(self, state: NetworkWorkflowState) -> dict:
         """Phân tích kết quả thực thi và tạo phản hồi cuối cho hội thoại."""
 
@@ -147,12 +154,32 @@ class NetworkAutomationWorkflow:
         task = state.get("task")
         if task is None:
             raise ValueError("Workflow phân tích cần Task")
+        playbook_keys = state.get("playbook_keys", [])
+        coverage = self._analysis.evaluate_evidence_coverage(
+            state.get("execution_results", []),
+            playbook_keys,
+        )
         analysis = await self._analysis.analyze(
             task,
             state.get("execution_results", []),
+            evidence_coverage=coverage,
         )
-        return {"analysis": analysis}
-
+        if analysis is not None:
+            derived_keys = [
+                playbook.key
+                for cause in analysis.root_causes
+                if (playbook := get_playbook(cause.fault_type)) is not None
+            ]
+            playbook_keys = list(dict.fromkeys([*playbook_keys, *derived_keys]))
+            coverage = self._analysis.evaluate_evidence_coverage(
+                state.get("execution_results", []),
+                playbook_keys,
+            )
+        return {
+            "analysis": analysis,
+            "evidence_coverage": coverage,
+            "playbook_keys": playbook_keys,
+        }
 
     async def _route_after_analysis(self, state: NetworkWorkflowState) -> str:
         """Quyết định kết luận hay mở rộng điều tra dựa trên evidence hiện có."""
@@ -161,27 +188,34 @@ class NetworkAutomationWorkflow:
         task = state.get("task")
         analysis = state.get("analysis")
         current_round = state.get("investigation_round", 0)
+        coverage = state.get("evidence_coverage")
         if (
             task is None
             or analysis is None
             or task.task_type not in {TaskType.DIAGNOSIS, TaskType.COMPOSITE}
         ):
             return "finalize"
-        needs_more_evidence = analysis.requires_more_data or (
-            analysis.is_anomaly is not False
-            and (
-                not analysis.root_causes
-                or analysis.confidence < self._diagnosis_confidence_threshold
+        playbook_incomplete = bool(
+            coverage is not None and coverage.applicable and not coverage.complete
+        )
+        needs_more_evidence = (
+            playbook_incomplete
+            or analysis.requires_more_data
+            or (
+                analysis.is_anomaly is not False
+                and (
+                    not analysis.root_causes
+                    or analysis.confidence < self._diagnosis_confidence_threshold
+                )
             )
         )
         if (
             needs_more_evidence
-            and analysis.suggested_checks
+            and (playbook_incomplete or bool(analysis.suggested_checks))
             and current_round < self._max_investigation_rounds
         ):
             return "investigate"
         return "finalize"
-
 
     async def _investigate(self, state: NetworkWorkflowState) -> dict:
         """Thực thi check READ-only do Analyst đề nghị và cộng dồn evidence."""
@@ -191,18 +225,29 @@ class NetworkAutomationWorkflow:
         analysis = state.get("analysis")
         if task is None or analysis is None:
             raise ValueError("Workflow điều tra cần Task và AnalysisResult")
-        plan = self._analysis.build_investigation_plan(analysis)
+        coverage = state.get("evidence_coverage")
+        plan = self._analysis.build_investigation_plan(
+            analysis,
+            playbook_keys=state.get("playbook_keys", []),
+            missing_evidence=(coverage.missing if coverage is not None else []),
+            execution_results=state.get("execution_results", []),
+        )
         if plan is None:
-            return {"investigation_round": self._max_investigation_rounds}
+            return {
+                "investigation_round": self._max_investigation_rounds,
+                "evidence_stop_reason": "NO_ADDITIONAL_CHECKS",
+            }
         additional = await self._execution.execute_investigation(task.id, plan)
         return {
             "task": self._execution.load_task_for_operation_device(
                 additional[0].operation_device_id
-            ) if additional else task,
+            )
+            if additional
+            else task,
             "execution_results": state.get("execution_results", []) + additional,
             "investigation_round": state.get("investigation_round", 0) + 1,
+            "evidence_stop_reason": "INVESTIGATION_EXECUTED",
         }
-
 
     async def _finalize(self, state: NetworkWorkflowState) -> dict:
         """Tạo phản hồi cuối duy nhất sau khi đủ evidence hoặc đạt giới hạn vòng."""
@@ -211,11 +256,31 @@ class NetworkAutomationWorkflow:
         task = state.get("task")
         if task is None:
             raise ValueError("Workflow kết luận cần Task")
+        coverage = state.get("evidence_coverage")
+        stop_reason = state.get("evidence_stop_reason")
+        if coverage is not None:
+            if coverage.complete:
+                stop_reason = "EVIDENCE_COMPLETE"
+            elif (
+                stop_reason != "NO_ADDITIONAL_CHECKS"
+                and state.get("investigation_round", 0)
+                >= self._max_investigation_rounds
+            ):
+                stop_reason = "MAX_ROUNDS_REACHED"
+            self._analysis.record_evidence_gate(
+                task.id,
+                coverage,
+                state.get("investigation_round", 0),
+                stop_reason or "FINALIZED_WITHOUT_PLAYBOOK_GATE",
+            )
         response = self._analysis.finalize_response(task, state.get("analysis"))
         return {"response": response}
 
-
-    async def run_message(self, conversation: Conversation, message: Message,) -> NetworkWorkflowState:
+    async def run_message(
+        self,
+        conversation: Conversation,
+        message: Message,
+    ) -> NetworkWorkflowState:
         """Chạy graph đầy đủ cho một message do người dùng gửi."""
 
         return await self._message_graph.ainvoke(
@@ -224,22 +289,29 @@ class NetworkAutomationWorkflow:
                 "message": message,
                 "execution_results": [],
                 "investigation_round": 0,
+                "playbook_keys": [],
             }
         )
 
-
-    async def resume_after_approval(self, operation_device_id: str,) -> NetworkWorkflowState:
+    async def resume_after_approval(
+        self,
+        operation_device_id: str,
+    ) -> NetworkWorkflowState:
         """Tiếp tục từ node thực thi bằng Task đã được lưu trong PostgreSQL."""
 
         task = self._execution.load_task_for_operation_device(operation_device_id)
+        playbook_keys = [
+            playbook.key
+            for playbook in select_playbooks(getattr(task, "input_message", ""))
+        ]
         return await self._approval_graph.ainvoke(
             {
                 "task": task,
                 "execution_results": [],
                 "investigation_round": 0,
+                "playbook_keys": playbook_keys,
             }
         )
-
 
     def graph_mermaid(self) -> str:
         """Xuất sơ đồ Mermaid ổn định để làm tài liệu và chẩn đoán."""

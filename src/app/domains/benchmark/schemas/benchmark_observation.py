@@ -18,3 +18,4 @@ class BenchmarkObservation(BaseModel):
     approval_wait_open: bool = False
     # Agent's submission comes from ANALYSIS_COMPLETED, never from benchmark GT.
     diagnosis_submission: dict | None = None
+    evidence_coverage: dict | None = None

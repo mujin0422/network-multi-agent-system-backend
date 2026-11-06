@@ -58,6 +58,7 @@ def build_benchmark_evaluation(
         "scenario_version": run.scenario_version,
         "scoring_method": score["scoring_method"],
         "submission_status": score["status"],
+        "diagnostic_evidence_coverage": observations.evidence_coverage,
     }
     evaluation = TaskEvaluationDetail(
         id=evaluation_id,
@@ -98,8 +99,7 @@ def build_benchmark_evaluation(
                 result=rca_result,
                 is_required=True,
                 expected_value=[
-                    item.model_dump()
-                    for item in run.scenario_snapshot.ground_truth
+                    item.model_dump() for item in run.scenario_snapshot.ground_truth
                 ],
                 actual_value={
                     "root_causes": score["predicted_root_causes"],
@@ -155,7 +155,9 @@ def build_benchmark_evaluation(
                 # A duration is an observation; no arbitrary PASS/FAIL threshold.
                 result=EvaluationResult.UNKNOWN,
                 is_required=False,
-                actual_value={"active_duration_ms": active_ms} if active_ms is not None else None,
+                actual_value={"active_duration_ms": active_ms}
+                if active_ms is not None
+                else None,
                 evidence={
                     "definition": (
                         "AI workflow lifetime: Task created to FINAL_RESPONSE, "
@@ -163,7 +165,9 @@ def build_benchmark_evaluation(
                         "Agent, Analyst and orchestration overhead"
                     ),
                     "task_created_at": task.created_at.isoformat(),
-                    "final_response_created_at": response_at.isoformat() if response_at else None,
+                    "final_response_created_at": response_at.isoformat()
+                    if response_at
+                    else None,
                     "approval_wait_ms": approval_wait_ms,
                     "approval_pause_count": len(observations.approval_wait_intervals),
                     "approval_wait_incomplete": observations.approval_wait_open,
@@ -180,11 +184,17 @@ def build_benchmark_evaluation(
                 # Count only: there is no declared success threshold for turns.
                 result=EvaluationResult.UNKNOWN,
                 is_required=False,
-                actual_value={"count": interaction_turns} if interaction_turns is not None else None,
+                actual_value={"count": interaction_turns}
+                if interaction_turns is not None
+                else None,
                 evidence={
                     "definition": "count of task_executions with non-null tool_name for this task",
                     "scope": "agent-to-tool calls",
-                    "excludes": ["benchmark fault injection", "benchmark cleanup", "chat message count"],
+                    "excludes": [
+                        "benchmark fault injection",
+                        "benchmark cleanup",
+                        "chat message count",
+                    ],
                 },
                 created_at=evaluated_at,
             ),

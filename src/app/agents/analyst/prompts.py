@@ -64,4 +64,7 @@ Quy tắc trả lời:
 - Chỉ trả về JSON đúng schema được cung cấp, không dùng Markdown hay văn bản bao quanh.
 - summary tối đa 600 ký tự; mỗi danh sách tối đa 4 ý và mỗi ý tối đa 240 ký tự.
 - Không chép lại toàn bộ output thiết bị; chỉ trích dữ kiện quan trọng.
+- Ưu tiên `structured_evidence` khi kết luận trạng thái, cấu hình, IP, route và
+  protocol; dùng `command_results` làm raw evidence để đối chiếu khi parser trả
+  UNKNOWN hoặc thiếu thuộc tính. Không suy diễn trái với raw output.
 """.strip()
