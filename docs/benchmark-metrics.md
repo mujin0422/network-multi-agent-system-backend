@@ -208,6 +208,18 @@ rather than silently receiving a prediction.
 - Migration `0008_add_evidence_coverage_activity.sql` chỉ bổ sung một giá trị
   cho enum `activity_event_type`; không tạo bảng mới. Evidence và coverage vẫn
   được lưu trong JSONB hiện có của Activity/Evaluation.
+
+### Causal Evidence Gate
+
+Evidence coverage chỉ cho biết hệ thống đã thu thập đủ loại dữ liệu, không tự
+chứng minh root cause. Trước khi lưu `ANALYSIS_COMPLETED`, Causal Evidence Gate
+đối chiếu từng root cause của Analyst với rule theo `FaultType` và đúng
+device/interface. Kết luận đủ bằng chứng được giữ trong
+`diagnosis_submission.root_causes`; kết luận chưa đủ được chuyển sang
+`suspected_causes`, đặt `requires_more_data=true` và không được evaluator xem là
+RCA prediction. Mỗi quyết định lưu execution ID, command, evidence type,
+resource ID và tối đa bốn supporting lines trong `causal_evidence_gate` để kiểm
+toán false positive mà không cần tạo bảng mới.
 - Existing scenarios/seeds are compatible, because they already have
   `ground_truth` device/interface/fault_type.
 - The existing all-runs TSR still spans historical evaluation versions;
