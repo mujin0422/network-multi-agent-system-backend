@@ -256,7 +256,7 @@ class AnalysisOrchestrator:
     ) -> list[PredictedRootCause]:
         """Dựng candidate đóng từ playbook và phạm vi được nêu trong yêu cầu."""
 
-        if not scope.primary_devices or not scope.primary_interfaces:
+        if not scope.primary_devices:
             return []
         candidates: list[PredictedRootCause] = []
         for playbook_key in playbook_keys:
@@ -264,11 +264,23 @@ class AnalysisOrchestrator:
             if playbook is None:
                 continue
             for device in sorted(scope.primary_devices):
-                for interface in sorted(scope.primary_interfaces):
-                    for fault_type in playbook.fault_types:
-                        # Chỉ MPLS hiện có matcher âm tính đủ chặt để phục hồi
-                        # candidate khi LLM kết luận không có anomaly.
-                        if fault_type.value != "mpls_disabled":
+                for fault_type in playbook.fault_types:
+                    # OSPF area mismatch có thể được nêu ở phạm vi node/subnet;
+                    # matcher sẽ tự đối chiếu từng topology link của node đó.
+                    interfaces: list[str | None] = (
+                        sorted(scope.primary_interfaces)
+                        if scope.primary_interfaces
+                        else [None]
+                    )
+                    for interface in interfaces:
+                        # Chỉ các fault đã có matcher âm tính theo đúng resource
+                        # và topology mới được phục hồi khi LLM bỏ sót anomaly.
+                        if fault_type.value not in {
+                            "mpls_disabled",
+                            "ospf_area_mismatch",
+                        }:
+                            continue
+                        if fault_type.value == "mpls_disabled" and interface is None:
                             continue
                         candidates.append(
                             PredictedRootCause(
@@ -287,6 +299,14 @@ class AnalysisOrchestrator:
 
         checks: list[DiagnosticCheck] = []
         for decision in causal_gate.decisions:
+            checks.extend(
+                DiagnosticCheck(
+                    device=check.device,
+                    commands=check.commands,
+                    reason=check.reason,
+                )
+                for check in decision.recommended_checks
+            )
             if not decision.missing_evidence or decision.cause.interface is None:
                 continue
             commands: list[str] = []

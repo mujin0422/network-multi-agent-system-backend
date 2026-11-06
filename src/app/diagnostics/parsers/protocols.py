@@ -3,7 +3,7 @@
 import re
 from collections.abc import Callable
 
-from app.diagnostics.parsers.common import clean_lines, node_resource
+from app.diagnostics.parsers.common import clean_lines, interface_resource, node_resource
 from app.diagnostics.schemas import DiagnosticEvidence, EvidenceSource, EvidenceType
 
 
@@ -29,12 +29,9 @@ def parse_ospf(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
     lines = clean_lines(output)
+    if "ospf interface" in command.casefold():
+        return _parse_ospf_interfaces(command, lines, output, source)
     network_lines = [line for line in lines if line.casefold().startswith("network ")]
-    interface_lines = [
-        line
-        for line in lines
-        if "area " in line.casefold() or "process id" in line.casefold()
-    ]
     result: list[DiagnosticEvidence] = []
     if network_lines or "running-config" in command.casefold():
         result.append(
@@ -51,18 +48,6 @@ def parse_ospf(
                 network_lines or lines[:3],
             )
         )
-    if "ospf interface" in command.casefold() and interface_lines:
-        result.append(
-            _evidence(
-                EvidenceType.OSPF_CONFIG,
-                source,
-                output,
-                {
-                    "interface_details": interface_lines,
-                },
-                interface_lines,
-            )
-        )
     if "ospf neighbor" in command.casefold():
         neighbors = [
             line for line in lines if re.match(r"^\d+\.\d+\.\d+\.\d+\s+\d+\s+\S+", line)
@@ -77,6 +62,112 @@ def parse_ospf(
                     "neighbors": neighbors,
                 },
                 neighbors,
+            )
+        )
+    return result
+
+
+def _parse_ospf_interfaces(
+    command: str,
+    lines: list[str],
+    output: str,
+    source: EvidenceSource,
+) -> list[DiagnosticEvidence]:
+    """Bóc từng interface OSPF để area luôn gắn với đúng resource."""
+
+    starts = [
+        index
+        for index, line in enumerate(lines)
+        if re.match(r"^\S+ is (?:up|down|administratively down), line protocol is", line, re.IGNORECASE)
+    ]
+    if not starts:
+        requested = re.search(r"ospf interface\s+(\S+)", command, re.IGNORECASE)
+        area = next(
+            (
+                match.group(1)
+                for line in lines
+                if (match := re.search(r"\bArea\s+(\S+)", line, re.IGNORECASE))
+            ),
+            None,
+        )
+        if requested and area is not None:
+            interface = requested.group(1)
+            return [
+                _evidence(
+                    EvidenceType.OSPF_CONFIG,
+                    source,
+                    output,
+                    {
+                        "interface": interface,
+                        "area": area.rstrip(","),
+                        "ip_prefix": None,
+                        "process_id": None,
+                        "network_type": None,
+                        "neighbor_count": None,
+                        "adjacent_neighbor_count": None,
+                    },
+                    lines[:3],
+                    interface_resource(source.device_name, interface),
+                )
+            ]
+    result: list[DiagnosticEvidence] = []
+    for position, start in enumerate(starts):
+        block = lines[start : starts[position + 1] if position + 1 < len(starts) else len(lines)]
+        interface = block[0].split(maxsplit=1)[0]
+        internet = next(
+            (line for line in block if "internet address" in line.casefold()),
+            "",
+        )
+        process = next(
+            (line for line in block if line.casefold().startswith("process id ")),
+            "",
+        )
+        area_match = re.search(r"\bArea\s+(\S+)", internet, re.IGNORECASE)
+        address_match = re.search(
+            r"Internet Address\s+(\d+\.\d+\.\d+\.\d+/\d+)",
+            internet,
+            re.IGNORECASE,
+        )
+        process_match = re.search(r"Process ID\s+(\d+)", process, re.IGNORECASE)
+        network_type_match = re.search(
+            r"Network Type\s+([^,]+)", process, re.IGNORECASE
+        )
+        neighbor_match = next(
+            (
+                re.search(
+                    r"Neighbor Count is\s+(\d+),\s+Adjacent neighbor count is\s+(\d+)",
+                    line,
+                    re.IGNORECASE,
+                )
+                for line in block
+                if "neighbor count is" in line.casefold()
+            ),
+            None,
+        )
+        result.append(
+            _evidence(
+                EvidenceType.OSPF_CONFIG,
+                source,
+                output,
+                {
+                    "interface": interface,
+                    "area": area_match.group(1) if area_match else None,
+                    "ip_prefix": address_match.group(1) if address_match else None,
+                    "process_id": int(process_match.group(1)) if process_match else None,
+                    "network_type": (
+                        network_type_match.group(1).strip()
+                        if network_type_match
+                        else None
+                    ),
+                    "neighbor_count": (
+                        int(neighbor_match.group(1)) if neighbor_match else None
+                    ),
+                    "adjacent_neighbor_count": (
+                        int(neighbor_match.group(2)) if neighbor_match else None
+                    ),
+                },
+                [line for line in (block[0], internet, process) if line],
+                interface_resource(source.device_name, interface),
             )
         )
     return result

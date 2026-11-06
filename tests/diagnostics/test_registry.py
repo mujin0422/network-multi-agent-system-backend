@@ -36,6 +36,17 @@ def test_select_playbooks_matches_ospf_area_without_unrelated_playbook() -> None
     assert "mpls_disabled" not in keys
 
 
+def test_select_playbooks_keeps_both_ospf_hypotheses_for_generic_adjacency() -> None:
+    selected = select_playbooks(
+        "Chẩn đoán nguyên nhân neighbor OSPF giữa P2 và backbone không hình thành"
+    )
+
+    assert {playbook.key for playbook in selected} == {
+        "ospf_network_missing",
+        "ospf_area_mismatch",
+    }
+
+
 def test_get_playbook_accepts_key_and_fault_type() -> None:
     by_key = get_playbook("wrong_subnet_mask")
     by_fault = get_playbook(FaultType.WRONG_SUBNET_MASK)

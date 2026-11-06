@@ -73,6 +73,38 @@ def test_parse_ospf_config_and_empty_neighbor_table() -> None:
     assert neighbors[0].attributes["neighbor_count"] == 0
 
 
+def test_parse_ospf_interface_area_per_resource() -> None:
+    command = "show ip ospf interface"
+    evidence = parse_command_output(
+        command,
+        (
+            "FastEthernet0/0 is up, line protocol is up\n"
+            "  Internet Address 10.0.10.2/24, Area 1\n"
+            "  Process ID 1, Router ID 10.0.0.2, Network Type BROADCAST, Cost: 1\n"
+            "  Neighbor Count is 0, Adjacent neighbor count is 0\n"
+            "FastEthernet1/0 is up, line protocol is up\n"
+            "  Internet Address 10.0.50.1/24, Area 0\n"
+            "  Process ID 1, Router ID 10.0.0.2, Network Type BROADCAST, Cost: 1\n"
+            "  Neighbor Count is 1, Adjacent neighbor count is 1"
+        ),
+        source(command),
+    )
+
+    assert len(evidence) == 2
+    assert evidence[0].resource_id == "interface/p3/fastethernet0/0"
+    assert evidence[0].attributes == {
+        "interface": "FastEthernet0/0",
+        "area": "1",
+        "ip_prefix": "10.0.10.2/24",
+        "process_id": 1,
+        "network_type": "BROADCAST",
+        "neighbor_count": 0,
+        "adjacent_neighbor_count": 0,
+    }
+    assert evidence[1].attributes["area"] == "0"
+    assert evidence[1].attributes["adjacent_neighbor_count"] == 1
+
+
 def test_parse_unknown_command_preserves_raw_output() -> None:
     command = "show clock"
     evidence = parse_command_output(command, "12:00:00 UTC", source(command))

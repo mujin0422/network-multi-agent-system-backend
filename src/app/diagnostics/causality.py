@@ -27,6 +27,14 @@ class CausalEvidenceReference(BaseModel):
     supporting_lines: list[str] = Field(default_factory=list)
 
 
+class CausalReadCheck(BaseModel):
+    """READ check do matcher đề nghị khi thiếu evidence theo topology."""
+
+    device: str
+    commands: list[str] = Field(min_length=1, max_length=4)
+    reason: str
+
+
 class CausalClaimDecision(BaseModel):
     """Kết quả xác nhận một root cause do Analyst đề xuất."""
 
@@ -35,6 +43,7 @@ class CausalClaimDecision(BaseModel):
     reason: str
     evidence: list[CausalEvidenceReference] = Field(default_factory=list)
     missing_evidence: list[EvidenceType] = Field(default_factory=list)
+    recommended_checks: list[CausalReadCheck] = Field(default_factory=list)
 
 
 class CausalGateResult(BaseModel):
@@ -91,7 +100,8 @@ def evaluate_causal_claims(
 ) -> CausalGateResult:
     """Chỉ xác nhận root cause khi evidence thỏa quy tắc của loại lỗi."""
 
-    decisions = [_evaluate_claim(cause, evidence, scope) for cause in causes]
+    normalized_causes = [_normalize_claim_scope(cause, scope) for cause in causes]
+    decisions = [_evaluate_claim(cause, evidence, scope) for cause in normalized_causes]
     return CausalGateResult(
         confirmed=[
             item.cause
@@ -105,6 +115,22 @@ def evaluate_causal_claims(
         ],
         decisions=decisions,
     )
+
+
+def _normalize_claim_scope(
+    cause: PredictedRootCause,
+    scope: CausalScope | None,
+) -> PredictedRootCause:
+    """Giữ RCA ở mức node khi yêu cầu OSPF không khoanh một interface cụ thể."""
+
+    if (
+        cause.fault_type == FaultType.OSPF_AREA_MISMATCH
+        and cause.interface is not None
+        and scope is not None
+        and not scope.primary_interfaces
+    ):
+        return cause.model_copy(update={"interface": None})
+    return cause
 
 
 def _evaluate_claim(
@@ -137,6 +163,16 @@ def _evaluate_claim(
             if (
                 item.evidence_type == EvidenceType.INTERFACE_STATUS
                 and (
+                    "brief" not in item.source.command.casefold()
+                    or (
+                        item.attributes.get("ip_address") is not None
+                        or any(
+                            observed.evidence_type == EvidenceType.IP_CONFIGURATION
+                            for observed in interface_evidence
+                        )
+                    )
+                )
+                and (
                     item.attributes.get("administratively_down") is True
                     or item.attributes.get("oper_status") == "DOWN"
                 )
@@ -144,9 +180,12 @@ def _evaluate_claim(
             or (
                 item.evidence_type == EvidenceType.INTERFACE_CONFIG
                 and item.attributes.get("configured_shutdown") is True
+                and item.attributes.get("ip_address") is not None
             )
         ]
-        return _decision(cause, matched, "Interface được quan sát ở trạng thái down hoặc shutdown.")
+        return _decision(
+            cause, matched, "Interface được quan sát ở trạng thái down hoặc shutdown."
+        )
 
     if fault == FaultType.MPLS_DISABLED:
         status_observations = [
@@ -208,7 +247,9 @@ def _evaluate_claim(
             if item.evidence_type == EvidenceType.ROUTE
             and item.attributes.get("default_route_present") is False
         ]
-        return _decision(cause, matched, "Bảng định tuyến xác nhận không có default route.")
+        return _decision(
+            cause, matched, "Bảng định tuyến xác nhận không có default route."
+        )
 
     if fault == FaultType.BGP_NEIGHBOR_ADMIN_DOWN:
         matched = [
@@ -217,23 +258,32 @@ def _evaluate_claim(
             if item.evidence_type == EvidenceType.BGP_CONFIG
             and bool(item.attributes.get("shutdown_neighbors"))
         ]
-        return _decision(cause, matched, "Cấu hình BGP chứa neighbor ở trạng thái shutdown.")
+        return _decision(
+            cause, matched, "Cấu hình BGP chứa neighbor ở trạng thái shutdown."
+        )
 
     if fault == FaultType.ACL_TRAFFIC_BLOCK:
         attachments = [
             item
             for item in interface_evidence
             if item.evidence_type in {EvidenceType.INTERFACE_CONFIG, EvidenceType.ACL}
-            and bool(item.attributes.get("access_group") or item.attributes.get("attachment"))
+            and bool(
+                item.attributes.get("access_group") or item.attributes.get("attachment")
+            )
         ]
         deny_rules = [
             item
             for item in device_evidence
             if item.evidence_type == EvidenceType.ACL
-            and any("deny" in str(entry).casefold() for entry in item.attributes.get("entries", []))
+            and any(
+                "deny" in str(entry).casefold()
+                for entry in item.attributes.get("entries", [])
+            )
         ]
         matched = [*attachments, *deny_rules] if attachments and deny_rules else []
-        return _decision(cause, matched, "ACL deny được quan sát và ACL được gắn trên interface.")
+        return _decision(
+            cause, matched, "ACL deny được quan sát và ACL được gắn trên interface."
+        )
 
     if fault == FaultType.OSPF_NETWORK_MISSING:
         configs = [
@@ -249,21 +299,18 @@ def _evaluate_claim(
             and item.attributes.get("neighbor_count") == 0
         ]
         matched = [*configs, *neighbors] if configs and neighbors else []
-        return _decision(cause, matched, "Đã kiểm tra cấu hình OSPF và xác nhận không có adjacency.")
+        return _decision(
+            cause, matched, "Đã kiểm tra cấu hình OSPF và xác nhận không có adjacency."
+        )
 
     if fault == FaultType.OSPF_AREA_MISMATCH:
-        ospf = [item for item in evidence if item.evidence_type == EvidenceType.OSPF_CONFIG]
-        areas = {
-            area
-            for item in ospf
-            for area in _ospf_areas(item)
-        }
-        matched = ospf if len(areas) >= 2 else []
-        return _decision(cause, matched, "Evidence hai đầu liên kết thể hiện các OSPF area khác nhau.")
+        return _evaluate_ospf_area_mismatch(cause, evidence, scope)
 
     if fault in {FaultType.WRONG_IP_ADDRESS, FaultType.WRONG_SUBNET_MASK}:
         ip_evidence = [
-            item for item in evidence if item.evidence_type == EvidenceType.IP_CONFIGURATION
+            item
+            for item in evidence
+            if item.evidence_type == EvidenceType.IP_CONFIGURATION
         ]
         mismatched = _mismatched_ip_configuration(
             ip_evidence,
@@ -274,7 +321,11 @@ def _evaluate_claim(
         matched = [item for item in mismatched if item in interface_evidence]
         if matched:
             matched.extend(item for item in mismatched if item not in matched)
-        return _decision(cause, matched, "Địa chỉ và subnet mask hai đầu không tạo cùng mạng kết nối.")
+        return _decision(
+            cause,
+            matched,
+            "Địa chỉ và subnet mask hai đầu không tạo cùng mạng kết nối.",
+        )
 
     return _decision(cause, [], "Chưa có quy tắc causal evidence cho loại lỗi này.")
 
@@ -303,6 +354,7 @@ def _decision(
     confirmed_reason: str,
     *,
     missing_evidence: list[EvidenceType] | None = None,
+    recommended_checks: list[CausalReadCheck] | None = None,
 ) -> CausalClaimDecision:
     if matched:
         return CausalClaimDecision(
@@ -318,6 +370,7 @@ def _decision(
         if missing_evidence is not None
         else "Chưa có evidence trực tiếp đáp ứng quy tắc xác nhận nguyên nhân.",
         missing_evidence=missing_evidence or [],
+        recommended_checks=recommended_checks or [],
     )
 
 
@@ -342,8 +395,7 @@ def _mpls_interface_disabled(
     if not matching:
         return True
     return any(
-        state.get("mpls_enabled") is False
-        or state.get("operational") is False
+        state.get("mpls_enabled") is False or state.get("operational") is False
         for state in matching
     )
 
@@ -385,16 +437,288 @@ def _normalize_interface(value: str) -> str:
     return f"{aliases.get(match.group(1), match.group(1))}{match.group(2)}"
 
 
-def _ospf_areas(item: DiagnosticEvidence) -> set[str]:
-    lines = [*item.supporting_lines]
-    details = item.attributes.get("interface_details", [])
-    networks = item.attributes.get("network_statements", [])
-    lines.extend(str(value) for value in [*details, *networks])
+def _evaluate_ospf_area_mismatch(
+    cause: PredictedRootCause,
+    evidence: list[DiagnosticEvidence],
+    scope: CausalScope | None,
+) -> CausalClaimDecision:
+    """Chỉ so sánh OSPF area của đúng interface mục tiêu và topology peer."""
+
+    if cause.interface is None:
+        return _evaluate_device_ospf_area_mismatch(cause, evidence, scope)
+
+    peer = _topology_peer(cause, scope)
+    local = [
+        item
+        for item in evidence
+        if item.evidence_type == EvidenceType.OSPF_CONFIG
+        and normalize_resource_part(item.source.device_name)
+        == normalize_resource_part(cause.device)
+        and _matches_interface(item, cause.interface)
+        and isinstance(item.attributes.get("area"), str)
+    ]
+    remote: list[DiagnosticEvidence] = []
+    if peer is not None:
+        remote = [
+            item
+            for item in evidence
+            if item.evidence_type == EvidenceType.OSPF_CONFIG
+            and normalize_resource_part(item.source.device_name)
+            == normalize_resource_part(peer[0])
+            and _matches_interface(item, peer[1])
+            and isinstance(item.attributes.get("area"), str)
+        ]
+    if local and remote:
+        local_area = str(local[0].attributes["area"])
+        peer_area = str(remote[0].attributes["area"])
+        if local_area != peer_area:
+            return _decision(
+                cause,
+                [local[0], remote[0]],
+                f"Hai đầu topology peer thuộc OSPF area khác nhau ({local_area} và {peer_area}).",
+            )
+        return _decision(
+            cause,
+            [],
+            "Hai đầu topology peer đang thuộc cùng OSPF area.",
+            missing_evidence=[],
+        )
+
+    # Một số lab không cung cấp topology peer đáng tin cậy. Với interface đã
+    # được nêu rõ, area của chính interface là một outlier và adjacency bằng 0
+    # trong khi các routed link còn lại cùng một area thì vẫn là evidence trực
+    # tiếp đủ mạnh để xác nhận sai area cục bộ.
+    if local:
+        target_area = str(local[0].attributes["area"])
+        other_areas = {
+            str(item.attributes["area"])
+            for item in evidence
+            if item.evidence_type == EvidenceType.OSPF_CONFIG
+            and normalize_resource_part(item.source.device_name)
+            == normalize_resource_part(cause.device)
+            and not _matches_interface(item, cause.interface)
+            and isinstance(item.attributes.get("area"), str)
+            and not _normalize_interface(
+                str(item.attributes.get("interface", ""))
+            ).startswith("loopback")
+        }
+        if (
+            len(other_areas) == 1
+            and target_area not in other_areas
+            and local[0].attributes.get("adjacent_neighbor_count") == 0
+        ):
+            return _decision(
+                cause,
+                [local[0]],
+                (
+                    f"Interface mục tiêu ở area {target_area}, khác area "
+                    f"{next(iter(other_areas))} của các routed link còn lại và "
+                    "không có OSPF adjacency."
+                ),
+            )
+
+    checks: list[CausalReadCheck] = []
+    if not local and cause.interface is not None:
+        checks.append(
+            CausalReadCheck(
+                device=cause.device,
+                commands=[f"show ip ospf interface {cause.interface}"],
+                reason="Thiếu OSPF area của interface mục tiêu.",
+            )
+        )
+    if peer is not None and not remote:
+        checks.append(
+            CausalReadCheck(
+                device=peer[0],
+                commands=[f"show ip ospf interface {peer[1]}"],
+                reason="Thiếu OSPF area của peer interface trong topology.",
+            )
+        )
+    return _decision(
+        cause,
+        [],
+        "Chưa đủ OSPF interface evidence của đúng hai đầu topology peer.",
+        missing_evidence=[EvidenceType.OSPF_CONFIG],
+        recommended_checks=checks,
+    )
+
+
+def _evaluate_device_ospf_area_mismatch(
+    cause: PredictedRootCause,
+    evidence: list[DiagnosticEvidence],
+    scope: CausalScope | None,
+) -> CausalClaimDecision:
+    """Đối chiếu area trên từng topology link khi yêu cầu chỉ nêu thiết bị."""
+
+    node_config_decision = _evaluate_node_ospf_area_statements(cause, evidence, scope)
+    if node_config_decision is not None:
+        return node_config_decision
+
+    local_items = [
+        item
+        for item in evidence
+        if item.evidence_type == EvidenceType.OSPF_CONFIG
+        and normalize_resource_part(item.source.device_name)
+        == normalize_resource_part(cause.device)
+        and isinstance(item.attributes.get("area"), str)
+        and isinstance(item.attributes.get("interface"), str)
+        and not _normalize_interface(str(item.attributes["interface"])).startswith(
+            "loopback"
+        )
+    ]
+    checks: list[CausalReadCheck] = []
+    compared: list[tuple[DiagnosticEvidence, DiagnosticEvidence]] = []
+    for local in local_items:
+        interface = str(local.attributes["interface"])
+        scoped_cause = cause.model_copy(update={"interface": interface})
+        peer = _topology_peer(scoped_cause, scope)
+        if peer is None:
+            continue
+        remote = next(
+            (
+                item
+                for item in evidence
+                if item.evidence_type == EvidenceType.OSPF_CONFIG
+                and normalize_resource_part(item.source.device_name)
+                == normalize_resource_part(peer[0])
+                and _matches_interface(item, peer[1])
+                and isinstance(item.attributes.get("area"), str)
+            ),
+            None,
+        )
+        if remote is None:
+            checks.append(
+                CausalReadCheck(
+                    device=peer[0],
+                    commands=[f"show ip ospf interface {peer[1]}"],
+                    reason=(
+                        f"Thiếu OSPF area của peer nối với {cause.device} {interface}."
+                    ),
+                )
+            )
+            continue
+        compared.append((local, remote))
+        if str(local.attributes["area"]) != str(remote.attributes["area"]):
+            return _decision(
+                cause,
+                [local, remote],
+                (
+                    f"Topology link {cause.device} {interface} có OSPF area "
+                    f"{local.attributes['area']} khác peer {peer[0]} {peer[1]} "
+                    f"area {remote.attributes['area']}."
+                ),
+            )
+
+    if compared and not checks:
+        return _decision(
+            cause,
+            [],
+            "Các topology link đã đối chiếu đang dùng cùng OSPF area.",
+            missing_evidence=[],
+        )
+    if not local_items:
+        checks.append(
+            CausalReadCheck(
+                device=cause.device,
+                commands=["show ip ospf interface"],
+                reason="Thiếu OSPF area theo từng interface trên thiết bị mục tiêu.",
+            )
+        )
+    return _decision(
+        cause,
+        [],
+        "Chưa đủ OSPF area evidence để đối chiếu các topology link của thiết bị.",
+        missing_evidence=[EvidenceType.OSPF_CONFIG],
+        recommended_checks=checks[:4],
+    )
+
+
+def _evaluate_node_ospf_area_statements(
+    cause: PredictedRootCause,
+    evidence: list[DiagnosticEvidence],
+    scope: CausalScope | None,
+) -> CausalClaimDecision | None:
+    """So sánh network statement của node với các topology peer đã thu thập."""
+
+    local_configs = [
+        item
+        for item in evidence
+        if item.evidence_type == EvidenceType.OSPF_CONFIG
+        and normalize_resource_part(item.source.device_name)
+        == normalize_resource_part(cause.device)
+        and _ospf_statement_areas(item)
+    ]
+    if not local_configs or scope is None:
+        return None
+    peer_names = {
+        normalize_resource_part(str(item.get("device", "")))
+        for hostname, neighbors in scope.topology_neighbors.items()
+        if normalize_resource_part(hostname) == normalize_resource_part(cause.device)
+        for item in neighbors
+        if item.get("device")
+    }
+    peer_configs = [
+        item
+        for item in evidence
+        if item.evidence_type == EvidenceType.OSPF_CONFIG
+        and normalize_resource_part(item.source.device_name) in peer_names
+        and _ospf_statement_areas(item)
+    ]
+    local_areas = {
+        area for item in local_configs for area in _ospf_statement_areas(item)
+    }
+    peer_areas = {area for item in peer_configs for area in _ospf_statement_areas(item)}
+    if len(local_areas) == 1 and peer_areas and local_areas.isdisjoint(peer_areas):
+        return _decision(
+            cause,
+            [local_configs[0], *peer_configs[:3]],
+            (
+                f"OSPF network statement của {cause.device} dùng area "
+                f"{next(iter(local_areas))}, khác area "
+                f"{', '.join(sorted(peer_areas))} trên các topology peer."
+            ),
+        )
+    return None
+
+
+def _ospf_statement_areas(item: DiagnosticEvidence) -> set[str]:
+    """Lấy area từ các network statement đã được parser chuẩn hóa."""
+
+    statements = item.attributes.get("network_statements", [])
+    if not isinstance(statements, list):
+        return set()
     return {
         match.group(1)
-        for line in lines
-        if (match := re.search(r"\barea\s+(\S+)", line, re.IGNORECASE))
+        for statement in statements
+        if isinstance(statement, str)
+        and (match := re.search(r"\barea\s+(\S+)", statement, re.IGNORECASE))
     }
+
+
+def _topology_peer(
+    cause: PredictedRootCause,
+    scope: CausalScope | None,
+) -> tuple[str, str] | None:
+    if scope is None or cause.interface is None:
+        return None
+    neighbors = next(
+        (
+            items
+            for hostname, items in scope.topology_neighbors.items()
+            if normalize_resource_part(hostname)
+            == normalize_resource_part(cause.device)
+        ),
+        [],
+    )
+    for item in neighbors:
+        if _normalize_interface(
+            item.get("local_interface", "")
+        ) == _normalize_interface(cause.interface):
+            device = item.get("device", "")
+            interface = item.get("peer_interface", "")
+            if device and interface and interface != "unknown":
+                return device, interface
+    return None
 
 
 def _mismatched_ip_configuration(
@@ -453,7 +777,8 @@ def _is_cause_peer_pair(
         (
             items
             for hostname, items in scope.topology_neighbors.items()
-            if normalize_resource_part(hostname) == normalize_resource_part(cause.device)
+            if normalize_resource_part(hostname)
+            == normalize_resource_part(cause.device)
         ),
         [],
     )

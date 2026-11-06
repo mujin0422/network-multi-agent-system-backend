@@ -231,6 +231,382 @@ def test_mpls_evidence_from_another_interface_does_not_confirm_cause() -> None:
     ]
 
 
+def test_ospf_area_mismatch_requires_topology_peer_interfaces() -> None:
+    evidence = [
+        *_evidence(
+            "P3",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.3/24, Area 1\n"
+                " Process ID 1, Router ID 3.3.3.3, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+        *_evidence(
+            "P4",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.4/24, Area 0\n"
+                " Process ID 1, Router ID 4.4.4.4, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P3",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán OSPF area trên P3 FastEthernet0/0",
+        ["P3", "P4"],
+        {
+            "P3": [
+                {
+                    "device": "P4",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.confirmed == [cause]
+    assert {item.device_name for item in result.decisions[0].evidence} == {
+        "P3",
+        "P4",
+    }
+
+
+def test_link_down_does_not_confirm_unused_unassigned_interface() -> None:
+    evidence = [
+        *_evidence(
+            "P2",
+            "show ip interface brief",
+            (
+                "Interface IP-Address OK? Method Status Protocol\n"
+                "FastEthernet3/0 unassigned YES NVRAM administratively down down"
+            ),
+        ),
+        *_evidence(
+            "P2",
+            "show running-config interface FastEthernet3/0",
+            "interface FastEthernet3/0\n no ip address\n shutdown",
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P2",
+        interface="FastEthernet3/0",
+        fault_type="link_down",
+    )
+
+    result = evaluate_causal_claims([cause], evidence)
+
+    assert result.confirmed == []
+    assert result.suspected == [cause]
+
+
+def test_ospf_area_mismatch_can_confirm_from_device_wide_scope() -> None:
+    evidence = [
+        *_evidence(
+            "P2",
+            "show ip ospf interface",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.10.2/24, Area 1\n"
+                " Process ID 1, Router ID 10.0.0.2, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+        *_evidence(
+            "P1",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.10.1/24, Area 0\n"
+                " Process ID 1, Router ID 10.0.0.1, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P2",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán neighbor OSPF trên P2",
+        ["P1", "P2"],
+        {
+            "P2": [
+                {
+                    "device": "P1",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.confirmed == [cause]
+
+
+def test_ospf_area_result_is_node_scoped_when_request_names_no_interface() -> None:
+    evidence = [
+        *_evidence(
+            "P2",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.10.2/24, Area 1\n"
+                " Process ID 1, Router ID 10.0.0.2, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+        *_evidence(
+            "P1",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.10.1/24, Area 0\n"
+                " Process ID 1, Router ID 10.0.0.1, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+    ]
+    interface_cause = PredictedRootCause(
+        device="P2",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán neighbor OSPF trên P2",
+        ["P1", "P2"],
+        {
+            "P2": [
+                {
+                    "device": "P1",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([interface_cause], evidence, scope)
+
+    assert len(result.confirmed) == 1
+    assert result.confirmed[0].device == "P2"
+    assert result.confirmed[0].interface is None
+
+
+def test_ospf_node_scope_compares_network_statements_with_topology_peers() -> None:
+    evidence = [
+        *_evidence(
+            "P2",
+            "show running-config | section ospf",
+            "router ospf 1\n network 10.0.0.0 0.255.255.255 area 1",
+        ),
+        *_evidence(
+            "P1",
+            "show running-config | section ospf",
+            "router ospf 1\n network 10.0.0.0 0.255.255.255 area 0",
+        ),
+        *_evidence(
+            "PE1",
+            "show running-config | section ospf",
+            "router ospf 1\n network 10.0.0.0 0.255.255.255 area 0",
+        ),
+    ]
+    cause = PredictedRootCause(device="P2", fault_type="ospf_area_mismatch")
+    scope = build_causal_scope(
+        "Chẩn đoán neighbor OSPF trên P2",
+        ["P1", "P2", "PE1"],
+        {
+            "P2": [
+                {
+                    "device": "P1",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                },
+                {
+                    "device": "PE1",
+                    "local_interface": "FastEthernet2/0",
+                    "peer_interface": "FastEthernet2/0",
+                },
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.confirmed == [cause]
+    assert "network statement" in result.decisions[0].reason
+
+
+def test_ospf_device_scope_requests_peer_area_before_confirming() -> None:
+    evidence = [
+        *_evidence(
+            "P2",
+            "show ip ospf interface",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.10.2/24, Area 1\n"
+                " Process ID 1, Router ID 10.0.0.2, Network Type BROADCAST, Cost: 1"
+            ),
+        )
+    ]
+    cause = PredictedRootCause(device="P2", fault_type="ospf_area_mismatch")
+    scope = build_causal_scope(
+        "Chẩn đoán neighbor OSPF trên P2",
+        ["P1", "P2"],
+        {
+            "P2": [
+                {
+                    "device": "P1",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].recommended_checks[0].device == "P1"
+    assert result.decisions[0].recommended_checks[0].commands == [
+        "show ip ospf interface FastEthernet0/0"
+    ]
+
+
+def test_ospf_different_area_on_non_peer_does_not_confirm_mismatch() -> None:
+    evidence = [
+        *_evidence(
+            "P3",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.3/24, Area 1\n"
+                " Process ID 1, Router ID 3.3.3.3, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+        *_evidence(
+            "P9",
+            "show ip ospf interface FastEthernet9/0",
+            (
+                "FastEthernet9/0 is up, line protocol is up\n"
+                " Internet Address 192.0.2.9/24, Area 0\n"
+                " Process ID 1, Router ID 9.9.9.9, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P3",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán OSPF area trên P3 FastEthernet0/0",
+        ["P3", "P4", "P9"],
+        {
+            "P3": [
+                {
+                    "device": "P4",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].recommended_checks[0].device == "P4"
+    assert result.decisions[0].recommended_checks[0].commands == [
+        "show ip ospf interface FastEthernet0/0"
+    ]
+
+
+def test_ospf_target_area_outlier_confirms_when_topology_peer_is_unavailable() -> None:
+    evidence = [
+        *_evidence(
+            "P3",
+            "show ip ospf interface",
+            (
+                "FastEthernet1/0 is up, line protocol is up\n"
+                " Internet Address 10.0.35.3/24, Area 0\n"
+                " Process ID 1, Router ID 3.3.3.3, Network Type BROADCAST, Cost: 1\n"
+                " Neighbor Count is 1, Adjacent neighbor count is 1\n"
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.3/24, Area 1\n"
+                " Process ID 1, Router ID 3.3.3.3, Network Type BROADCAST, Cost: 1\n"
+                " Neighbor Count is 0, Adjacent neighbor count is 0"
+            ),
+        )
+    ]
+    cause = PredictedRootCause(
+        device="P3",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán P3 FastEthernet0/0 mất OSPF adjacency",
+        ["P3"],
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.confirmed == [cause]
+
+
+def test_ospf_same_area_on_peer_is_not_mismatch() -> None:
+    evidence = [
+        *_evidence(
+            "P3",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.3/24, Area 0\n"
+                " Process ID 1, Router ID 3.3.3.3, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+        *_evidence(
+            "P4",
+            "show ip ospf interface FastEthernet0/0",
+            (
+                "FastEthernet0/0 is up, line protocol is up\n"
+                " Internet Address 10.0.34.4/24, Area 0\n"
+                " Process ID 1, Router ID 4.4.4.4, Network Type BROADCAST, Cost: 1"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P3",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    scope = build_causal_scope(
+        "Chẩn đoán OSPF area trên P3 FastEthernet0/0",
+        ["P3", "P4"],
+        {
+            "P3": [
+                {
+                    "device": "P4",
+                    "local_interface": "FastEthernet0/0",
+                    "peer_interface": "FastEthernet0/0",
+                }
+            ]
+        },
+    )
+
+    result = evaluate_causal_claims([cause], evidence, scope)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].missing_evidence == []
+    assert result.decisions[0].recommended_checks == []
+
+
 def test_wrong_subnet_mask_requires_two_incompatible_link_networks() -> None:
     evidence = [
         *_evidence(

@@ -89,6 +89,21 @@ WRONG_SUBNET_MASK = Playbook(
 
 OSPF_COMMANDS = (
     Command(
+        command_template="show ip interface brief",
+        parser="interface",
+        produces=(Evidence.INTERFACE_STATUS,),
+    ),
+    Command(
+        command_template="show ip ospf interface",
+        parser="ospf",
+        produces=(Evidence.OSPF_CONFIG,),
+    ),
+    Command(
+        command_template="show interfaces {interface}",
+        parser="interface",
+        produces=(Evidence.INTERFACE_STATUS,),
+    ),
+    Command(
         command_template="show ip ospf neighbor",
         parser="ospf",
         produces=(Evidence.OSPF_NEIGHBOR,),
@@ -109,6 +124,12 @@ OSPF_COMMANDS = (
         target=Target.NEIGHBOR,
         produces=(Evidence.OSPF_CONFIG,),
     ),
+    Command(
+        command_template="show interfaces {peer_interface}",
+        parser="interface",
+        target=Target.NEIGHBOR,
+        produces=(Evidence.INTERFACE_STATUS,),
+    ),
 )
 OSPF_NETWORK_MISSING = Playbook(
     key="ospf_network_missing",
@@ -123,7 +144,11 @@ OSPF_NETWORK_MISSING = Playbook(
         "tham gia ospf",
     ),
     commands=OSPF_COMMANDS,
-    required_evidence=(Evidence.OSPF_CONFIG, Evidence.OSPF_NEIGHBOR),
+    required_evidence=(
+        Evidence.INTERFACE_STATUS,
+        Evidence.OSPF_CONFIG,
+        Evidence.OSPF_NEIGHBOR,
+    ),
 )
 OSPF_AREA_MISMATCH = Playbook(
     key="ospf_area_mismatch",
