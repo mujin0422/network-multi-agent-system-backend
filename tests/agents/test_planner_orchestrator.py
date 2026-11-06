@@ -18,7 +18,6 @@ from app.domains.execution.schemas import (
     TaskStatus,
     TaskType,
 )
-from app.domains.execution.services import ExecutionService
 from tests.execution_service_factory import build_execution_service_stub
 from app.domains.inventory.schemas import Device
 from app.domains.inventory.services import DeviceService
@@ -87,6 +86,15 @@ class FakeRetryChatModel(FakeChatModel):
         return await super().ainvoke(messages)
 
 
+class CapturingChatModel(FakeChatModel):
+    def __init__(self):
+        self.messages = []
+
+    async def ainvoke(self, messages):
+        self.messages = messages
+        return await super().ainvoke(messages)
+
+
 class StubExecutionStore:
     def __init__(self):
         self.tasks = {}
@@ -97,7 +105,11 @@ class StubExecutionStore:
 
     def get_task_by_source_message_id(self, message_id):
         return next(
-            (task for task in self.tasks.values() if task.source_message_id == message_id),
+            (
+                task
+                for task in self.tasks.values()
+                if task.source_message_id == message_id
+            ),
             None,
         )
 
@@ -271,6 +283,86 @@ def test_planner_retries_when_model_omits_device_command() -> None:
 
     assert model.call_count == 2
     assert plan.operations[0].operation_parameters == {"command": "show ip route"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        (
+            "Đây là kế hoạch:\n```json\n"
+            '{"task_type":"DIAGNOSIS","operations":[{'
+            '"operation_intent":"GET_OSPF_CONFIG",'
+            '"operation_parameters":{"command":"show running-config | section router ospf"},'
+            '"devices":[{"device_id":"devc-1","device_role":"SOURCE",'
+            '"access_mode":"READ"}],"dependencies":[]}]}\n```'
+        ),
+        [
+            {"type": "text", "text": "Kết quả Planner:\n"},
+            {
+                "type": "text",
+                "text": (
+                    '{"task_type":"DIAGNOSIS","operations":[{'
+                    '"operation_intent":"GET_OSPF_CONFIG",'
+                    '"operation_parameters":{"command":"show ip ospf neighbor"},'
+                    '"devices":[{"device_id":"devc-1",'
+                    '"device_role":"SOURCE","access_mode":"READ"}],'
+                    '"dependencies":[]}]}'
+                ),
+            },
+        ],
+        (
+            "{'task_type':'DIAGNOSIS','operations':[{'operation_intent':"
+            "'GET_OSPF_CONFIG','operation_parameters':{'command':"
+            "'show ip ospf neighbor'},'devices':[{'device_id':'devc-1',"
+            "'device_role':'SOURCE','access_mode':'READ'}],'dependencies':[]}]}"
+        ),
+    ],
+)
+def test_planner_parses_common_nvidia_json_response_shapes(content) -> None:
+    """Planner vẫn đọc được JSON khi NIM bọc bằng prose, block hoặc dict literal."""
+
+    plan = PlannerAgent._parse_plan(content)
+
+    assert plan.task_type == TaskType.DIAGNOSIS
+    assert plan.operations[0].devices[0].device_id == "devc-1"
+
+
+def test_planner_correction_prompt_repeats_required_json_shape() -> None:
+    prompt = PlannerAgent._build_correction_prompt(
+        "{invalid}",
+        ValueError("operation_parameters.command is required"),
+    )
+
+    assert "CẤU TRÚC TỐI THIỂU BẮT BUỘC" in prompt
+    assert '"operation_parameters":{"command":"show ..."}' in prompt
+    assert "không dùng hostname thay cho device_id" in prompt
+
+
+def test_planner_includes_matched_diagnostic_playbook() -> None:
+    now = datetime.now(UTC)
+    device = Device(
+        id="devc-1",
+        credential_id=None,
+        brand_id="brnd-1",
+        category_id="catg-1",
+        hostname="P1",
+        host="192.0.2.1",
+        port=22,
+        device_type="cisco_ios",
+        location=None,
+        created_by="user-1",
+        last_updated_by="user-1",
+        created_at=now,
+        last_updated_at=now,
+    )
+    model = CapturingChatModel()
+
+    asyncio.run(PlannerAgent(model).plan("Chẩn đoán OSPF area mismatch", [device]))
+
+    prompt = str(model.messages[-1].content)
+    assert "MATCHED DIAGNOSTIC PLAYBOOKS" in prompt
+    assert '"key": "ospf_area_mismatch"' in prompt
+    assert "show ip ospf neighbor" in prompt
 
 
 def test_planner_normalizes_write_commands_before_approval() -> None:
