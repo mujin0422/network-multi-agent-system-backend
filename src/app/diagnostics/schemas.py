@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domains.evaluation.schemas import FaultType
 
 JsonScalar = str | bool | int | float | None
+JsonValue = JsonScalar | list[JsonScalar] | list[dict[str, JsonScalar]]
 
 
 class PlaybookTarget(StrEnum):
@@ -76,7 +77,7 @@ class DiagnosticEvidence(BaseModel):
     evidence_type: EvidenceType
     resource_id: str = Field(min_length=1)
     source: EvidenceSource
-    attributes: dict[str, JsonScalar | list[JsonScalar]] = Field(default_factory=dict)
+    attributes: dict[str, JsonValue] = Field(default_factory=dict)
     supporting_lines: list[str] = Field(default_factory=list)
     raw_output: str
 

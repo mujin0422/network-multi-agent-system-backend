@@ -141,6 +141,11 @@ MPLS_DISABLED = Playbook(
     keywords=("mpls", "ldp", "label distribution"),
     commands=(
         Command(
+            command_template="show interfaces {interface}",
+            parser="interface",
+            produces=(Evidence.INTERFACE_STATUS,),
+        ),
+        Command(
             command_template="show mpls interfaces",
             parser="mpls",
             produces=(Evidence.MPLS_INTERFACE,),
@@ -162,7 +167,11 @@ MPLS_DISABLED = Playbook(
             produces=(Evidence.MPLS_INTERFACE,),
         ),
     ),
-    required_evidence=(Evidence.MPLS_INTERFACE, Evidence.LDP_NEIGHBOR),
+    required_evidence=(
+        Evidence.INTERFACE_STATUS,
+        Evidence.INTERFACE_CONFIG,
+        Evidence.MPLS_INTERFACE,
+    ),
 )
 BGP_NEIGHBOR_DOWN = Playbook(
     key="bgp_neighbor_admin_down",

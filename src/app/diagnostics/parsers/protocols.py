@@ -109,12 +109,29 @@ def parse_mpls(
             r"^(?:Fa|Gi|Te|Et|FastEthernet|GigabitEthernet)\S+\s+", line, re.IGNORECASE
         )
     ]
+    parsed_interfaces: list[dict[str, str | bool]] = []
+    for entry in entries:
+        columns = entry.split()
+        if not columns:
+            continue
+        parsed_interfaces.append(
+            {
+                "interface": columns[0],
+                "mpls_enabled": len(columns) > 1
+                and columns[1].casefold() == "yes",
+                "operational": columns[-1].casefold() == "yes",
+            }
+        )
     return [
         _evidence(
             EvidenceType.MPLS_INTERFACE,
             source,
             output,
-            {"interface_count": len(entries), "interfaces": entries},
+            {
+                "interface_count": len(entries),
+                "interfaces": entries,
+                "interface_states": parsed_interfaces,
+            },
             entries,
         )
     ]

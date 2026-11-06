@@ -103,6 +103,134 @@ def test_default_route_missing_requires_negative_route_observation() -> None:
     ]
 
 
+def test_mpls_disabled_requires_up_interface_config_and_mpls_table() -> None:
+    evidence = [
+        *_evidence(
+            "P1",
+            "show interfaces FastEthernet1/0",
+            "FastEthernet1/0 is up, line protocol is up",
+        ),
+        *_evidence(
+            "P1",
+            "show running-config interface FastEthernet1/0",
+            "interface FastEthernet1/0\n no shutdown",
+        ),
+        *_evidence(
+            "P1",
+            "show mpls interfaces",
+            (
+                "Interface IP Tunnel BGP Static Operational\n"
+                "FastEthernet0/0 Yes (ldp) No No No Yes"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P1",
+        interface="FastEthernet1/0",
+        fault_type="mpls_disabled",
+    )
+
+    result = evaluate_causal_claims([cause], evidence)
+
+    assert result.confirmed == [cause]
+    assert {item.evidence_type for item in result.decisions[0].evidence} == {
+        "INTERFACE_STATUS",
+        "INTERFACE_CONFIG",
+        "MPLS_INTERFACE",
+    }
+
+
+def test_mpls_enabled_and_operational_is_not_confirmed_as_disabled() -> None:
+    evidence = [
+        *_evidence(
+            "P1",
+            "show interfaces FastEthernet1/0",
+            "FastEthernet1/0 is up, line protocol is up",
+        ),
+        *_evidence(
+            "P1",
+            "show running-config interface FastEthernet1/0",
+            "interface FastEthernet1/0\n mpls ip\n no shutdown",
+        ),
+        *_evidence(
+            "P1",
+            "show mpls interfaces",
+            (
+                "Interface IP Tunnel BGP Static Operational\n"
+                "FastEthernet1/0 Yes (ldp) No No No Yes"
+            ),
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P1",
+        interface="FastEthernet1/0",
+        fault_type="mpls_disabled",
+    )
+
+    result = evaluate_causal_claims([cause], evidence)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].missing_evidence == []
+
+
+def test_mpls_disabled_reports_target_specific_missing_evidence() -> None:
+    evidence = [
+        *_evidence(
+            "P1",
+            "show interfaces FastEthernet1/0",
+            "FastEthernet1/0 is up, line protocol is up",
+        ),
+        *_evidence(
+            "P1",
+            "show mpls interfaces",
+            "Interface IP Tunnel BGP Static Operational",
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P1",
+        interface="FastEthernet1/0",
+        fault_type="mpls_disabled",
+    )
+
+    result = evaluate_causal_claims([cause], evidence)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].missing_evidence == ["INTERFACE_CONFIG"]
+
+
+def test_mpls_evidence_from_another_interface_does_not_confirm_cause() -> None:
+    evidence = [
+        *_evidence(
+            "P1",
+            "show interfaces FastEthernet0/0",
+            "FastEthernet0/0 is up, line protocol is up",
+        ),
+        *_evidence(
+            "P1",
+            "show running-config interface FastEthernet0/0",
+            "interface FastEthernet0/0\n no shutdown",
+        ),
+        *_evidence(
+            "P1",
+            "show mpls interfaces",
+            "Interface IP Tunnel BGP Static Operational",
+        ),
+    ]
+    cause = PredictedRootCause(
+        device="P1",
+        interface="FastEthernet1/0",
+        fault_type="mpls_disabled",
+    )
+
+    result = evaluate_causal_claims([cause], evidence)
+
+    assert result.suspected == [cause]
+    assert result.decisions[0].missing_evidence == [
+        "INTERFACE_STATUS",
+        "INTERFACE_CONFIG",
+    ]
+
+
 def test_wrong_subnet_mask_requires_two_incompatible_link_networks() -> None:
     evidence = [
         *_evidence(

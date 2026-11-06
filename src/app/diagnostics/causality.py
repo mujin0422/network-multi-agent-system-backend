@@ -34,6 +34,7 @@ class CausalClaimDecision(BaseModel):
     status: CausalClaimStatus
     reason: str
     evidence: list[CausalEvidenceReference] = Field(default_factory=list)
+    missing_evidence: list[EvidenceType] = Field(default_factory=list)
 
 
 class CausalGateResult(BaseModel):
@@ -148,13 +149,57 @@ def _evaluate_claim(
         return _decision(cause, matched, "Interface được quan sát ở trạng thái down hoặc shutdown.")
 
     if fault == FaultType.MPLS_DISABLED:
-        matched = [
+        status_observations = [
+            item
+            for item in interface_evidence
+            if item.evidence_type == EvidenceType.INTERFACE_STATUS
+        ]
+        up_statuses = [
+            item
+            for item in status_observations
+            if item.attributes.get("admin_status") == "UP"
+            and item.attributes.get("oper_status") == "UP"
+        ]
+        config_observations = [
             item
             for item in interface_evidence
             if item.evidence_type == EvidenceType.INTERFACE_CONFIG
-            and item.attributes.get("mpls_enabled") is False
         ]
-        return _decision(cause, matched, "Cấu hình interface không có lệnh mpls ip.")
+        disabled_configs = [
+            item
+            for item in config_observations
+            if item.attributes.get("mpls_enabled") is False
+        ]
+        mpls_tables = [
+            item
+            for item in device_evidence
+            if item.evidence_type == EvidenceType.MPLS_INTERFACE
+        ]
+        mpls_disabled = [
+            item
+            for item in mpls_tables
+            if _mpls_interface_disabled(item, cause.interface)
+        ]
+        missing: list[EvidenceType] = []
+        if not status_observations:
+            missing.append(EvidenceType.INTERFACE_STATUS)
+        if not config_observations:
+            missing.append(EvidenceType.INTERFACE_CONFIG)
+        if not mpls_tables:
+            missing.append(EvidenceType.MPLS_INTERFACE)
+        matched = [*up_statuses, *disabled_configs, *mpls_disabled]
+        if up_statuses and disabled_configs and mpls_disabled:
+            return _decision(
+                cause,
+                matched,
+                "Interface đang up/up, thiếu lệnh mpls ip và không hoạt động trong bảng MPLS.",
+            )
+        return _decision(
+            cause,
+            [],
+            "Chưa đủ bằng chứng theo interface để xác nhận MPLS bị tắt.",
+            missing_evidence=missing,
+        )
 
     if fault == FaultType.DEFAULT_ROUTE_MISSING:
         matched = [
@@ -256,6 +301,8 @@ def _decision(
     cause: PredictedRootCause,
     matched: list[DiagnosticEvidence],
     confirmed_reason: str,
+    *,
+    missing_evidence: list[EvidenceType] | None = None,
 ) -> CausalClaimDecision:
     if matched:
         return CausalClaimDecision(
@@ -267,7 +314,37 @@ def _decision(
     return CausalClaimDecision(
         cause=cause,
         status=CausalClaimStatus.SUSPECTED,
-        reason="Chưa có evidence trực tiếp đáp ứng quy tắc xác nhận nguyên nhân.",
+        reason=confirmed_reason
+        if missing_evidence is not None
+        else "Chưa có evidence trực tiếp đáp ứng quy tắc xác nhận nguyên nhân.",
+        missing_evidence=missing_evidence or [],
+    )
+
+
+def _mpls_interface_disabled(
+    item: DiagnosticEvidence,
+    interface: str | None,
+) -> bool:
+    """Xác nhận interface vắng mặt hoặc được MPLS báo không operational."""
+
+    if interface is None:
+        return False
+    expected = _normalize_interface(interface)
+    states = item.attributes.get("interface_states", [])
+    if not isinstance(states, list):
+        return False
+    matching = [
+        state
+        for state in states
+        if isinstance(state, dict)
+        and _normalize_interface(str(state.get("interface", ""))) == expected
+    ]
+    if not matching:
+        return True
+    return any(
+        state.get("mpls_enabled") is False
+        or state.get("operational") is False
+        for state in matching
     )
 
 

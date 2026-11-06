@@ -59,6 +59,9 @@ def test_evidence_coverage_reports_missing_required_types() -> None:
 
     coverage = evaluate_evidence_coverage(["mpls_disabled"], [evidence])
 
-    assert coverage.coverage == 0.5
-    assert coverage.missing == [EvidenceType.LDP_NEIGHBOR]
+    assert coverage.coverage == 1 / 3
+    assert coverage.missing == [
+        EvidenceType.INTERFACE_CONFIG,
+        EvidenceType.INTERFACE_STATUS,
+    ]
     assert coverage.complete is False

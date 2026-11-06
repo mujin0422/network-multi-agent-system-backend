@@ -99,4 +99,11 @@ def test_protocol_interface_commands_use_protocol_parser() -> None:
 
     assert mpls[0].evidence_type == EvidenceType.MPLS_INTERFACE
     assert mpls[0].attributes["interface_count"] == 1
+    assert mpls[0].attributes["interface_states"] == [
+        {
+            "interface": "FastEthernet0/0",
+            "mpls_enabled": True,
+            "operational": True,
+        }
+    ]
     assert ospf[0].evidence_type == EvidenceType.OSPF_CONFIG
