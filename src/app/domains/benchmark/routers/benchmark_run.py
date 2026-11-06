@@ -2,10 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
-from app.domains.benchmark.schemas import BenchmarkRun, BenchmarkStartRequest
+from app.domains.benchmark.schemas import BenchmarkRun, BenchmarkRunPage, BenchmarkStartRequest
 from app.domains.benchmark.schemas.benchmark_run_summary import BenchmarkRunSummary
 from app.domains.benchmark.services import BenchmarkRunService
 from app.domains.identity.routers.dependencies import require_permission
@@ -40,6 +40,18 @@ async def get_run_summary(
 ) -> BenchmarkRunSummary:
     """TSR across full run history (not limited by the list pagination)."""
     return service.get_summary()
+
+
+@router.get("/page", response_model=BenchmarkRunPage)
+async def get_run_page(
+    service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> BenchmarkRunPage:
+    """Trả một trang benchmark run cùng tổng số bản ghi."""
+
+    return service.get_run_page(page=page, page_size=page_size)
 
 
 @router.get("/{run_id}", response_model=BenchmarkRun)

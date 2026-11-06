@@ -485,17 +485,29 @@ class BenchmarkScenarioRunner:
         return selected
 
     def _get_completed_scenario_ids_for_date(self) -> set[str]:
-        runs = self._client.request(
-            "GET",
-            "/api/v1/benchmarks/runs",
-            query={"limit": 100},
-        )
+        runs = self._get_all_runs()
         return {
             run["scenario_id"]
             for run in runs
             if self._date_of(run.get("started_at")) == self._config.run_date
             and self._is_successful_run(run)
         }
+
+    def _get_all_runs(self) -> list[dict[str, Any]]:
+        """Đọc toàn bộ lịch sử run theo trang, không bỏ sót sau bản ghi thứ 100."""
+
+        page = 1
+        runs: list[dict[str, Any]] = []
+        while True:
+            result = self._client.request(
+                "GET",
+                "/api/v1/benchmarks/runs/page",
+                query={"page": page, "page_size": 100},
+            )
+            runs.extend(result.get("items", []))
+            if page >= int(result.get("total_pages", 0)):
+                return runs
+            page += 1
 
     def _date_of(self, raw_value: object) -> date | None:
         if not isinstance(raw_value, str):
@@ -686,11 +698,7 @@ class BenchmarkScenarioRunner:
         """Khôi phục cleanup còn treo trước khi tiêm fault mới vào topology."""
 
         # Bước 1: Đọc các run gần nhất để tìm fault chưa được hoàn nguyên.
-        runs = self._client.request(
-            "GET",
-            "/api/v1/benchmarks/runs",
-            query={"limit": 100},
-        )
+        runs = self._get_all_runs()
         pending = [run for run in runs if run.get("cleanup_required")]
         # Bước 2: Cleanup lần lượt; bất kỳ lỗi nào cũng chặn phiên benchmark mới.
         for run in pending:

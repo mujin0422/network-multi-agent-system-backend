@@ -2,6 +2,7 @@
 
 import time
 from datetime import UTC, datetime
+from math import ceil
 
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import (
@@ -15,6 +16,7 @@ from app.domains.benchmark.schemas import (
     BenchmarkAction,
     BenchmarkCheck,
     BenchmarkRun,
+    BenchmarkRunPage,
     BenchmarkRunRecord,
     BenchmarkRunStatus,
     BenchmarkScenario,
@@ -58,6 +60,21 @@ class BenchmarkRunService:
     def list_runs(self, limit: int = 50) -> list[BenchmarkRun]:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_runs."""
         return [to_public_benchmark_run(run) for run in self._runs.get_all(limit)]
+
+    def get_run_page(self, *, page: int, page_size: int) -> BenchmarkRunPage:
+        """Lấy lịch sử benchmark run theo trang mà không cắt ở 100 bản ghi."""
+
+        records, total = self._runs.get_page(
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        return BenchmarkRunPage(
+            items=[to_public_benchmark_run(run) for run in records],
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=ceil(total / page_size),
+        )
 
     def get_run(self, run_id: str) -> BenchmarkRun:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_run."""

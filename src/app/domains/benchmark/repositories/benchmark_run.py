@@ -81,6 +81,33 @@ class BenchmarkRunRepository:
             ]
 
 
+    def get_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[BenchmarkRunRecord], int]:
+        """Lấy một trang benchmark run và tổng số bản ghi trong lịch sử."""
+
+        data_statement = (
+            select(BenchmarkRunModel)
+            .order_by(BenchmarkRunModel.started_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count()).select_from(BenchmarkRunModel)
+        with self._sessions() as session:
+            rows = session.scalars(data_statement).all()
+            total = session.scalar(count_statement) or 0
+            return (
+                [
+                    BenchmarkRunRecord.model_validate(row, from_attributes=True)
+                    for row in rows
+                ],
+                int(total),
+            )
+
+
     def get_by_id(self, run_id: str) -> BenchmarkRunRecord:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""
         with self._sessions() as session:
