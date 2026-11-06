@@ -46,11 +46,15 @@ class AnalystAgent:
     ) -> AnalysisResult:
         """Gọi model và yêu cầu sửa structured output theo số retry cấu hình."""
 
+        response_schema = AnalysisResult.model_json_schema()
+        # suspected_causes là kết quả của backend Causal Evidence Gate, không
+        # cho LLM tự đưa nguyên nhân vào nhánh không được evaluator chấm.
+        response_schema.get("properties", {}).pop("suspected_causes", None)
         prompt = (
             "EXECUTION OUTPUTS:\n"
             f"{json.dumps(execution_outputs, ensure_ascii=False)}\n\n"
             "RESPONSE JSON SCHEMA:\n"
-            f"{json.dumps(AnalysisResult.model_json_schema(), ensure_ascii=False)}\n\n"
+            f"{json.dumps(response_schema, ensure_ascii=False)}\n\n"
             "Chỉ trả về một JSON object hợp lệ, không dùng Markdown."
         )
         messages = [
@@ -106,7 +110,7 @@ class AnalystAgent:
                 # thêm dấu phẩy cuối dù prompt đã yêu cầu JSON nghiêm ngặt.
                 # Chỉ sửa các key thuộc schema để không thay đổi nội dung lệnh.
                 repaired_json = re.sub(
-                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|confidence|evidence_gaps|suggested_checks|commands|reason|is_anomaly|root_causes|device|interface|fault_type)(\s*:)',
+                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|confidence|evidence_gaps|suggested_checks|commands|reason|is_anomaly|root_causes|suspected_causes|device|interface|fault_type)(\s*:)',
                     r'\1"\2"\3',
                     raw_json,
                 )
@@ -123,6 +127,7 @@ class AnalystAgent:
         """
         if not isinstance(payload, dict):
             raise ValueError("Analyst submission must be a JSON object")
+        payload = {key: value for key, value in payload.items() if key != "suspected_causes"}
         required = {
             "is_anomaly",
             "root_causes",

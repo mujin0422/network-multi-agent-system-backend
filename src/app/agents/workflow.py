@@ -167,7 +167,7 @@ class NetworkAutomationWorkflow:
         if analysis is not None:
             derived_keys = [
                 playbook.key
-                for cause in analysis.root_causes
+                for cause in [*analysis.root_causes, *analysis.suspected_causes]
                 if (playbook := get_playbook(cause.fault_type)) is not None
             ]
             playbook_keys = list(dict.fromkeys([*playbook_keys, *derived_keys]))

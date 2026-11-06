@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from app.agents.analyst import AnalystAgent, AnalysisResult
 from app.agents.network import NetworkExecutionResult
 from app.diagnostics import (
+    CausalGateResult,
     DiagnosticEvidence,
     EvidenceCoverage,
     EvidenceSource,
     EvidenceType,
     PlaybookTarget,
+    build_causal_scope,
     evaluate_evidence_coverage,
+    evaluate_causal_claims,
     get_playbook,
     parse_command_output,
 )
@@ -91,6 +94,8 @@ class AnalysisOrchestrator:
                 }
             )
         fallback_error: str | None = None
+        causal_gate: CausalGateResult | None = None
+        interpretation_retry = False
         try:
             # Bước 4: Gọi Analyst; lỗi model/schema sẽ chuyển sang fallback an toàn.
             analysis = await self._analyst.analyze(analysis_inputs)
@@ -98,7 +103,83 @@ class AnalysisOrchestrator:
             fallback_error = str(exc)
             analysis = self._build_fallback_analysis(analysis_inputs)
 
-        # Bước 5: Lưu structured diagnosis trước khi evaluator đọc kết quả.
+        # Bước 5: Khi đã đủ loại evidence nhưng Analyst không tạo prediction,
+        # yêu cầu diễn giải lại đúng một lần thay vì finalize với false negative.
+        if (
+            fallback_error is None
+            and evidence_coverage is not None
+            and evidence_coverage.complete
+            and analysis.is_anomaly is not False
+            and not analysis.root_causes
+        ):
+            interpretation_retry = True
+            retry_context = {
+                "context_type": "CAUSAL INTERPRETATION RETRY",
+                "instruction": (
+                    "Evidence playbook đã đầy đủ nhưng lần phân tích trước không có "
+                    "root_causes. Hãy đối chiếu structured_evidence, đúng thiết bị/"
+                    "interface trong yêu cầu và tạo root cause tối thiểu nếu evidence "
+                    "trực tiếp chứng minh; nếu vẫn chưa đủ thì giữ [] và nêu chính xác "
+                    "dữ kiện còn thiếu. Không thêm interface bất thường ngoài phạm vi."
+                ),
+                "previous_analysis": analysis.model_dump(mode="json"),
+            }
+            try:
+                retried = await self._analyst.analyze([*analysis_inputs, retry_context])
+                if retried.root_causes:
+                    analysis = retried
+            except Exception:
+                # Giữ kết quả đầu tiên để workflow vẫn dừng an toàn và có audit trail.
+                pass
+
+        # Bước 6: Chỉ giữ root cause có evidence trực tiếp; giả thuyết chưa đủ
+        # bằng chứng vẫn được lưu để điều tra tiếp nhưng evaluator không chấm nó.
+        if (
+            fallback_error is None
+            and task.task_type in {TaskType.DIAGNOSIS, TaskType.COMPOSITE}
+            and analysis.root_causes
+        ):
+            hostnames = {
+                device.id: device.hostname
+                for device in self._device_service.list_available_devices()
+            }
+            parsed_evidence = self._parse_evidence(execution_results, hostnames)
+            topology_neighbors: dict[str, list[dict[str, str]]] = {}
+            if self._gns3_provider is not None:
+                try:
+                    topology_neighbors = self._gns3_provider.list_topology_neighbors()
+                except Exception:
+                    topology_neighbors = {}
+            scope = build_causal_scope(
+                task.input_message,
+                list(hostnames.values()),
+                topology_neighbors,
+            )
+            causal_gate = evaluate_causal_claims(
+                analysis.root_causes,
+                parsed_evidence,
+                scope,
+            )
+            rejected_reasons = [
+                f"{item.cause.device}/{item.cause.interface or '-'} "
+                f"{item.cause.fault_type.value}: {item.reason}"
+                for item in causal_gate.decisions
+                if item.status.value == "SUSPECTED"
+            ]
+            analysis = analysis.model_copy(
+                update={
+                    "root_causes": causal_gate.confirmed,
+                    "suspected_causes": causal_gate.suspected,
+                    "requires_more_data": (
+                        analysis.requires_more_data or bool(causal_gate.suspected)
+                    ),
+                    "evidence_gaps": list(
+                        dict.fromkeys([*analysis.evidence_gaps, *rejected_reasons])
+                    )[:4],
+                }
+            )
+
+        # Bước 7: Lưu structured diagnosis trước khi evaluator đọc kết quả.
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.ANALYST,
@@ -114,10 +195,20 @@ class AnalysisOrchestrator:
                     else None
                 ),
                 "used_fallback": fallback_error is not None,
+                "causal_interpretation_retry": interpretation_retry,
+                "causal_evidence_gate": (
+                    causal_gate.model_dump(mode="json")
+                    if causal_gate is not None
+                    else None
+                ),
                 "diagnosis_submission": {
                     "is_anomaly": analysis.is_anomaly,
                     "root_causes": [
                         cause.model_dump(mode="json") for cause in analysis.root_causes
+                    ],
+                    "suspected_causes": [
+                        cause.model_dump(mode="json")
+                        for cause in analysis.suspected_causes
                     ],
                 },
                 **({"fallback_reason": fallback_error} if fallback_error else {}),
@@ -463,9 +554,14 @@ class AnalysisOrchestrator:
         """Định dạng AnalysisResult thành nội dung tiếng Việt dễ đọc."""
 
         sections = [f"Tóm tắt\n{analysis.summary.strip()}"]
+        cause_title = (
+            "Giả thuyết chưa được evidence gate xác nhận"
+            if analysis.suspected_causes and not analysis.root_causes
+            else "Nguyên nhân có khả năng"
+        )
         for title, values in (
             ("Phát hiện chính", analysis.findings),
-            ("Nguyên nhân có khả năng", analysis.likely_causes),
+            (cause_title, analysis.likely_causes),
             ("Hành động đề xuất", analysis.recommendations),
         ):
             if values:

@@ -10,8 +10,8 @@ from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
 from app.agents.network import NetworkExecutionResult, NetworkExecutionStatus
 from app.agents.orchestrator import AnalysisOrchestrator
-from app.diagnostics import EvidenceType
-from app.domains.execution.schemas import AccessMode
+from app.diagnostics import EvidenceCoverage, EvidenceType
+from app.domains.execution.schemas import AccessMode, TaskStatus, TaskType
 from app.tools import CommandResult
 
 
@@ -37,6 +37,25 @@ def test_analyst_prompt_interprets_bad_mask_and_avoids_rejected_command() -> Non
     assert "Bad mask /N for address X" in ANALYST_SYSTEM_PROMPT
     assert "không gọi netmask hợp lệ" in ANALYST_SYSTEM_PROMPT
     assert "Không đề xuất chạy lại nguyên văn command" in ANALYST_SYSTEM_PROMPT
+
+
+def test_analyst_schema_does_not_allow_model_owned_suspected_causes() -> None:
+    model = StubChatModel(
+        [
+            '{"summary":"Đã phân tích.","findings":[],"likely_causes":[],'
+            '"recommendations":[],"requires_more_data":false,"confidence":1,'
+            '"evidence_gaps":[],"suggested_checks":[],"is_anomaly":true,'
+            '"root_causes":[],"suspected_causes":[{"device":"P1",'
+            '"interface":"FastEthernet0/0","fault_type":"link_down"}]}'
+        ]
+    )
+
+    result = asyncio.run(AnalystAgent(model).analyze([{"status": "SUCCESS"}]))
+
+    assert result.suspected_causes == []
+    assert "suspected_causes" not in model.calls[0][-1].content.split(
+        "RESPONSE JSON SCHEMA:", 1
+    )[1].split("Chỉ trả về", 1)[0]
 
 
 def test_analyst_recreates_truncated_json_on_retry() -> None:
@@ -150,6 +169,113 @@ def test_analysis_input_replaces_internal_device_id_with_hostname() -> None:
     assert payload[0]["structured_evidence"][0]["resource_id"] == "node/p1"
     assert payload[0]["error_message"] is None
     assert "devc-" not in str(payload)
+
+
+def test_complete_evidence_retries_empty_diagnosis_and_applies_scope_gate() -> None:
+    class SequenceAnalyst:
+        def __init__(self):
+            self.calls = 0
+
+        async def analyze(self, _inputs):
+            self.calls += 1
+            if self.calls == 1:
+                return AnalysisResult(
+                    summary="Có bất thường nhưng chưa kết luận.",
+                    is_anomaly=True,
+                    confidence=0.7,
+                )
+            return AnalysisResult(
+                summary="P1 FastEthernet0/0 bị shutdown.",
+                is_anomaly=True,
+                confidence=0.95,
+                root_causes=[
+                    {
+                        "device": "P1",
+                        "interface": "FastEthernet0/0",
+                        "fault_type": "link_down",
+                    },
+                    {
+                        "device": "P2",
+                        "interface": "FastEthernet3/0",
+                        "fault_type": "link_down",
+                    },
+                ],
+            )
+
+    class ExecutionService:
+        def __init__(self):
+            self.events = []
+
+        def get_task(self, _task_id):
+            return SimpleNamespace(task_status=TaskStatus.SUCCESS)
+
+        def record_activity(self, *args, **kwargs):
+            self.events.append((args, kwargs))
+
+    analyst = SequenceAnalyst()
+    execution = ExecutionService()
+    orchestrator = AnalysisOrchestrator(
+        analyst=analyst,
+        execution_service=execution,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+    )
+    task = SimpleNamespace(
+        id="task-1",
+        task_type=TaskType.DIAGNOSIS,
+        input_message="Chẩn đoán P1 FastEthernet0/0 bị mất kết nối",
+    )
+    results = [
+        NetworkExecutionResult(
+            operation_id="oper-1",
+            operation_device_id="opdv-1",
+            device_id="devc-221026-00000001",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show interfaces FastEthernet0/0",
+                    output=(
+                        "FastEthernet0/0 is administratively down, "
+                        "line protocol is down"
+                    ),
+                )
+            ],
+        ),
+        NetworkExecutionResult(
+            operation_id="oper-2",
+            operation_device_id="opdv-2",
+            device_id="devc-221026-00000002",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show interfaces FastEthernet3/0",
+                    output=(
+                        "FastEthernet3/0 is administratively down, "
+                        "line protocol is down"
+                    ),
+                )
+            ],
+        ),
+    ]
+    coverage = EvidenceCoverage(
+        applicable=True,
+        playbook_keys=["interface_link_down"],
+        required=[EvidenceType.INTERFACE_STATUS],
+        observed=[EvidenceType.INTERFACE_STATUS],
+        missing=[],
+        coverage=1,
+    )
+
+    result = asyncio.run(orchestrator.analyze(task, results, coverage))
+
+    assert analyst.calls == 2
+    assert result is not None
+    assert [cause.device for cause in result.root_causes] == ["P1"]
+    assert [cause.device for cause in result.suspected_causes] == ["P2"]
+    completed_event = execution.events[-1][1]["event_data"]
+    assert completed_event["causal_interpretation_retry"] is True
 
 
 def test_investigation_plan_adds_missing_playbook_command_without_duplicates() -> None:
