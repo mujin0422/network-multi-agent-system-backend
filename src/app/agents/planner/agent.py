@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from app.agents.planner.prompts import PLANNER_SYSTEM_PROMPT
 from app.diagnostics import select_playbooks
-from app.domains.execution.schemas import ExecutionPlanCreate
+from app.domains.execution.schemas import ExecutionPlanCreate, TaskType
 from app.domains.inventory.schemas import Device
 from app.tools.network.commands import normalize_config_commands
 
@@ -82,7 +82,12 @@ class PlannerAgent:
                 for retry_number in range(self.max_validation_retries + 1):
                     result = await self._planner.ainvoke(messages)
                     try:
-                        plan = self._parse_plan(result)
+                        plan = self._parse_plan(
+                            result,
+                            default_task_type=(
+                                TaskType.DIAGNOSIS if diagnostic_playbooks else None
+                            ),
+                        )
                         self._validate_interface_commands(
                             plan,
                             {
@@ -133,12 +138,19 @@ class PlannerAgent:
         )
 
     @staticmethod
-    def _parse_plan(result: Any) -> ExecutionPlanCreate:
+    def _parse_plan(
+        result: Any,
+        default_task_type: TaskType | None = None,
+    ) -> ExecutionPlanCreate:
         """Bóc JSON từ các dạng phản hồi phổ biến rồi kiểm tra bằng Pydantic."""
 
         try:
             content = getattr(result, "content", result)
             payload = PlannerAgent._extract_json_payload(content)
+            payload = PlannerAgent._wrap_single_operation(
+                payload,
+                default_task_type=default_task_type,
+            )
             plan = ExecutionPlanCreate.model_validate(payload)
             return PlannerAgent._normalize_write_commands(plan)
         except (ValidationError, ValueError) as exc:
@@ -147,11 +159,38 @@ class PlannerAgent:
             ) from exc
 
     @staticmethod
+    def _wrap_single_operation(
+        payload: dict[str, Any],
+        *,
+        default_task_type: TaskType | None,
+    ) -> dict[str, Any]:
+        """Bọc operation bị NIM bỏ lớp ngoài mà không tự tạo command hay device."""
+
+        if "task_type" in payload or "operations" in payload:
+            return payload
+        operation_fields = {
+            "operation_intent",
+            "operation_parameters",
+            "devices",
+            "dependencies",
+        }
+        if default_task_type is None or not operation_fields.issubset(payload):
+            return payload
+        return {
+            "task_type": default_task_type.value,
+            "operations": [payload],
+        }
+
+    @staticmethod
     def _extract_json_payload(content: Any) -> dict[str, Any]:
         """Chuẩn hóa content block và bóc JSON object mà không sửa nghĩa kế hoạch."""
 
         if isinstance(content, dict):
-            if "task_type" in content or "operations" in content:
+            if (
+                "task_type" in content
+                or "operations" in content
+                or "operation_intent" in content
+            ):
                 return content
             text = content.get("text")
             if isinstance(text, str):

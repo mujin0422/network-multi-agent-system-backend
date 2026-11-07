@@ -176,6 +176,63 @@ def test_workflow_collects_more_evidence_before_finalizing() -> None:
     assert state["analysis"].confidence == 0.9
 
 
+def test_workflow_finalizes_confirmed_root_cause_despite_auxiliary_gaps() -> None:
+    calls = []
+
+    class ConfirmedAnalysis(StubAnalysis):
+        async def analyze(self, task, results, evidence_coverage=None):
+            self.calls.append("analyze")
+            return AnalysisResult(
+                summary="Đã xác nhận sai OSPF area.",
+                is_anomaly=True,
+                confidence=0.9,
+                root_causes=[
+                    {
+                        "device": "P3",
+                        "interface": "FastEthernet0/0",
+                        "fault_type": "ospf_area_mismatch",
+                    }
+                ],
+                requires_more_data=True,
+                evidence_gaps=["Thiếu dữ liệu phụ không ảnh hưởng RCA."],
+                suggested_checks=[
+                    {
+                        "device": "P1",
+                        "commands": ["show ip ospf neighbor"],
+                        "reason": "Bổ sung ngữ cảnh",
+                    }
+                ],
+            )
+
+        def evaluate_evidence_coverage(self, results, playbook_keys):
+            return EvidenceCoverage(
+                applicable=True,
+                playbook_keys=["ospf_area_mismatch"],
+                required=[EvidenceType.OSPF_CONFIG],
+                observed=[EvidenceType.OSPF_CONFIG],
+                missing=[],
+                coverage=1.0,
+            )
+
+    workflow = NetworkAutomationWorkflow(
+        StubGNS3Provider(calls),
+        StubPlanning(calls),
+        StubExecution(calls),
+        ConfirmedAnalysis(calls),
+        max_investigation_rounds=2,
+    )
+
+    state = asyncio.run(
+        workflow.run_message(
+            "conversation",
+            SimpleNamespace(message="Chẩn đoán OSPF area mismatch trên P3"),
+        )
+    )
+
+    assert calls == ["check_gns3", "plan", "execute", "analyze"]
+    assert state["investigation_round"] == 0
+
+
 def test_workflow_blocks_finalize_until_playbook_evidence_is_complete() -> None:
     calls = []
 
@@ -188,21 +245,27 @@ def test_workflow_blocks_finalize_until_playbook_evidence_is_complete() -> None:
         def evaluate_evidence_coverage(self, results, playbook_keys):
             self.coverage_checks += 1
             missing = (
-                [EvidenceType.LDP_NEIGHBOR]
-                if self.coverage_checks <= 2
-                else []
+                [EvidenceType.INTERFACE_CONFIG] if self.coverage_checks <= 2 else []
             )
             return EvidenceCoverage(
                 applicable=True,
                 playbook_keys=["mpls_disabled"],
-                required=[EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR],
+                required=[
+                    EvidenceType.INTERFACE_STATUS,
+                    EvidenceType.INTERFACE_CONFIG,
+                    EvidenceType.MPLS_INTERFACE,
+                ],
                 observed=(
-                    [EvidenceType.MPLS_INTERFACE]
+                    [EvidenceType.INTERFACE_STATUS, EvidenceType.MPLS_INTERFACE]
                     if missing
-                    else [EvidenceType.MPLS_INTERFACE, EvidenceType.LDP_NEIGHBOR]
+                    else [
+                        EvidenceType.INTERFACE_STATUS,
+                        EvidenceType.INTERFACE_CONFIG,
+                        EvidenceType.MPLS_INTERFACE,
+                    ]
                 ),
                 missing=missing,
-                coverage=0.5 if missing else 1.0,
+                coverage=2 / 3 if missing else 1.0,
             )
 
         def record_evidence_gate(

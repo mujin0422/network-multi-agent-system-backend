@@ -327,6 +327,48 @@ def test_planner_parses_common_nvidia_json_response_shapes(content) -> None:
     assert plan.operations[0].devices[0].device_id == "devc-1"
 
 
+def test_planner_wraps_single_operation_for_matched_diagnostic_playbook() -> None:
+    content = {
+        "operation_intent": "GET_OSPF_EVIDENCE",
+        "operation_parameters": {"command": "show ip ospf interface"},
+        "devices": [
+            {
+                "device_id": "devc-1",
+                "device_role": "SOURCE",
+                "access_mode": "READ",
+            }
+        ],
+        "dependencies": [],
+    }
+
+    plan = PlannerAgent._parse_plan(
+        content,
+        default_task_type=TaskType.DIAGNOSIS,
+    )
+
+    assert plan.task_type == TaskType.DIAGNOSIS
+    assert len(plan.operations) == 1
+    assert plan.operations[0].operation_intent == "GET_OSPF_EVIDENCE"
+
+
+def test_planner_does_not_guess_task_type_for_unscoped_single_operation() -> None:
+    content = {
+        "operation_intent": "GET_ROUTE",
+        "operation_parameters": {"command": "show ip route"},
+        "devices": [
+            {
+                "device_id": "devc-1",
+                "device_role": "SOURCE",
+                "access_mode": "READ",
+            }
+        ],
+        "dependencies": [],
+    }
+
+    with pytest.raises(ValueError, match="ExecutionPlanCreate"):
+        PlannerAgent._parse_plan(content)
+
+
 def test_planner_correction_prompt_repeats_required_json_shape() -> None:
     prompt = PlannerAgent._build_correction_prompt(
         "{invalid}",

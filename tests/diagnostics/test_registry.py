@@ -36,6 +36,17 @@ def test_select_playbooks_matches_ospf_area_without_unrelated_playbook() -> None
     assert "mpls_disabled" not in keys
 
 
+def test_select_playbooks_keeps_both_ospf_hypotheses_for_generic_adjacency() -> None:
+    selected = select_playbooks(
+        "Chẩn đoán nguyên nhân neighbor OSPF giữa P2 và backbone không hình thành"
+    )
+
+    assert {playbook.key for playbook in selected} == {
+        "ospf_network_missing",
+        "ospf_area_mismatch",
+    }
+
+
 def test_get_playbook_accepts_key_and_fault_type() -> None:
     by_key = get_playbook("wrong_subnet_mask")
     by_fault = get_playbook(FaultType.WRONG_SUBNET_MASK)
@@ -59,6 +70,9 @@ def test_evidence_coverage_reports_missing_required_types() -> None:
 
     coverage = evaluate_evidence_coverage(["mpls_disabled"], [evidence])
 
-    assert coverage.coverage == 0.5
-    assert coverage.missing == [EvidenceType.LDP_NEIGHBOR]
+    assert coverage.coverage == 1 / 3
+    assert coverage.missing == [
+        EvidenceType.INTERFACE_CONFIG,
+        EvidenceType.INTERFACE_STATUS,
+    ]
     assert coverage.complete is False

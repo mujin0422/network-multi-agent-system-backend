@@ -10,6 +10,7 @@ from app.domains.execution.schemas import (
     ApprovalStatus,
     DependencyType,
     DeviceRole,
+    ExecutionPlanCreate,
     Operation,
     OperationDeviceApproval,
     OperationDependency,
@@ -59,6 +60,32 @@ class StubExecutionService:
             update={"operations": list(self.operations.values())}
         )
 
+    def append_investigation_plan(self, task_id, plan):
+        """Tạo operation READ mới để mô phỏng service thật."""
+        assert self.task is not None and self.task.id == task_id
+        next_order = max(item.display_order for item in self.operations.values()) + 1
+        for offset, planned in enumerate(plan.operations):
+            operation = Operation(
+                id=f"oper-investigation-{offset + 1}",
+                task_id=task_id,
+                operation_intent=planned.operation_intent,
+                display_order=next_order + offset,
+                operation_status=OperationStatus.PENDING,
+                operation_parameters=planned.operation_parameters,
+                created_at=datetime.now(UTC),
+            )
+            self.operations[operation.id] = operation
+            planned_device = planned.devices[0]
+            self.mappings[operation.id] = TaskOperationDevice(
+                id=f"map-{operation.id}",
+                operation_id=operation.id,
+                device_id=planned_device.device_id,
+                operation_device_status=OperationDeviceStatus.PENDING,
+                device_role=planned_device.device_role,
+                access_mode=planned_device.access_mode,
+            )
+        return self.get_task(task_id)
+
     def list_operation_devices(self, operation_id: str) -> list:
         return [self.mappings[operation_id]]
 
@@ -87,7 +114,9 @@ class StubExecutionService:
     def save_device_action_logs(self, logs) -> None:
         self.logs.extend(logs)
 
-    def record_activity(self, task_id, actor_type, event_type, event_status=None, **kwargs):
+    def record_activity(
+        self, task_id, actor_type, event_type, event_status=None, **kwargs
+    ):
         self.activities.append(
             {
                 "task_id": task_id,
@@ -216,6 +245,51 @@ def test_execute_task_runs_operations_by_display_order() -> None:
     )
     assert len(service.executions) == 6  # RUNNING và SUCCESS cho mỗi mapping.
     assert len(service.logs) == 3
+
+
+def test_execute_investigation_runs_new_operations_after_task_is_terminal() -> None:
+    task = build_task().model_copy(
+        update={
+            "task_status": TaskStatus.SUCCESS,
+            "operations": [
+                build_task()
+                .operations[0]
+                .model_copy(update={"operation_status": OperationStatus.SUCCESS})
+            ],
+        }
+    )
+    service = StubExecutionService(task.operations)
+    service.task = task
+    agent = StubNetworkAgent()
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "DIAGNOSIS",
+            "operations": [
+                {
+                    "operation_intent": "COLLECT_OSPF_EVIDENCE",
+                    "operation_parameters": {"command": "show ip ospf interface"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "CONTEXT",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    results = asyncio.run(
+        ExecutionOrchestrator(service, agent).execute_investigation(task.id, plan)
+    )
+
+    assert len(results) == 1
+    assert agent.calls == ["oper-investigation-1"]
+    assert service.operations["oper-investigation-1"].operation_status == (
+        OperationStatus.SUCCESS
+    )
 
 
 def test_execute_task_stops_after_failed_operation() -> None:

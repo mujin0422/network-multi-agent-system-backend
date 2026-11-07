@@ -47,14 +47,19 @@ class ExecutionOrchestrator:
         # A late approval callback must not revive a Task already finalized by
         # the approval expiry worker.
         if task.task_status in {
-            TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
-            TaskStatus.FAILED, TaskStatus.REJECTED,
+            TaskStatus.SUCCESS,
+            TaskStatus.PARTIAL_SUCCESS,
+            TaskStatus.FAILED,
+            TaskStatus.REJECTED,
         }:
             return []
         if task.task_status == TaskStatus.RUNNING and (
-            self._execution_service.get_task(task.id).task_status in {
-                TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
-                TaskStatus.FAILED, TaskStatus.REJECTED,
+            self._execution_service.get_task(task.id).task_status
+            in {
+                TaskStatus.SUCCESS,
+                TaskStatus.PARTIAL_SUCCESS,
+                TaskStatus.FAILED,
+                TaskStatus.REJECTED,
             }
         ):
             return []
@@ -80,9 +85,12 @@ class ExecutionOrchestrator:
                 key=lambda item: item.display_order,
             ):
                 if task.task_status == TaskStatus.RUNNING and (
-                    self._execution_service.get_task(task.id).task_status in {
-                        TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
-                        TaskStatus.FAILED, TaskStatus.REJECTED,
+                    self._execution_service.get_task(task.id).task_status
+                    in {
+                        TaskStatus.SUCCESS,
+                        TaskStatus.PARTIAL_SUCCESS,
+                        TaskStatus.FAILED,
+                        TaskStatus.REJECTED,
                     }
                 ):
                     return results
@@ -110,9 +118,12 @@ class ExecutionOrchestrator:
             raise
 
         if task.task_status == TaskStatus.RUNNING and (
-            self._execution_service.get_task(task.id).task_status in {
-                TaskStatus.SUCCESS, TaskStatus.PARTIAL_SUCCESS,
-                TaskStatus.FAILED, TaskStatus.REJECTED,
+            self._execution_service.get_task(task.id).task_status
+            in {
+                TaskStatus.SUCCESS,
+                TaskStatus.PARTIAL_SUCCESS,
+                TaskStatus.FAILED,
+                TaskStatus.REJECTED,
             }
         ):
             return results
@@ -127,8 +138,35 @@ class ExecutionOrchestrator:
     ) -> list[NetworkExecutionResult]:
         """Nối và thực thi một lượt thu thập evidence READ-only."""
 
+        existing_ids = {
+            operation.id
+            for operation in self._execution_service.get_task(task_id).operations
+        }
         task = self._execution_service.append_investigation_plan(task_id, plan)
-        return await self.execute_task(task)
+        appended = sorted(
+            (
+                operation
+                for operation in task.operations
+                if operation.id not in existing_ids
+            ),
+            key=lambda operation: operation.display_order,
+        )
+        if not appended:
+            return []
+
+        # Task ban đầu đã SUCCESS trước node Analyst. Không gọi execute_task ở
+        # đây vì terminal guard dành cho callback approval sẽ chặn toàn bộ
+        # operation vừa nối. Investigation chỉ chạy đúng các READ operation mới.
+        self._execution_service.record_activity(
+            task_id,
+            ActivityActorType.ORCHESTRATOR,
+            ActivityEventType.EXECUTION_STARTED,
+            event_data={"investigation": True, "operation_count": len(appended)},
+        )
+        results: list[NetworkExecutionResult] = []
+        for operation in appended:
+            results.extend(await self.execute_network_operation(operation.id))
+        return results
 
     def load_task_for_operation_device(
         self,
@@ -155,9 +193,7 @@ class ExecutionOrchestrator:
 
         operation_started_at = operation.started_at or datetime.now(UTC)
         # Bước 2: Chuẩn hóa command và lọc mapping theo quyền/approval.
-        commands = self._network_agent.extract_commands(
-            operation.operation_parameters
-        )
+        commands = self._network_agent.extract_commands(operation.operation_parameters)
         executable_mappings = [
             mapping
             for mapping in mappings

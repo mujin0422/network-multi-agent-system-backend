@@ -10,7 +10,15 @@ from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
 from app.agents.network import NetworkExecutionResult, NetworkExecutionStatus
 from app.agents.orchestrator import AnalysisOrchestrator
-from app.diagnostics import EvidenceCoverage, EvidenceType
+from app.diagnostics import (
+    CausalClaimDecision,
+    CausalGateResult,
+    CausalReadCheck,
+    EvidenceCoverage,
+    EvidenceType,
+    build_causal_scope,
+)
+from app.domains.evaluation.schemas import PredictedRootCause
 from app.domains.execution.schemas import AccessMode, TaskStatus, TaskType
 from app.tools import CommandResult
 
@@ -278,7 +286,190 @@ def test_complete_evidence_retries_empty_diagnosis_and_applies_scope_gate() -> N
     assert completed_event["causal_interpretation_retry"] is True
 
 
-def test_investigation_plan_adds_missing_playbook_command_without_duplicates() -> None:
+def test_complete_mpls_evidence_recovers_candidate_when_analyst_reports_healthy() -> None:
+    class HealthyAnalyst:
+        async def analyze(self, _inputs):
+            return AnalysisResult(
+                summary="Không phát hiện bất thường.",
+                is_anomaly=False,
+                confidence=0.9,
+            )
+
+    class ExecutionService:
+        def __init__(self):
+            self.events = []
+
+        def get_task(self, _task_id):
+            return SimpleNamespace(task_status=TaskStatus.SUCCESS)
+
+        def record_activity(self, *args, **kwargs):
+            self.events.append((args, kwargs))
+
+    execution = ExecutionService()
+    orchestrator = AnalysisOrchestrator(
+        analyst=HealthyAnalyst(),
+        execution_service=execution,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+    )
+    task = SimpleNamespace(
+        id="task-mpls",
+        task_type=TaskType.DIAGNOSIS,
+        input_message=(
+            "Chẩn đoán vì sao MPLS không hoạt động trên FastEthernet1/0 của P1"
+        ),
+    )
+    results = [
+        NetworkExecutionResult(
+            operation_id="oper-mpls",
+            operation_device_id="opdv-mpls",
+            device_id="devc-221026-00000001",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show interfaces FastEthernet1/0",
+                    output="FastEthernet1/0 is up, line protocol is up",
+                ),
+                CommandResult(
+                    command="show running-config interface FastEthernet1/0",
+                    output=(
+                        "interface FastEthernet1/0\n"
+                        " ip address 10.0.20.1 255.255.255.0"
+                    ),
+                ),
+                CommandResult(
+                    command="show mpls interfaces",
+                    output=(
+                        "Interface IP Tunnel BGP Static Operational\n"
+                        "FastEthernet0/0 Yes (ldp) No No No Yes"
+                    ),
+                ),
+            ],
+        )
+    ]
+    coverage = EvidenceCoverage(
+        applicable=True,
+        playbook_keys=["mpls_disabled"],
+        required=[
+            EvidenceType.INTERFACE_STATUS,
+            EvidenceType.INTERFACE_CONFIG,
+            EvidenceType.MPLS_INTERFACE,
+        ],
+        observed=[
+            EvidenceType.INTERFACE_STATUS,
+            EvidenceType.INTERFACE_CONFIG,
+            EvidenceType.MPLS_INTERFACE,
+        ],
+        missing=[],
+        coverage=1,
+    )
+
+    result = asyncio.run(orchestrator.analyze(task, results, coverage))
+
+    assert result is not None
+    assert result.is_anomaly is True
+    assert len(result.root_causes) == 1
+    assert result.root_causes[0].device == "p1"
+    assert result.root_causes[0].interface == "fastethernet1/0"
+    assert result.root_causes[0].fault_type == "mpls_disabled"
+    completed_event = execution.events[-1][1]["event_data"]
+    assert completed_event["causal_candidate_source"] == "PLAYBOOK_SCOPE"
+
+
+def test_complete_peer_ospf_evidence_recovers_area_mismatch_candidate() -> None:
+    class HealthyAnalyst:
+        async def analyze(self, _inputs):
+            return AnalysisResult(
+                summary="Không phát hiện bất thường.",
+                is_anomaly=False,
+                confidence=0.9,
+            )
+
+    class ExecutionService:
+        def __init__(self):
+            self.events = []
+
+        def get_task(self, _task_id):
+            return SimpleNamespace(task_status=TaskStatus.SUCCESS)
+
+        def record_activity(self, *args, **kwargs):
+            self.events.append((args, kwargs))
+
+    class TopologyProvider:
+        def list_topology_neighbors(self):
+            return {
+                "P2": [
+                    {
+                        "device": "P1",
+                        "local_interface": "FastEthernet0/0",
+                        "peer_interface": "FastEthernet0/0",
+                    }
+                ]
+            }
+
+    execution = ExecutionService()
+    orchestrator = AnalysisOrchestrator(
+        analyst=HealthyAnalyst(),
+        execution_service=execution,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+        gns3_provider=TopologyProvider(),
+    )
+    task = SimpleNamespace(
+        id="task-ospf",
+        task_type=TaskType.DIAGNOSIS,
+        input_message="Chẩn đoán OSPF area trên P2 FastEthernet0/0",
+    )
+
+    def ospf_result(device_id: str, address: str, area: int):
+        return NetworkExecutionResult(
+            operation_id=f"oper-{device_id}",
+            operation_device_id=f"opdv-{device_id}",
+            device_id=device_id,
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.SUCCESS,
+            results=[
+                CommandResult(
+                    command="show ip ospf interface FastEthernet0/0",
+                    output=(
+                        "FastEthernet0/0 is up, line protocol is up\n"
+                        f" Internet Address {address}/24, Area {area}\n"
+                        " Process ID 1, Router ID 1.1.1.1, "
+                        "Network Type BROADCAST, Cost: 1"
+                    ),
+                )
+            ],
+        )
+
+    coverage = EvidenceCoverage(
+        applicable=True,
+        playbook_keys=["ospf_area_mismatch"],
+        required=[EvidenceType.OSPF_CONFIG],
+        observed=[EvidenceType.OSPF_CONFIG],
+        missing=[],
+        coverage=1,
+    )
+    result = asyncio.run(
+        orchestrator.analyze(
+            task,
+            [
+                ospf_result("devc-221026-00000002", "10.0.10.2", 1),
+                ospf_result("devc-221026-00000001", "10.0.10.1", 0),
+            ],
+            coverage,
+        )
+    )
+
+    assert result is not None
+    assert result.is_anomaly is True
+    assert len(result.root_causes) == 1
+    assert result.root_causes[0].fault_type == "ospf_area_mismatch"
+    completed_event = execution.events[-1][1]["event_data"]
+    assert completed_event["causal_candidate_source"] == "PLAYBOOK_SCOPE"
+
+
+def test_investigation_plan_adds_missing_mpls_config_command() -> None:
     orchestrator = AnalysisOrchestrator(
         analyst=None,
         execution_service=None,
@@ -294,6 +485,10 @@ def test_investigation_plan_adds_missing_playbook_command_without_duplicates() -
             status=NetworkExecutionStatus.SUCCESS,
             results=[
                 CommandResult(
+                    command="show interfaces FastEthernet0/0",
+                    output="FastEthernet0/0 is up, line protocol is up",
+                ),
+                CommandResult(
                     command="show mpls interfaces",
                     output="FastEthernet0/0 Yes (ldp) Operational",
                 )
@@ -302,17 +497,98 @@ def test_investigation_plan_adds_missing_playbook_command_without_duplicates() -
     ]
 
     plan = orchestrator.build_investigation_plan(
-        AnalysisResult(summary="Thiếu LDP evidence."),
+        AnalysisResult(summary="Thiếu cấu hình interface."),
         playbook_keys=["mpls_disabled"],
-        missing_evidence=[EvidenceType.LDP_NEIGHBOR],
+        missing_evidence=[EvidenceType.INTERFACE_CONFIG],
         execution_results=results,
     )
 
     assert plan is not None
     assert len(plan.operations) == 1
     assert plan.operations[0].operation_parameters["commands"] == [
-        "show mpls ldp neighbor"
+        "show running-config interface FastEthernet0/0"
     ]
+
+
+def test_playbook_candidate_supports_device_wide_ospf_area_scope() -> None:
+    scope = build_causal_scope(
+        "Chẩn đoán neighbor OSPF trên P2",
+        ["P1", "P2"],
+    )
+
+    candidates = AnalysisOrchestrator._playbook_causal_candidates(
+        ["ospf_area_mismatch"],
+        scope,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].device == "p2"
+    assert candidates[0].interface is None
+    assert candidates[0].fault_type == "ospf_area_mismatch"
+
+
+def test_causal_gate_builds_targeted_mpls_check_for_missing_evidence() -> None:
+    cause = PredictedRootCause(
+        device="P1",
+        interface="FastEthernet1/0",
+        fault_type="mpls_disabled",
+    )
+    gate = CausalGateResult(
+        suspected=[cause],
+        decisions=[
+            CausalClaimDecision(
+                cause=cause,
+                status="SUSPECTED",
+                reason="Thiếu evidence theo interface.",
+                missing_evidence=[
+                    EvidenceType.INTERFACE_CONFIG,
+                    EvidenceType.MPLS_INTERFACE,
+                ],
+            )
+        ],
+    )
+
+    checks = AnalysisOrchestrator._causal_investigation_checks(gate)
+
+    assert len(checks) == 1
+    assert checks[0].device == "P1"
+    assert checks[0].commands == [
+        "show running-config interface FastEthernet1/0",
+        "show mpls interfaces",
+        "show mpls ldp discovery",
+    ]
+
+
+def test_causal_gate_preserves_topology_peer_check() -> None:
+    cause = PredictedRootCause(
+        device="P3",
+        interface="FastEthernet0/0",
+        fault_type="ospf_area_mismatch",
+    )
+    gate = CausalGateResult(
+        suspected=[cause],
+        decisions=[
+            CausalClaimDecision(
+                cause=cause,
+                status="SUSPECTED",
+                reason="Thiếu OSPF evidence của peer.",
+                missing_evidence=[EvidenceType.OSPF_CONFIG],
+                recommended_checks=[
+                    CausalReadCheck(
+                        device="P4",
+                        commands=["show ip ospf interface FastEthernet0/0"],
+                        reason="Thu thập area của peer interface.",
+                    )
+                ],
+            )
+        ],
+    )
+
+    checks = AnalysisOrchestrator._causal_investigation_checks(gate)
+
+    assert len(checks) == 1
+    assert checks[0].device == "P4"
+    assert checks[0].commands == ["show ip ospf interface FastEthernet0/0"]
 
 
 def test_analysis_fallback_uses_device_names_without_guessing_root_cause() -> None:

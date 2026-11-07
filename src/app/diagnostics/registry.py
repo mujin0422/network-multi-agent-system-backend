@@ -25,10 +25,26 @@ def get_playbook(value: str | FaultType) -> DiagnosticPlaybook | None:
 
 
 def select_playbooks(user_message: str) -> tuple[DiagnosticPlaybook, ...]:
-    """Chọn playbook bằng keyword, không tự tạo loại sự cố mới."""
+    """Chọn playbook theo dấu hiệu; triệu chứng OSPF chung phải xét nhiều giả thuyết."""
     normalized = user_message.casefold()
-    return tuple(
+    selected = [
         item
         for item in ALL_PLAYBOOKS
         if any(key.casefold() in normalized for key in item.keywords)
+    ]
+
+    # Yêu cầu thực tế thường chỉ mô tả "adjacency/neighbor không hình thành",
+    # chưa thể biết trước là thiếu network statement hay lệch area. Giữ cả hai
+    # playbook để evidence gate phân biệt thay vì khóa sớm vào một nguyên nhân.
+    generic_ospf_symptoms = (
+        "ospf adjacency",
+        "ospf neighbor",
+        "neighbor ospf",
+        "láng giềng ospf",
     )
+    if any(symptom in normalized for symptom in generic_ospf_symptoms):
+        for key in ("ospf_network_missing", "ospf_area_mismatch"):
+            playbook = _BY_KEY[key]
+            if playbook not in selected:
+                selected.append(playbook)
+    return tuple(selected)
