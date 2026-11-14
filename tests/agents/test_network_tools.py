@@ -124,3 +124,37 @@ def test_normalize_config_commands_accepts_usable_30_host() -> None:
     command = "ip address 10.0.34.2 255.255.255.252"
 
     assert normalize_config_commands([command]) == [command]
+
+
+def test_normalize_config_commands_inserts_exit_between_submodes() -> None:
+    commands = normalize_config_commands(
+        [
+            "interface Loopback0",
+            "ip address 4.4.4.4 255.255.255.255",
+            "interface FastEthernet0/0",
+            "mpls ip",
+            "router ospf 1",
+            "network 4.4.4.4 0.0.0.0 area 0",
+        ]
+    )
+
+    assert commands == [
+        "interface Loopback0",
+        "ip address 4.4.4.4 255.255.255.255",
+        "exit",
+        "interface FastEthernet0/0",
+        "mpls ip",
+        "exit",
+        "router ospf 1",
+        "network 4.4.4.4 0.0.0.0 area 0",
+    ]
+
+
+def test_normalize_config_commands_rejects_invalid_ldp_interface_command() -> None:
+    with pytest.raises(ValueError, match="không hỗ trợ"):
+        normalize_config_commands(["mpls ldp interface FastEthernet0/0"])
+
+
+def test_normalize_config_commands_rejects_mpls_ip_in_router_mode() -> None:
+    with pytest.raises(ValueError, match="router submode"):
+        normalize_config_commands(["router ospf 1", "mpls ip"])

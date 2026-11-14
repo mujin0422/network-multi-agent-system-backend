@@ -5,6 +5,7 @@ from functools import lru_cache
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from app.agents.analyst import AnalystAgent
+from app.agents.configuration import ConfigurationAgent
 from app.agents.network import NetworkAgent
 from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator, PlanningOrchestrator
 from app.agents.planner import PlannerAgent
@@ -95,6 +96,28 @@ def _build_analyst_agent() -> AnalystAgent:
 
 
 @lru_cache
+def _build_configuration_agent() -> ConfigurationAgent:
+    """Khởi tạo Agent riêng sinh CLI WRITE từ yêu cầu của Planner."""
+
+    settings = get_settings()
+    if not settings.nvidia_api_key or not settings.nvidia_model:
+        raise RuntimeError("NVIDIA_API_KEY và NVIDIA_MODEL phải được cấu hình")
+    model = ChatNVIDIA(
+        model=settings.nvidia_model,
+        api_key=settings.nvidia_api_key,
+        temperature=0,
+    ).bind(
+        chat_template_kwargs={"enable_thinking": False},
+        parallel_tool_calls=False,
+    )
+    return ConfigurationAgent(
+        model,
+        max_validation_retries=settings.planner_validation_retries,
+        timeout_seconds=settings.planner_timeout_seconds,
+    )
+
+
+@lru_cache
 def _build_network_agent() -> NetworkAgent:
     """Lắp Network Agent với backend Netmiko hoặc Nornir theo cấu hình."""
 
@@ -150,6 +173,7 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
         execution_service,
         device_service,
         _build_gns3_provider(),
+        _build_configuration_agent(),
     )
     execution = ExecutionOrchestrator(execution_service, _build_network_agent())
     analysis = AnalysisOrchestrator(
