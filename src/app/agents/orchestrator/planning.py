@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from app.agents.planner import PlannerAgent
+from app.agents.configuration import ConfigurationAgent
 from app.domains.conversation.schemas import Conversation, Message, MessageSender
 from app.domains.execution.schemas import (
     ActivityActorType,
@@ -26,6 +27,7 @@ class PlanningOrchestrator:
         execution_service: ExecutionService,
         device_service: DeviceService,
         gns3_provider: GNS3Provider | None = None,
+        configuration_agent: ConfigurationAgent | None = None,
     ) -> None:
         """Khởi tạo các agent và domain service phục vụ giai đoạn lập kế hoạch."""
 
@@ -35,6 +37,7 @@ class PlanningOrchestrator:
         self._execution_service = execution_service
         self._device_service = device_service
         self._gns3_provider = gns3_provider
+        self._configuration_agent = configuration_agent
 
     async def plan_user_message(
         self,
@@ -90,6 +93,8 @@ class PlanningOrchestrator:
 
         # Bước 4: Planner dùng LLM để chuyển câu tiếng Việt thành PlannedTask,
         # gồm operations, dependencies và danh sách device của từng operation.
+        failure_actor = ActivityActorType.PLANNER
+        failure_stage = "PLANNING"
         try:
             node_interfaces = (
                 self._gns3_provider.list_node_interfaces()
@@ -107,6 +112,47 @@ class PlanningOrchestrator:
                 node_interfaces=node_interfaces,
                 topology_neighbors=topology_neighbors,
             )
+            self._execution_service.record_activity(
+                task.id,
+                ActivityActorType.PLANNER,
+                ActivityEventType.PLAN_GENERATED,
+                event_data={"operation_count": len(plan.operations)},
+            )
+            interfaces_by_device_id = {
+                device.id: node_interfaces.get(device.hostname, []) for device in devices
+            }
+            write_operation_count = sum(
+                1
+                for operation in plan.operations
+                if any(device.access_mode.value == "WRITE" for device in operation.devices)
+            )
+            if self._configuration_agent is not None and write_operation_count:
+                failure_actor = ActivityActorType.CONFIGURATION
+                failure_stage = "CONFIGURATION"
+                configuration_started_at = datetime.now(UTC)
+                self._execution_service.record_activity(
+                    task.id,
+                    ActivityActorType.CONFIGURATION,
+                    ActivityEventType.CONFIGURATION_STARTED,
+                    ActivityEventStatus.RUNNING,
+                    event_data={"operation_count": write_operation_count},
+                    started_at=configuration_started_at,
+                )
+                plan = await self._configuration_agent.generate(
+                    plan,
+                    devices,
+                    interfaces_by_device_id,
+                )
+                self._execution_service.record_activity(
+                    task.id,
+                    ActivityActorType.CONFIGURATION,
+                    ActivityEventType.CONFIGURATION_COMPLETED,
+                    event_data={"operation_count": write_operation_count},
+                    started_at=configuration_started_at,
+                )
+                failure_actor = ActivityActorType.PLANNER
+                failure_stage = "PLAN_VALIDATION"
+            PlannerAgent._validate_interface_commands(plan, interfaces_by_device_id)
         except Exception as exc:
             self._execution_service.update_task(
                 task.model_copy(
@@ -118,19 +164,12 @@ class PlanningOrchestrator:
             )
             self._execution_service.record_activity(
                 task.id,
-                ActivityActorType.PLANNER,
+                failure_actor,
                 ActivityEventType.TASK_FAILED,
                 ActivityEventStatus.FAILED,
-                event_data={"error": str(exc), "stage": "PLANNING"},
+                event_data={"error": str(exc), "stage": failure_stage},
             )
             raise
-        self._execution_service.record_activity(
-            task.id,
-            ActivityActorType.PLANNER,
-            ActivityEventType.PLAN_GENERATED,
-            event_data={"operation_count": len(plan.operations)},
-        )
-
         try:
             # Bước 5: Không tin hoàn toàn output LLM. Tất cả device ID trong kế
             # hoạch phải thuộc inventory vừa cung cấp thì mới được phép lưu.

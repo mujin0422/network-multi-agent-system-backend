@@ -41,8 +41,11 @@ class PlannerAgent:
     ) -> ExecutionPlanCreate:
         """Tạo DAG operation chỉ với những device có trong inventory."""
 
+        # Bước 1: Chuẩn hóa ngữ cảnh topology và interface được cung cấp.
         node_interfaces = node_interfaces or {}
         topology_neighbors = topology_neighbors or {}
+
+        # Bước 2: Chuyển inventory thành dữ liệu công khai, không chứa credential.
         inventory = [
             {
                 "id": device.id,
@@ -58,6 +61,8 @@ class PlannerAgent:
         diagnostic_playbooks = [
             playbook.planner_payload() for playbook in select_playbooks(user_message)
         ]
+
+        # Bước 3: Tạo prompt gồm yêu cầu, inventory, topology, playbook và schema.
         prompt = (
             f"USER REQUEST:\n{user_message}\n\n"
             "AVAILABLE DEVICES (use only their id values):\n"
@@ -78,30 +83,25 @@ class PlannerAgent:
             HumanMessage(content=prompt),
         ]
         try:
+            # Bước 4: Gọi LLM trong giới hạn timeout và số lần validation retry.
             async with asyncio.timeout(self.timeout_seconds):
                 for retry_number in range(self.max_validation_retries + 1):
                     result = await self._planner.ainvoke(messages)
                     try:
+                        # Bước 5: Bóc JSON và kiểm tra kế hoạch bằng schema nghiệp vụ.
                         plan = self._parse_plan(
                             result,
                             default_task_type=(
                                 TaskType.DIAGNOSIS if diagnostic_playbooks else None
                             ),
                         )
-                        self._validate_interface_commands(
-                            plan,
-                            {
-                                device.id: node_interfaces.get(device.hostname, [])
-                                for device in devices
-                            },
-                        )
+                        self._validate_requested_access(user_message, plan)
                         return plan
                     except ValueError as exc:
                         if retry_number == self.max_validation_retries:
                             raise
 
-                        # Đưa cả kết quả sai và lỗi validation về cho model để
-                        # model sửa JSON mà không phải mất ngữ cảnh ban đầu.
+                        # Bước 6: Gửi lỗi validation cho LLM sửa mà không mất ngữ cảnh.
                         messages.append(
                             HumanMessage(
                                 content=self._build_correction_prompt(result, exc),
@@ -132,10 +132,43 @@ class PlannerAgent:
             '"device_role":"SOURCE","access_mode":"READ"}],'
             '"dependencies":[]}]}\n\n'
             "Không đổi tên field, không dùng hostname thay cho device_id và không "
-            "thêm Markdown. Operation có devices phải chứa "
-            "operation_parameters.command là chuỗi không rỗng hoặc "
-            "operation_parameters.commands là danh sách command không rỗng."
+            "thêm Markdown. Operation READ phải có command; Operation WRITE "
+            "phải có operation_parameters.configuration_requirements là object."
         )
+
+    @staticmethod
+    def _validate_requested_access(
+        user_message: str,
+        plan: ExecutionPlanCreate,
+    ) -> None:
+        """Không cho Planner làm mất WRITE intent được người dùng yêu cầu rõ."""
+
+        normalized_message = user_message.casefold()
+        write_patterns = (
+            r"\bthực hiện\s+(?:việc\s+)?cấu hình\b",
+            r"\bhãy\s+cấu hình\b",
+            r"\bcấu hình\s+cho\b",
+            r"\bkhắc phục\b",
+            r"\bsửa\s+(?:lỗi|cấu hình)\b",
+            r"\b(?:bật|tắt)\s+(?:cổng|interface|ospf|mpls|ldp|bgp)\b",
+        )
+        requests_write = any(
+            re.search(pattern, normalized_message) for pattern in write_patterns
+        )
+        if not requests_write:
+            return
+
+        has_write = any(
+            device.access_mode.value == "WRITE"
+            for operation in plan.operations
+            for device in operation.devices
+        )
+        if not has_write:
+            raise ValueError(
+                "Người dùng yêu cầu thực hiện thay đổi nhưng kế hoạch không có "
+                "Operation WRITE. Hãy giữ các bước READ cần thiết và bổ sung WRITE "
+                "với configuration_requirements cùng dependency phù hợp."
+            )
 
     @staticmethod
     def _parse_plan(
@@ -145,14 +178,17 @@ class PlannerAgent:
         """Bóc JSON từ các dạng phản hồi phổ biến rồi kiểm tra bằng Pydantic."""
 
         try:
+            # Bước 1: Lấy content từ phản hồi của model.
             content = getattr(result, "content", result)
+            # Bước 2: Bóc JSON từ text hoặc content block.
             payload = PlannerAgent._extract_json_payload(content)
+            # Bước 3: Khôi phục lớp plan khi model chỉ trả một operation hợp lệ.
             payload = PlannerAgent._wrap_single_operation(
                 payload,
                 default_task_type=default_task_type,
             )
-            plan = ExecutionPlanCreate.model_validate(payload)
-            return PlannerAgent._normalize_write_commands(plan)
+            # Bước 4: Xác thực payload bằng ExecutionPlanCreate.
+            return ExecutionPlanCreate.model_validate(payload)
         except (ValidationError, ValueError) as exc:
             raise ValueError(
                 "Planner Agent trả về JSON không đúng ExecutionPlanCreate"
@@ -216,6 +252,7 @@ class PlannerAgent:
         """Đọc JSON thuần, code fence hoặc JSON nằm sau phần dẫn nhập của model."""
 
         raw_content = raw_content.strip()
+        # Bước 1: Thu thập JSON thuần và các JSON code fence có thể có.
         candidates = [raw_content]
         candidates.extend(
             match.group(1).strip()
@@ -228,6 +265,7 @@ class PlannerAgent:
 
         decoder = json.JSONDecoder()
         for candidate in candidates:
+            # Bước 2: Ưu tiên giải mã toàn bộ candidate như JSON chuẩn.
             try:
                 payload = json.loads(candidate)
                 if isinstance(payload, dict):
@@ -235,8 +273,7 @@ class PlannerAgent:
             except json.JSONDecodeError:
                 pass
 
-            # NVIDIA NIM đôi khi thêm một câu dẫn nhập trước JSON. raw_decode từ
-            # từng dấu ngoặc chỉ chấp nhận object JSON hoàn chỉnh đầu tiên.
+            # Bước 3: Tìm object đầu tiên nếu model thêm câu dẫn trước JSON.
             for match in re.finditer(r"\{", candidate):
                 try:
                     payload, _ = decoder.raw_decode(candidate[match.start() :])
@@ -245,8 +282,7 @@ class PlannerAgent:
                 if isinstance(payload, dict):
                     return payload
 
-            # Chấp nhận dict literal an toàn khi model dùng dấu nháy đơn; không
-            # dùng eval và không tự suy đoán hay bổ sung field nghiệp vụ.
+            # Bước 4: Đọc an toàn dict literal khi model dùng dấu nháy đơn.
             try:
                 payload = ast.literal_eval(candidate)
             except (SyntaxError, ValueError):
@@ -261,6 +297,7 @@ class PlannerAgent:
         """Lưu đúng payload sẽ được Netmiko thực thi vào approval snapshot."""
 
         normalized_operations = []
+        # Bước 1: Duyệt từng operation và giữ nguyên các operation READ.
         for operation in plan.operations:
             if not any(
                 device.access_mode.value == "WRITE" for device in operation.devices
@@ -269,10 +306,12 @@ class PlannerAgent:
                 continue
 
             parameters = dict(operation.operation_parameters)
+            # Bước 2: Quy đổi command đơn hoặc commands thành một danh sách.
             raw_commands = parameters.pop("commands", parameters.pop("command", None))
             commands = [raw_commands] if isinstance(raw_commands, str) else raw_commands
             if not isinstance(commands, list):
                 raise ValueError("Operation WRITE không chứa danh sách command hợp lệ")
+            # Bước 3: Loại lệnh quản lý phiên trước khi tạo approval snapshot.
             parameters["commands"] = normalize_config_commands(commands)
             normalized_operations.append(
                 operation.model_copy(update={"operation_parameters": parameters})
@@ -290,6 +329,7 @@ class PlannerAgent:
             r"^interface\s+((?:Fast|Gigabit|TenGigabit|TwentyFiveGigabit|FortyGigabit|HundredGigabit)?Ethernet\S+)$",
             flags=re.IGNORECASE,
         )
+        # Bước 1: Chỉ kiểm tra những operation có quyền WRITE.
         for operation in plan.operations:
             write_devices = [
                 device
@@ -299,11 +339,13 @@ class PlannerAgent:
             if not write_devices:
                 continue
             commands = operation.operation_parameters.get("commands", [])
+            # Bước 2: Tìm các command khai báo interface vật lý.
             for command in commands:
                 match = physical_interface.fullmatch(command.strip())
                 if match is None:
                     continue
                 interface_name = match.group(1).split(".", maxsplit=1)[0]
+                # Bước 3: Đối chiếu interface với inventory của từng thiết bị.
                 for device in write_devices:
                     available = interfaces_by_device_id.get(device.device_id, [])
                     if available and interface_name not in available:

@@ -200,6 +200,34 @@ def test_orchestrator_creates_task_operations_dependencies_and_devices() -> None
     assert execution_repository.operation_devices[0].device_id == device.id
 
 
+def test_planner_rejects_read_only_plan_for_explicit_configuration_request() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "DIAGNOSIS",
+            "operations": [
+                {
+                    "operation_intent": "GET_CONFIG",
+                    "operation_parameters": {"command": "show running-config"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="không có Operation WRITE"):
+        PlannerAgent._validate_requested_access(
+            "Xem P1 và thực hiện cấu hình cho P4 tham gia MPLS",
+            plan,
+        )
+
+
 def test_execution_service_persists_plan_and_returns_task_detail() -> None:
     """Regression: use the generated plan records, not undefined local variables."""
 

@@ -21,20 +21,23 @@ Quy tắc:
 - Device có role SOURCE hoặc CONTEXT luôn phải dùng READ access.
 - Device có role TARGET dùng READ khi kiểm tra hoặc WRITE khi thay đổi cấu hình.
 - Tách riêng các bước thu thập dữ liệu, phân tích, cấu hình và xác minh.
+- Khi người dùng yêu cầu thực hiện thay đổi (ví dụ "thực hiện cấu hình", "hãy
+  cấu hình", "bật", "tắt", "sửa" hoặc "khắc phục"), kế hoạch bắt buộc phải có
+  ít nhất một Operation WRITE. Không được đổi toàn bộ yêu cầu thành DIAGNOSIS
+  chỉ vì nội dung có tên giao thức hoặc khớp diagnostic playbook.
+- Nếu thay đổi phụ thuộc vào dữ liệu cần thu thập, hãy tạo các Operation READ
+  trước và cho Operation WRITE phụ thuộc ON_SUCCESS vào những bước đó.
 - Với tác vụ DIAGNOSIS có MATCHED DIAGNOSTIC PLAYBOOKS, ưu tiên tạo các
   operation READ để thu thập đủ command bắt buộc trong playbook. Lệnh có target
   NEIGHBOR phải chạy trên đúng thiết bị đầu bên kia khi topology cung cấp được;
   đối chiếu `local_interface` và `peer_interface` trong AVAILABLE TOPOLOGY
   NEIGHBORS, không tự suy đoán interface hoặc thiết bị không có trong inventory.
 - Operation WRITE phải phụ thuộc vào các bước kiểm tra hoặc phân tích cần thiết.
-- Mọi operation có ít nhất một phần tử trong devices bắt buộc phải có command
-  thực thi trong operation_parameters. Dùng {"command": "show ..."} cho một
-  lệnh hoặc {"commands": ["show ...", "show ..."]} cho nhiều lệnh. Không được
-  để operation_parameters rỗng khi operation có devices.
-- Với operation WRITE, chỉ trả về payload cấu hình. Không đưa các lệnh quản lý
-  phiên `configure terminal`, `conf t`, `end`, `write memory` hoặc
-  `copy running-config startup-config`; backend tự vào/thoát config mode và lưu
-  running-config sau khi toàn bộ lệnh hợp lệ.
+- Operation READ có device bắt buộc phải chứa `command` hoặc `commands`.
+- Operation WRITE không được tự sinh CLI command. Hãy mô tả trạng thái cấu hình
+  cần đạt trong `operation_parameters.configuration_requirements` dưới dạng JSON
+  object có đủ giao thức, tham số, interface và giá trị do người dùng yêu cầu.
+  Configuration Agent riêng sẽ chuyển yêu cầu này thành command theo thiết bị.
 - Trên Cisco IOS, targeted LDP phải dùng đủ cú pháp
   `mpls ldp neighbor <peer-ip> targeted ldp`; không được bỏ từ khóa `ldp` cuối.
 - Chỉ trả về một JSON object đúng schema được cung cấp, không thêm Markdown hoặc

@@ -39,7 +39,7 @@ class PlannedOperation(BaseModel):
 
     @model_validator(mode="after")
     def validate_device_commands(self) -> "PlannedOperation":
-        """Operation gắn thiết bị phải có ít nhất một command hợp lệ."""
+        """READ cần command; WRITE có thể chờ Configuration Agent biên dịch."""
 
         if not self.devices:
             return self
@@ -51,6 +51,12 @@ class PlannedOperation(BaseModel):
         if isinstance(raw_commands, list) and any(
             isinstance(command, str) and command.strip() for command in raw_commands
         ):
+            return self
+        has_write_device = any(
+            device.access_mode == AccessMode.WRITE for device in self.devices
+        )
+        requirements = self.operation_parameters.get("configuration_requirements")
+        if has_write_device and isinstance(requirements, dict) and requirements:
             return self
         raise ValueError("Operation có device phải cung cấp command hợp lệ")
 
