@@ -6,314 +6,1038 @@
 **Nhóm sinh viên:** Phạm Đăng Minh Khang; Phạm Đình Duy Thái; Triệu Phú Quân  
 **Phạm vi đối chiếu:** mã nguồn nhánh develop của backend và frontend, tài liệu đề cương giữa kỳ và bằng chứng kiểm thử cung cấp ngày 03/11/2026.
 
-### Tóm tắt
+### TÓM TẮT ĐỀ TÀI
 
-Đề tài nghiên cứu, thiết kế và hiện thực nguyên mẫu hệ thống Multi-Agent hỗ trợ quản trị viên thực hiện tác vụ cấu hình, kiểm tra và chẩn đoán sự cố mạng thông qua ngôn ngữ tự nhiên. Kiến trúc gồm Planner Agent sử dụng LLM để xây dựng kế hoạch có cấu trúc; Network Agent thực thi lệnh qua một giao diện công cụ mạng; Analyst Agent phân tích bằng chứng, sinh nhận định tiếng Việt và xuất dự đoán nguyên nhân dạng dữ liệu. Các Orchestrator và LangGraph quản lý luồng nghiệp vụ, quan hệ phụ thuộc, trạng thái thực thi và điểm tạm dừng phê duyệt. Phần mềm xây dựng trên FastAPI, Python, PostgreSQL, React, TypeScript; sử dụng NVIDIA AI endpoint, Netmiko/Nornir và môi trường mạng GNS3.
+Đề tài “Nghiên cứu và xây dựng hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng” nhằm nghiên cứu và ứng dụng mô hình ngôn ngữ lớn (Large Language Model) kết hợp kiến trúc đa tác nhân (Multi-Agent System) trong tự động hóa quản trị mạng.
 
-Ngoài các phân hệ quản lý thiết bị, credential, người dùng, vai trò, hội thoại, tác vụ và audit, hệ thống đã triển khai một **Benchmark Engine** có kịch bản tiêm lỗi, kiểm tra điều kiện trước/sau, Ground Truth, cleanup và lịch sử lần chạy. Evaluator phiên bản **db-benchmark-v5** tham khảo cơ chế của NIKA 0.2: so sánh tập hợp cặp (tài nguyên, loại lỗi) do Analyst dự đoán với Ground Truth, tính Precision, Recall, F1 cho RCA, Localization và Fault Type, đồng thời ghi nhận Detection, GOAL, Task Success Rate, thời gian hoạt động workflow AI và số lượt gọi công cụ. Phiên bản v5 bổ sung taxonomy lỗi chuẩn, ánh xạ alias tương đương và chuẩn hóa phạm vi node/interface trước khi chấm. Các số đo và bằng chứng được lưu trong PostgreSQL và hiển thị trên giao diện Evaluations.
+Hệ thống được thiết kế với ba tác nhân chính: Planner Agent đảm nhiệm lập kế hoạch, Network Agent thực thi các tác vụ trên thiết bị mạng và Analyst Agent phân tích kết quả, hỗ trợ xác định nguyên nhân sự cố. Quá trình phối hợp được điều phối thông qua LangGraph, kết hợp Netmiko và Nornir để tương tác với thiết bị trong môi trường giả lập GNS3. Đồng thời, cơ chế phê duyệt Human-in-the-loop được tích hợp nhằm kiểm soát các thao tác thay đổi cấu hình.
 
-Kết quả kiểm chứng có thể xác nhận tại thời điểm lập báo cáo gồm Docker build và khởi động API thành công; **42/42 bài test được chọn đạt, kèm một cảnh báo Pydantic**; và một lượt benchmark chẩn đoán thực tế hiển thị GOAL/RCA PASS, các chỉ số chấm theo nhãn cấu trúc đạt 100%, thời gian workflow AI **22,40 giây** cùng **4 lượt Agent→Tool**. Đây là bằng chứng của một lượt chạy, **không đại diện cho độ chính xác tổng thể, hiệu năng trung bình hay độ an toàn trên nhiều kịch bản**. Hai tiêu chí Remediation và Safety chưa có bộ chấm kết quả độc lập, nên được ghi NOT_APPLICABLE. Hệ thống cũng chưa phải closed-loop self-healing hay bộ triển khai đầy đủ của NIKA.
+Đề tài xây dựng bộ kịch bản thực nghiệm để đánh giá tỷ lệ hoàn thành nhiệm vụ, khả năng xác định nguyên nhân gốc và thời gian thực thi. Kết quả nghiên cứu góp phần làm rõ khả năng ứng dụng kiến trúc Multi-Agent trong hỗ trợ quản trị mạng, đồng thời tạo cơ sở cho việc tiếp tục hoàn thiện hệ thống.
 
-**Từ khóa:** Multi-Agent System, Large Language Model, LangGraph, Network Automation, Network Troubleshooting, Root Cause Analysis, NIKA, Ground Truth, Human-in-the-loop, GNS3.
+# MỞ ĐẦU
+
+## Lý do chọn đề tài
+
+Trong những năm gần đây, sự phát triển của các hệ thống mạng về quy mô, số lượng thiết bị, giao thức và dịch vụ đã làm gia tăng mức độ phức tạp của công tác quản trị và vận hành mạng. Bên cạnh các thiết bị mạng truyền thống, việc ứng dụng công nghệ ảo hóa và các kiến trúc mạng hiện đại đặt ra yêu cầu ngày càng cao đối với khả năng cấu hình, giám sát và xử lý sự cố. Trong thực tế, quản trị viên thường phải thực hiện nhiều công việc liên tiếp như kiểm tra trạng thái thiết bị, thu thập thông tin vận hành, phân tích nguyên nhân sự cố, lựa chọn phương án khắc phục và xác minh kết quả. Những công việc này đòi hỏi kiến thức chuyên môn, kinh nghiệm và có thể tiêu tốn nhiều thời gian, đặc biệt trong các môi trường mạng có nhiều thiết bị và cấu hình phức tạp [1], [8].
+
+Trước những thách thức đó, các phương pháp ứng dụng trí tuệ nhân tạo trong quản lý và vận hành mạng đã nhận được nhiều sự quan tâm. Đặc biệt, sự phát triển của mô hình Large Language Model (LLM) mở ra khả năng hỗ trợ quản trị mạng thông qua giao tiếp bằng ngôn ngữ tự nhiên. Khác với nhiều phương pháp Machine Learning truyền thống được phát triển cho các nhiệm vụ cụ thể, LLM có khả năng xử lý và kết hợp các nguồn thông tin dạng văn bản như tài liệu kỹ thuật, tệp cấu hình, nhật ký hệ thống và kết quả thực thi lệnh. Theo khảo sát của Hong và cộng sự [1], LLM có thể được ứng dụng trong nhiều nhiệm vụ quản lý mạng, bao gồm thiết kế mạng, cấu hình, quản lý sự cố, bảo mật và điều phối hoạt động mạng.
+
+Tuy nhiên, việc ứng dụng LLM vào các tác vụ cấu hình và xử lý sự cố mạng vẫn tồn tại những thách thức về độ tin cậy và an toàn. Một trong những hạn chế đáng chú ý là hiện tượng hallucination, khi mô hình có thể đưa ra thông tin hoặc đề xuất cấu hình không chính xác. Trong môi trường mạng, việc thực thi những thay đổi không phù hợp có thể ảnh hưởng đến khả năng kết nối và hoạt động của các thiết bị. Vì vậy, các hệ thống tự động hóa dựa trên LLM cần có cơ chế kiểm tra tính hợp lệ của hành động, xác minh trạng thái mạng và kiểm soát quá trình thực thi [1], [2].
+
+Các nghiên cứu gần đây đã tiếp cận vấn đề này theo những hướng khác nhau. LLM-NetCFG [2] nghiên cứu khả năng chuyển yêu cầu bằng ngôn ngữ tự nhiên thành cấu hình mạng và thực hiện xác minh cấu hình. NetConfArena [5] đề xuất môi trường đánh giá cho AI Agent trong bài toán cấu hình mạng theo cơ chế tương tác vòng kín, trong đó agent có thể quan sát trạng thái, thực hiện hành động và kiểm tra kết quả. Trong lĩnh vực xử lý sự cố mạng, NIKA [3] cung cấp môi trường đánh giá khả năng phát hiện, định vị và xác định nguyên nhân gốc của sự cố. Bên cạnh đó, NETARENA [4] nhấn mạnh sự cần thiết của việc đánh giá AI Agent dựa trên tính đúng đắn, độ an toàn và thời gian thực thi.
+
+Một hướng tiếp cận khác là kiến trúc hệ thống đa tác tử (Multi-Agent System), trong đó các nhiệm vụ phức tạp được phân chia cho những agent có vai trò chuyên biệt. OpsAgent [6] là một ví dụ về việc ứng dụng Multi-Agent trong quản lý sự cố của hệ thống microservice, sử dụng cơ chế điều phối và kiểm tra chéo giữa các agent nhằm hỗ trợ quá trình phân tích nguyên nhân sự cố. Cách tiếp cận này cung cấp cơ sở tham khảo cho việc phân chia trách nhiệm và tổ chức phối hợp giữa các thành phần trong hệ thống quản trị mạng.
+
+Trên cơ sở các nghiên cứu đã khảo sát, đề tài lựa chọn nghiên cứu khả năng tổ chức và phối hợp nhiều AI Agent trong một hệ thống hỗ trợ cấu hình, chẩn đoán và khắc phục sự cố mạng. Trọng tâm của đề tài là thiết kế kiến trúc Multi-Agent với các chức năng chuyên biệt, xây dựng cơ chế điều phối và tích hợp các công cụ cho phép hệ thống tương tác với thiết bị mạng trong môi trường mô phỏng.
+
+Xuất phát từ những vấn đề trên, đề tài “Nghiên cứu và xây dựng hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng” được lựa chọn nhằm nghiên cứu, thiết kế và xây dựng một hệ thống hỗ trợ quản trị viên thực hiện các tác vụ cấu hình, chẩn đoán và khắc phục sự cố mạng thông qua giao tiếp ngôn ngữ tự nhiên. Hệ thống được triển khai và đánh giá trong môi trường mạng mô phỏng, tập trung vào khả năng thực hiện nhiệm vụ, độ chính xác trong chẩn đoán, hiệu quả khắc phục sự cố và tính an toàn của các hành động cấu hình.
+
+## Mục đích và nhiệm vụ nghiên cứu
+
+### Mục đích nghiên cứu
+
+Mục đích của đề tài là nghiên cứu, thiết kế và xây dựng một hệ thống đa tác tử (Multi-Agent System) ứng dụng mô hình ngôn ngữ lớn nhằm hỗ trợ quản trị viên mạng thực hiện các tác vụ cấu hình thiết bị, chẩn đoán và khắc phục sự cố thông qua giao tiếp bằng ngôn ngữ tự nhiên.
+
+Hệ thống tập trung vào việc phân chia các chức năng quản trị mạng thành những agent chuyên trách, xây dựng cơ chế điều phối và phối hợp giữa các agent, đồng thời tích hợp các công cụ tự động hóa nhằm cho phép hệ thống tương tác với thiết bị mạng trong môi trường mô phỏng.
+
+Bên cạnh đó, đề tài nghiên cứu các phương pháp kiểm tra và kiểm soát hành động cấu hình do hệ thống đề xuất, kết hợp cơ chế Human-in-the-loop để quản trị viên có thể xem xét và xác nhận trước khi thực hiện thay đổi trên thiết bị.
+
+### Nhiệm vụ nghiên cứu
+
+Khảo sát và phân tích các nghiên cứu liên quan đến ứng dụng Large Language Models, AI Agent, Multi-Agent System, Network Configuration Automation và Network Troubleshooting nhằm xác định hướng tiếp cận phù hợp.
+
+Thiết kế kiến trúc Multi-Agent bao gồm các thành phần đẩm nhiệm các chức năng chuyên biệt gồm tiếp nhận và điều phối yêu cầu, thu thập thông tin mạng, chẩn đoán sự cố, cấu hình và khắc phục, kiểm chứng kết quả.
+
+Xây dựng cơ chế tương tác với các thiết bị mạng trong môi trường ảo hóa GNS3 thông qua giao diện dòng lệnh và các công cụ tự động hóa.
+
+Áp dụng cơ chế Human-in-the-loop kết hợp với các bước kiểm tra tính hợp lệ của đề xuất cấu hình nhằm hỗ trợ kiểm soát những thay đổi được thực hiện.
+
+Xây dựng tập kịch bản thực nghiệm có trạng thái ban đầu, yêu cầu nhiệm vụ, nguyên nhân sự cố, trạng thái cấu hình mục tiêu và các điều kiện kiểm chứng được xác định trước, nhằm phục vụ quá trình đánh giá hiệu quả của hệ thống.
+
+Đánh giá các cấu hình thực nghiệm dựa trên các tiêu chí như Task Success Rate, Root Cause Accuracy, Remediation Success Rate, Safety, Latency và Interaction Turns; từ đó phân tích ưu điểm, hạn chế và sự đánh đổi giữa các phương pháp.
+
+## Đối tượng và phạm vi nghiên cứu
+
+### Khách thể nghiên cứu
+
+Khách thể nghiên cứu là các quy trình quản trị và vận hành hệ thống mạng quy mô nhỏ và vừa, bao gồm việc cấu hình thiết bị, kiểm tra trạng thái mạng, chẩn đoán nguyên nhân sự cố và thực hiện các biện pháp khắc phục.
+
+### Đối tượng nghiên cứu
+
+Đối tượng nghiên cứu của đề tài là kiến trúc hệ thống Multi-Agent ứng dụng mô hình ngôn ngữ lớn trong các tác vụ cấu hình, chẩn đoán và khắc phục sự cố mạng. Nghiên cứu tập trung vào phương pháp phân chia chức năng giữa các agent, cơ chế điều phối và trao đổi thông tin, phương pháp tương tác với thiết bị mạng và các cơ chế kiểm soát hành động cấu hình nhằm hỗ trợ quá trình quản trị mạng.
+
+### Phạm vi nghiên cứu
+
+Về không gian: Đề tài được triển khai và thử nghiệm trong môi trường mô phỏng mạng, sử dụng các thiết bị ảo hóa. Việc thực nghiệm không được thực hiện trực tiếp trên hệ thống mạng production nhằm đảm bảo tính kiểm soát và khả năng tái lập các kịch bản.
+
+Về nội dung: đề tài giới hạn ở các sự cố mạng phổ biến tại tầng Data Link và Network trong mô hình OSI. Trong đó, các tác vụ cấu hình dự kiến bao gồm cấu hình địa chỉ IP, thay đổi trạng thái interface, cấu hình định tuyến tĩnh và một số cấu hình định tuyến động cơ bản. Các kịch bản xử lý sự cố dự kiến bao gồm interface bị shutdown, sai địa chỉ IP hoặc subnet mask, thiếu hoặc sai route, lỗi cấu hình giao thức định tuyến và một số trường hợp mất kết nối do cấu hình không phù hợp.
+
+Về công nghệ AI: Đề tài sử dụng mô hình LLM đã được phát triển sẵn để xây dựng các AI Agent. Trọng tâm là thiết kế kiến trúc hệ thống, cơ chế phối hợp và khả năng sử dụng các công cụ tương tác với thiết bị mạng, không nghiên cứu huấn luyện một LLM mới.
+
+## Ý nghĩa khoa học và ý nghĩa thực tiễn
+
+### Ý nghĩa khoa học
+
+Đề tài góp phần nghiên cứu và làm rõ khả năng ứng dụng kiến trúc Multi-Agent trong lĩnh vực quản trị mạng, đặc biệt đối với các nhiệm vụ cấu hình thiết bị, chẩn đoán nguyên nhân và hỗ trợ xử lý sự cố mạng. Thông qua việc xây dựng và đánh giá một hệ thống thực nghiệm, đề tài cung cấp thêm cơ sở tham khảo về cách tổ chức và vận hành các AI Agent trong môi trường mạng có những yêu cầu kỹ thuật và điều kiện kiểm soát cụ thể.
+
+Thông qua quá trình phân tích, thiết kế và triển khai hệ thống, đề tài khảo sát phương pháp phân chia các chức năng quản trị mạng thành những nhiệm vụ chuyên biệt do từng AI Agent đảm nhiệm. Đồng thời, nghiên cứu xem xét cơ chế điều phối, trao đổi thông tin và phối hợp thực hiện nhiệm vụ giữa các Agent, cũng như phương pháp tích hợp mô hình ngôn ngữ lớn với những công cụ quản trị mạng nhằm hình thành một quy trình xử lý thống nhất.
+
+Bên cạnh đó, đề tài nghiên cứu việc kết hợp các phương pháp kiểm tra tính hợp lệ, kiểm chứng kết quả và cơ chế Human-in-the-loop trong quá trình thực thi những đề xuất cấu hình do LLM tạo ra. Việc tích hợp các cơ chế này nhằm làm rõ vai trò của hoạt động kiểm soát và phê duyệt trong hệ thống tự động hóa mạng có sử dụng AI, đặc biệt đối với những thao tác có khả năng ảnh hưởng đến trạng thái hoạt động của thiết bị.
+
+Kết quả thực nghiệm của đề tài được kỳ vọng cung cấp thêm thông tin về khả năng thực hiện nhiệm vụ, độ chính xác trong chẩn đoán, hiệu quả xử lý sự cố và mức độ tuân thủ các điều kiện an toàn của hệ thống Multi-Agent. Những kết quả này có thể được sử dụng làm cơ sở tham khảo cho các nghiên cứu tiếp theo về ứng dụng AI Agent trong tự động hóa quản trị và vận hành hệ thống mạng.
+
+### Ý nghĩa thực tiễn
+
+Về mặt thực tiễn, hệ thống được xây dựng hướng đến việc hỗ trợ quản trị viên mạng trong quá trình thực hiện các tác vụ cấu hình, giám sát trạng thái và xử lý sự cố thông qua giao tiếp bằng ngôn ngữ tự nhiên. Thay vì phải trực tiếp thực hiện toàn bộ các thao tác bằng dòng lệnh, người quản trị có thể mô tả yêu cầu để hệ thống phân tích, đề xuất phương án và hỗ trợ thực hiện theo quy trình được kiểm soát.
+
+Việc tổ chức các chức năng thành những AI Agent chuyên trách tạo điều kiện phân tách nhiệm vụ và quản lý từng giai đoạn xử lý một cách rõ ràng. Cách tiếp cận này có thể hỗ trợ quá trình bảo trì, mở rộng và tích hợp thêm các chức năng quản trị mạng trong tương lai, đồng thời tạo thuận lợi cho việc theo dõi kết quả thực hiện và xác định trách nhiệm của từng thành phần trong hệ thống.
+
+Thông qua việc tích hợp các công cụ tự động hóa với cơ chế xác nhận trước khi thực thi, hệ thống hướng đến giảm bớt những thao tác cấu hình thủ công có tính lặp lại và hỗ trợ kiểm soát các thay đổi trên thiết bị mạng. Các bước kiểm tra và phê duyệt được thiết kế nhằm giúp quản trị viên xem xét phương án xử lý trước khi áp dụng, qua đó góp phần hạn chế những rủi ro phát sinh từ cấu hình không phù hợp.
+
+Kết quả nghiên cứu và triển khai có thể được sử dụng làm tài liệu tham khảo cho việc phát triển các hệ thống hỗ trợ quản trị mạng trong môi trường phòng thí nghiệm, phục vụ hoạt động đào tạo và nghiên cứu về AI Agent, Multi-Agent System và Network Automation. Đồng thời, hệ thống thực nghiệm có thể làm nền tảng để tiếp tục nghiên cứu khả năng mở rộng và ứng dụng trong những môi trường mạng có yêu cầu vận hành phức tạp hơn.
 
 ---
 
-# CHƯƠNG 1. GIỚI THIỆU VẤN ĐỀ VÀ TỔNG QUAN TÌNH HÌNH NGHIÊN CỨU
+# CHƯƠNG 1. GIỚI THIỆU VÀ TỔNG QUAN TÌNH HÌNH NGHIÊN CỨU
 
-## 1.1. Bài toán quản trị và tự động hóa mạng
+## 1.1. Bài toán quản trị và tự động hóa mạng hiện nay
 
-Hạ tầng mạng hiện đại thường bao gồm nhiều loại thiết bị, phiên bản hệ điều hành, giao thức và miền quản trị. Một thay đổi tưởng như cục bộ, chẳng hạn cập nhật địa chỉ IP, chính sách định tuyến hoặc VLAN, có thể ảnh hưởng đến nhiều thành phần phụ thuộc. Quản trị thủ công bằng giao diện dòng lệnh đòi hỏi người vận hành phải nhớ cú pháp theo nhà cung cấp, xác định đúng thứ tự thao tác, kiểm tra trạng thái trước và sau thay đổi, đồng thời lưu lại bằng chứng phục vụ truy vết. Khi quy mô tăng, phương pháp này phát sinh ba nhóm vấn đề chính: chi phí vận hành cao, kết quả thiếu đồng nhất và rủi ro sai sót do con người.
+Hạ tầng mạng máy tính hiện nay ngày càng phát triển về quy mô và mức độ phức tạp, với sự kết hợp của nhiều loại thiết bị, giao thức truyền thông và công nghệ mạng khác nhau. Trong quá trình vận hành, quản trị viên phải thực hiện nhiều nhiệm vụ như cấu hình địa chỉ IP, thiết lập giao thức định tuyến, quản lý VLAN, giám sát trạng thái thiết bị và xử lý các sự cố kết nối. Những nhiệm vụ này thường có mối quan hệ phụ thuộc lẫn nhau, khiến một thay đổi cấu hình trên thiết bị có thể ảnh hưởng đến hoạt động của nhiều thành phần trong hệ thống. Theo Sidhu và Sharma [17], các phương pháp quản trị mạng truyền thống đang dần bộc lộ những hạn chế về khả năng mở rộng, tính linh hoạt và hiệu quả vận hành trước sự gia tăng về quy mô và độ phức tạp của hạ tầng mạng hiện đại.
 
-Tự động hóa mạng chuyển các thao tác lặp lại thành quy trình có thể lập trình. Tuy nhiên, tự động hóa không chỉ là gửi một tập lệnh tới nhiều thiết bị. Một hệ thống phù hợp cần quản lý inventory, thông tin xác thực, quan hệ phụ thuộc giữa các bước, trạng thái từng thiết bị, cơ chế xử lý lỗi, kiểm tra kết quả và nhật ký kiểm toán. Đối với thao tác làm thay đổi cấu hình, hệ thống còn phải bảo đảm đúng đối tượng, đúng nội dung đã được phê duyệt và không thực thi khi điều kiện an toàn chưa thỏa mãn.
+Trong phương pháp quản trị thủ công, người vận hành thường phải truy cập trực tiếp vào từng thiết bị thông qua giao diện dòng lệnh để kiểm tra trạng thái, xác định nguyên nhân sự cố và thực hiện các thao tác cấu hình tương ứng. Quá trình này đòi hỏi kiến thức chuyên môn, khả năng phân tích và kinh nghiệm xử lý các tình huống phát sinh. Khi số lượng thiết bị tăng lên, việc thực hiện nhiều thao tác lặp lại không chỉ làm gia tăng khối lượng công việc mà còn tiềm ẩn nguy cơ sai sót, đặc biệt khi các thiết bị sử dụng những cú pháp cấu hình hoặc cơ chế quản lý khác nhau. Những hạn chế này đặt ra yêu cầu về các phương pháp quản trị có khả năng giảm sự phụ thuộc vào thao tác thủ công và nâng cao tính nhất quán trong quá trình vận hành hệ thống mạng.
 
-RFC 8969 mô tả tự động hóa quản lý dịch vụ và mạng như một vòng đời gồm tạo lập, cung cấp, giám sát, chẩn đoán, bảo đảm và tối ưu dịch vụ; các mô hình dữ liệu đóng vai trò liên kết trạng thái mong muốn với trạng thái vận hành [2]. Cách nhìn theo vòng đời cho thấy một giải pháp tự động hóa hoàn chỉnh phải vượt ra ngoài việc sinh lệnh: nó cần có khả năng kiểm tra, quan sát và phản hồi.
+Để giải quyết những khó khăn trên, tự động hóa mạng được nghiên cứu và ứng dụng nhằm hỗ trợ triển khai cấu hình, thu thập thông tin trạng thái và kiểm tra hoạt động của thiết bị thông qua các công cụ phần mềm. Nghiên cứu của Abdellatif và cộng sự [18] đã đánh giá các phương pháp tự động hóa trong những nhiệm vụ như xây dựng cấu trúc mạng, tạo cấu hình và kiểm thử, qua đó làm rõ khả năng tiết kiệm thời gian và công sức so với các phương pháp thực hiện truyền thống. Tuy nhiên, tự động hóa mạng không chỉ đơn thuần là gửi một tập lệnh đến nhiều thiết bị mà còn đòi hỏi cơ chế quản lý thông tin thiết bị, xác thực quyền truy cập, xác định thứ tự thực hiện các thao tác và kiểm chứng trạng thái hệ thống sau khi áp dụng cấu hình.
 
-## 1.2. Ứng dụng AI và LLM trong quản trị mạng
+Đối với các nhiệm vụ chẩn đoán và xử lý sự cố, hệ thống cần có khả năng thu thập dữ liệu từ nhiều thiết bị, phân tích những dấu hiệu bất thường và xác định phương án khắc phục phù hợp với trạng thái mạng hiện tại. Bên cạnh đó, các thao tác thay đổi cấu hình cần được kiểm tra và kiểm soát nhằm hạn chế nguy cơ gây gián đoạn hoạt động của những thành phần khác. Vì vậy, bài toán đặt ra không chỉ là tự động hóa quá trình thực thi lệnh mà còn là xây dựng một quy trình có khả năng kết hợp giữa phân tích yêu cầu, chẩn đoán sự cố, đề xuất phương án xử lý và kiểm chứng kết quả. Đây cũng là cơ sở để nghiên cứu các hướng tiếp cận sử dụng trí tuệ nhân tạo nhằm hỗ trợ quản trị và tự động hóa mạng một cách linh hoạt, có kiểm soát và phù hợp với yêu cầu vận hành thực tế.
 
-Mô hình ngôn ngữ lớn (Large Language Model — LLM) cung cấp một lớp giao tiếp ngữ nghĩa giữa ý định của người vận hành và các thao tác kỹ thuật. Thay vì yêu cầu người dùng chỉ định toàn bộ câu lệnh, LLM có thể phân loại nhiệm vụ, tách yêu cầu thành các bước, lựa chọn dữ liệu cần thu thập và diễn giải kết quả. Trong quản trị mạng, khả năng này đặc biệt hữu ích vì yêu cầu thường được mô tả ở mức mục tiêu, trong khi thực thi cần biểu diễn cụ thể theo thiết bị và giao thức.
+## 1.2. Lịch sử nghiên cứu vấn đề
 
-Tuy nhiên, đầu ra của LLM có tính xác suất và có thể chứa thiết bị không tồn tại, cú pháp không hợp lệ hoặc suy luận thiếu bằng chứng. Vì vậy, LLM không nên được xem là nguồn chân lý duy nhất và không nên trực tiếp nắm giữ thông tin xác thực hay quyền thay đổi cấu hình. Kiến trúc an toàn cần đặt LLM sau các ranh giới kiểm soát: cung cấp inventory giới hạn, buộc đầu ra theo schema, kiểm tra lại định danh, phân biệt quyền đọc/ghi, phê duyệt thao tác rủi ro và lưu toàn bộ dấu vết thực thi.
+### 1.2.1. Ứng dụng AI và LLM trong quản trị mạng
 
-Mô hình ReAct cho thấy việc xen kẽ suy luận và hành động giúp mô hình cập nhật kế hoạch dựa trên quan sát từ môi trường [4]. Dù đề tài không cài đặt ReAct theo đúng thuật toán của công trình này, nguyên tắc tách bước lập kế hoạch, hành động và quan sát là cơ sở hữu ích để thiết kế quy trình tác tử có thể kiểm soát.
+Việc ứng dụng trí tuệ nhân tạo trong quản lý và vận hành mạng đã được nghiên cứu nhằm hỗ trợ tự động hóa các nhiệm vụ như cấu hình thiết bị, giám sát trạng thái, phát hiện bất thường và xử lý sự cố. Các phương pháp dựa trên Machine Learning (ML), Deep Learning (DL) và Reinforcement Learning (RL) đã được áp dụng cho nhiều bài toán quản trị mạng. Tuy nhiên, các phương pháp này thường cần dữ liệu huấn luyện và cơ chế xử lý được thiết kế phù hợp với từng loại nhiệm vụ hoặc môi trường cụ thể.
 
-## 1.3. Các nghiên cứu về cấu hình mạng tự động
+Hong và cộng sự [1] thực hiện một khảo sát toàn diện về việc ứng dụng mô hình Large Language Model (LLM) trong quản lý và vận hành mạng. Các tác giả phân loại những nhiệm vụ quản trị mạng thành các nhóm chính, bao gồm thiết kế mạng, cấu hình mạng, quản lý sự cố, bảo mật và điều phối hoạt động mạng. Nghiên cứu cho thấy LLM có khả năng tiếp nhận yêu cầu bằng ngôn ngữ tự nhiên, xử lý các nguồn dữ liệu phi cấu trúc như tài liệu kỹ thuật, tệp cấu hình và nhật ký hệ thống, từ đó hỗ trợ quản trị viên trong quá trình phân tích và thực hiện các tác vụ mạng.
 
-Các nghiên cứu gần đây tập trung vào việc chuyển chính sách hoặc yêu cầu ngôn ngữ tự nhiên thành cấu hình mức thấp. NETBUDDY sử dụng LLM để biến yêu cầu cấp cao thành cấu hình P4 và BGP, đồng thời chia quá trình sinh cấu hình thành các bước nhỏ và sử dụng cơ chế tự sửa nhằm cải thiện kết quả [6]. LLM-NetCFG đề xuất các tác tử cấu hình trong định hướng Zero-touch Network and Service Management, kết hợp sinh, xác minh và triển khai cấu hình từ intent ngôn ngữ tự nhiên [7]. Một hướng khác sử dụng các LLM Agent để dịch cấu hình giữa các nền tảng nhà cung cấp, kết hợp phân rã cấu hình theo intent và xác minh hai giai đoạn về cú pháp và ngữ nghĩa [8].
+Bên cạnh những khả năng trên, nghiên cứu của Hong và cộng sự cũng chỉ ra các thách thức khi triển khai LLM trong môi trường mạng, bao gồm hiện tượng hallucination, hạn chế về kiến thức chuyên ngành, chi phí tính toán và các vấn đề bảo mật thông tin. Những hạn chế này đặc biệt đáng chú ý đối với các hệ thống cho phép LLM đề xuất hoặc thực hiện thay đổi cấu hình thiết bị, bởi kết quả không chính xác có thể ảnh hưởng đến hoạt động của mạng.
 
-NetConfArena [17] đề xuất môi trường thực thi để đánh giá agent cấu hình theo chu trình quan sát–hành động–phản hồi, thay vì chỉ chấm câu lệnh được sinh ra. Đây là cơ sở tham khảo khi xây dựng hệ thống thử nghiệm trên GNS3.
+Ở góc độ quản lý vận hành hệ thống, Zhang và cộng sự [7] về ứng dụng LLM trong Artificial Intelligence for IT Operations (AIOps). Nghiên cứu tổng hợp và phân tích 183 công trình được công bố trong giai đoạn 2020–2024, tập trung vào các nguồn dữ liệu vận hành, nhiệm vụ quản lý sự cố, phương pháp ứng dụng LLM và cách thức đánh giá. Các nhiệm vụ được khảo sát bao gồm phát hiện bất thường, phân tích nguyên nhân gốc và hỗ trợ khắc phục sự cố.
 
-Các công trình này cho thấy ba xu hướng. Thứ nhất, yêu cầu cấp cao cần được phân rã thành đơn vị nhỏ để giảm độ phức tạp của từng lần sinh. Thứ hai, kết quả sinh bởi LLM cần qua lớp xác minh độc lập. Thứ ba, đánh giá phải xem xét cả tính đúng cú pháp và tính đúng ngữ nghĩa; một cấu hình được thiết bị chấp nhận chưa chắc đã đạt mục tiêu vận hành.
+Nhìn chung, các nghiên cứu khảo sát trên cung cấp cơ sở lý thuyết về khả năng ứng dụng LLM trong quản trị và vận hành hệ thống và cũng cho thấy nhu cầu kết hợp LLM với các công cụ tương tác môi trường và cơ chế kiểm soát phù hợp khi triển khai những tác vụ quản trị mạng có ảnh hưởng trực tiếp đến trạng thái thiết bị.
 
-Đề tài kế thừa tư tưởng phân rã bằng cách biểu diễn yêu cầu thành các operation có thứ tự và dependency. Tuy nhiên, phiên bản hiện tại chưa có bộ kiểm tra cú pháp theo nền tảng, mô phỏng cấu hình trước khi áp dụng hoặc xác minh hình thức đối với trạng thái đích. Do đó, phạm vi hiện tại là nguyên mẫu có kiểm soát, chưa phải hệ thống cấu hình tự trị hoàn toàn.
+### 1.2.2. Các nghiên cứu về cấu hình mạng tự động
 
-## 1.4. Các nghiên cứu về network troubleshooting
+Cấu hình mạng là một trong những nhiệm vụ quan trọng của quá trình quản trị hệ thống. Các yêu cầu cấu hình thường được quản trị viên mô tả dưới dạng mục tiêu hoặc chính sách, trong khi việc triển khai đòi hỏi chuyển đổi những yêu cầu này thành các tham số và câu lệnh phù hợp với từng thiết bị. Do đó, việc ứng dụng LLM vào quá trình chuyển đổi yêu cầu ngôn ngữ tự nhiên thành cấu hình mạng là một hướng nghiên cứu đáng chú ý.
 
-Network troubleshooting là quá trình phát hiện triệu chứng, thu thập dữ liệu liên quan, khoanh vùng miền lỗi, suy luận nguyên nhân gốc và đề xuất hoặc thực hiện biện pháp khắc phục. Phương pháp truyền thống dựa trên runbook, luật chuyên gia, so sánh cấu hình và tương quan sự kiện. Trong hệ thống lớn, dữ liệu có thể đến từ log, trạng thái giao thức, bảng định tuyến, chỉ số hiệu năng và topology; vì vậy, thách thức cốt lõi là liên kết bằng chứng phân tán với quan hệ phụ thuộc giữa các dịch vụ và thiết bị.
+Lira và cộng sự [2] đã đề xuất LLM-NetCFG, một hệ thống hướng đến Zero-Touch Network Configuration Management. Hệ thống sử dụng LLM để chuyển các intent bằng ngôn ngữ tự nhiên thành cấu hình cụ thể. Kiến trúc bao gồm các thành phần chịu trách nhiệm sinh cấu hình, kiểm tra cấu hình và điều phối quá trình thực hiện. Nếu cấu hình không vượt qua quá trình xác minh, thông tin lỗi có thể được sử dụng để điều chỉnh kết quả trước khi triển khai. Cách tiếp cận này cho thấy việc sinh câu lệnh cấu hình bằng LLM chưa đủ để đảm bảo một hệ thống network automation đáng tin cậy. Kết quả do mô hình tạo ra cần được xác minh trước hoặc sau khi áp dụng trên thiết bị.
 
-RFC 9232 mô tả mức trưởng thành của telemetry từ thu thập dữ liệu tới vòng điều khiển khép kín, trong đó hệ thống thông minh tự động yêu cầu dữ liệu, phân tích và cập nhật hoạt động mạng [9]. Các nghiên cứu LLM cho Root Cause Analysis gần đây nhấn mạnh rằng LLM thuần túy dễ tạo suy luận không ổn định; kết quả cần được ràng buộc bởi bằng chứng có cấu trúc và tri thức miền [10].
+NetConfArena [5] phát triển cách tiếp cận này theo hướng tương tác vòng kín. Thay vì chỉ yêu cầu LLM sinh ra một tập lệnh cấu hình và so sánh với câu trả lời mẫu, AI Agent được đặt trong một môi trường mạng có thể thực thi. Agent quan sát trạng thái hiện tại, thực hiện cấu hình, sử dụng các lệnh kiểm tra để thu thập phản hồi và tiếp tục sửa đổi khi cần thiết. Một điểm quan trọng của NetConfArena là kết quả cuối cùng được đánh giá dựa trên hành vi của mạng thay vì chỉ dựa trên việc câu lệnh có được thiết bị chấp nhận hay không. Điều này phù hợp với thực tế rằng nhiều tập lệnh khác nhau có thể cùng tạo ra một trạng thái mạng đúng.
 
-NIKA [14, 15] chia bài toán troubleshooting thành Detection, Localization và RCA; mã nguồn NIKA 0.2 đánh giá theo các cặp tài nguyên–loại lỗi, tính Precision, Recall và F1. NETARENA [16] nhấn mạnh hiệu quả, độ an toàn và thời gian thực thi trong môi trường có trạng thái. Các phương pháp này là căn cứ thiết kế phép đo trong đề tài.
+Từ hai nghiên cứu trên, có thể nhận thấy LLM có khả năng hỗ trợ chuyển đổi yêu cầu ngôn ngữ tự nhiên thành cấu hình thiết bị mạng. Tuy nhiên, để áp dụng trong một hệ thống quản trị mạng, quá trình cấu hình cần được kết hợp với khả năng thu thập thông tin trạng thái, kiểm tra hành động và đánh giá kết quả thực hiện. Đây là cơ sở tham khảo cho việc xây dựng chức năng lập kế hoạch và tương tác thiết bị mạng trong đề tài.
 
-Trong đề tài, Planner Agent tạo các bước thu thập bằng lệnh quan sát, Network Agent lấy kết quả thực tế và Analyst Agent tổng hợp phát hiện, nguyên nhân có khả năng cùng khuyến nghị. Đặc biệt, nhóm đã bổ sung các kịch bản sự cố GNS3 có Ground Truth và bộ chấm phiên bản v4 dựa trên cặp tài nguyên–loại lỗi, tham khảo NIKA [14, 15]. Việc chấm có cấu trúc giúp tách đánh giá đúng vị trí khỏi đúng loại nguyên nhân và tránh việc câu trả lời chỉ chứa đủ từ khóa vẫn được tính đúng. Tuy nhiên, đây là đánh giá đối chiếu nhãn kịch bản, không phải tự động kiểm chứng lại tính đúng đắn của mọi nhận định từ trạng thái mạng; telemetry liên tục và knowledge graph chưa được triển khai.
+### 1.2.3. Các nghiên cứu về chẩn đoán và khắc phục sự cố mạng
 
-## 1.5. Multi-Agent trong quản trị và xử lý sự cố hệ thống
+Bên cạnh cấu hình thiết bị, chẩn đoán và xử lý sự cố là những nhiệm vụ quan trọng trong quá trình vận hành mạng. Khi xảy ra sự cố, quản trị viên thường phải thu thập thông tin từ nhiều thiết bị, kiểm tra trạng thái kết nối, phân tích kết quả và xác định nguyên nhân trước khi lựa chọn phương án khắc phục. Quá trình này đòi hỏi kinh nghiệm, khả năng kết hợp thông tin từ nhiều nguồn và thực hiện các bước kiểm tra phù hợp với từng tình huống.
 
-Multi-Agent System (MAS) phân chia một nhiệm vụ phức tạp cho nhiều tác tử có vai trò và giao diện rõ ràng. Trong ứng dụng LLM, AutoGen minh họa khả năng tổ chức các tác tử hội thoại để phối hợp hoàn thành nhiệm vụ [5]. Lợi ích của cách tiếp cận nhiều tác tử không nằm ở số lượng tác tử, mà ở khả năng cô lập trách nhiệm và quyền hạn: tác tử lập kế hoạch không cần quyền truy cập credential; tác tử thực thi không cần tự suy luận mục tiêu; tác tử phân tích không được tự thay đổi thiết bị.
+Wang và cộng sự [3] đề xuất NIKA, một framework dùng để đánh giá AI Agent trong bài toán rong bài toán Network Troubleshooting. NIKA cung cấp các kịch bản sự cố mạng được xây dựng trên nhiều loại topology, đồng thời cho phép AI Agent tương tác với môi trường thông qua những công cụ giám sát và chẩn đoán. Nghiên cứu phân chia việc đánh giá khả năng troubleshooting thành ba nhiệm vụ chính, bao gồm: phát hiện sự cố, xác định vị trí sự cố và xác định nguyên nhân gốc.
 
-OpsAgent [18] minh họa cách tổ chức nhiều agent chuyên trách cho bài toán sự cố trong hệ thống microservice, cung cấp ý tưởng về cơ chế phối hợp và phân chia trách nhiệm. Đề tài không sao chép thuật toán OpsAgent.
+Kết quả thực nghiệm của NIKA cho thấy các mô hình lớn có thể đạt kết quả tương đối tốt hơn ở bước phát hiện sự cố, nhưng vẫn gặp khó khăn ở bước xác định chính xác vị trí lỗi và nguyên nhân gốc. Điều này cho thấy Network Troubleshooting đòi hỏi nhiều hơn khả năng hiểu ngôn ngữ. Agent cần liên tục thu thập bằng chứng từ môi trường, lựa chọn công cụ kiểm tra thích hợp và kết hợp nhiều thông tin trước khi đưa ra kết luận.
 
-Đối với quản trị mạng, phân tách này giúp giảm phạm vi ảnh hưởng khi một thành phần trả kết quả sai. Planner tạo kế hoạch nhưng không kết nối thiết bị. Network Agent chỉ nhận operation và mapping đã được kiểm tra. Analyst chỉ xử lý output sau thực thi. Orchestrator, thay vì LLM, quản lý trạng thái, dependency, phê duyệt và ghi audit. Đây là mô hình “AI đề xuất — phần mềm xác minh và thực thi” phù hợp hơn với yêu cầu kiểm soát thay đổi.
+Ở hướng nghiên cứu về đánh giá AI Agent trong tự động hóa mạng, Zhou và cộng sự [4] đề xuất NETARENA, một framework tạo benchmark động cho các nhiệm vụ quản lý và vận hành hệ thống mạng. NETARENA sử dụng mô hình trừu tượng dựa trên trạng thái và hành động để biểu diễn nhiệm vụ, trong đó agent thực hiện các thao tác trên môi trường nhằm đạt được trạng thái mục tiêu.
 
-## 1.6. Nhận xét các nghiên cứu liên quan
+Khác với phương pháp đánh giá chỉ dựa trên kết quả đầu ra, NETARENA tích hợp với các môi trường thực thi để đánh giá hành vi của agent thông qua ba tiêu chí chính: tính đúng đắn, độ an toàn và thời gian thực hiện . Nghiên cứu chỉ ra rằng một hành động có thể đạt được mục tiêu nhưng vẫn gây ra những ảnh hưởng không mong muốn đối với hệ thống. Vì vậy, hiệu quả của AI Agent cần được xem xét trên nhiều khía cạnh thay vì chỉ dựa vào tỷ lệ hoàn thành nhiệm vụ.
 
-| Hướng nghiên cứu | Đóng góp chính | Hạn chế cần lưu ý khi áp dụng |
-| --- | --- | --- |
-| Intent-Based Networking | Trừu tượng hóa mục tiêu khỏi chi tiết thiết bị; nhấn mạnh fulfillment và assurance | Cần mô hình intent, cơ chế dịch và vòng phản hồi đáng tin cậy |
-| LLM sinh cấu hình | Giảm rào cản cú pháp; hỗ trợ biến yêu cầu tự nhiên thành cấu hình | Có nguy cơ hallucination, sai cú pháp hoặc đúng cú pháp nhưng sai mục tiêu |
-| LLM hỗ trợ troubleshooting | Tổng hợp nhiều bằng chứng và tạo giải thích dễ hiểu | Cần grounding, telemetry và benchmark RCA; không nên suy luận khi thiếu dữ liệu |
-| Multi-Agent | Phân tách trách nhiệm, chuyên môn và quyền hạn | Tăng độ phức tạp điều phối, trạng thái và xử lý lỗi liên tác tử |
-| Closed-loop automation | Theo dõi trạng thái thực tế và hiệu chỉnh để duy trì intent | Đòi hỏi quan sát liên tục, kiểm tra hậu điều kiện, rollback và quản trị rủi ro |
+Bajpai [8] nghiên cứu việc ứng dụng AIOps và ML vào tự động hóa quá trình xử lý sự cố mạng. Công trình trình bày một kiến trúc tổng quan gồm các giai đoạn thu thập dữ liệu, tiền xử lý, phát hiện bất thường, phân tích nguyên nhân gốc, dự đoán sự cố và tự động khắc phục. Cách tiếp cận này cho thấy hoạt động troubleshooting có thể được tổ chức thành nhiều bước xử lý liên quan đến dữ liệu và hành động vận hành. Tuy nhiên, nghiên cứu chủ yếu trình bày kiến trúc AIOps ở mức tổng quan, chưa tập trung vào cơ chế phối hợp giữa các LLM Agent chuyên trách.
 
-Nhìn chung, các nghiên cứu khẳng định tiềm năng của LLM trong giao diện intent và lập kế hoạch, nhưng cũng thống nhất gián tiếp về nhu cầu xác minh ngoài mô hình. Khoảng cách lớn giữa nguyên mẫu và triển khai thực tế nằm ở dữ liệu đánh giá, kiểm soát tác động, khả năng phục hồi và chứng minh rằng trạng thái sau thực thi phù hợp với mục tiêu ban đầu.
+Nhìn chung, NIKA cung cấp cơ sở cho việc phân chia và đánh giá các nhiệm vụ chẩn đoán sự cố, NETARENA đưa ra phương pháp đánh giá hành vi của agent trong môi trường có thể thực thi, trong khi nghiên cứu của Bajpai mô tả các giai đoạn xử lý trong một hệ thống AIOps. Những công trình này cung cấp cơ sở tham khảo cho việc thiết kế các chức năng thu thập thông tin, phân tích trạng thái, xác định nguyên nhân và hỗ trợ khắc phục sự cố trong hệ thống đề xuất.
 
-## 1.7. Khoảng trống nghiên cứu và hướng tiếp cận của đề tài
+### 1.2.4. Multi-Agent trong quản lý sự cố
 
-Khoảng trống mà đề tài hướng tới là xây dựng một luồng end-to-end có thể truy vết cho yêu cầu quản trị mạng bằng tiếng Việt, đồng thời hạn chế quyền tự quyết trực tiếp của LLM. Hướng tiếp cận gồm các đặc điểm:
+Các nhiệm vụ quản lý và xử lý sự cố hệ thống thường bao gồm nhiều hoạt động có mối liên hệ với nhau, từ tiếp nhận yêu cầu, thu thập dữ liệu, phân tích trạng thái đến xác định nguyên nhân và lựa chọn phương án xử lý. Việc tổ chức những hoạt động này trong một hệ thống AI đặt ra yêu cầu về phân chia trách nhiệm, quản lý luồng thông tin và phối hợp giữa các thành phần.
 
-1. Tiếp nhận yêu cầu trong hội thoại và gắn yêu cầu gốc với Task để truy vết.
-2. Chỉ cung cấp cho Planner danh sách thiết bị tồn tại trong inventory và kiểm tra lại mọi `device_id` do mô hình trả về.
-3. Biểu diễn kế hoạch thành các operation có thứ tự, dependency, vai trò thiết bị và chế độ truy cập `READ`/`WRITE`.
-4. Tách Planner Agent, Network Agent và Analyst Agent; đặt lifecycle và business rule trong Orchestrator cùng domain service.
-5. Yêu cầu phê duyệt thao tác `WRITE`; đối chiếu snapshot câu lệnh và SHA-256 hash trước khi thực thi.
-6. Mã hóa credential thiết bị trong PostgreSQL và chỉ giải mã theo nhu cầu tại ranh giới kết nối.
-7. Lưu trạng thái Task, operation, mapping thiết bị, execution, action log và activity timeline.
+Luo và cộng sự [6] đề xuất OpsAgent, một hệ thống Multi-Agent phục vụ quản lý sự cố (Incident Management) trong môi trường microservice. Hệ thống hướng đến các nhiệm vụ như phát hiện bất thường, phân loại sự cố và xác định thành phần gây ra lỗi. OpsAgent được xây dựng trên ba thành phần chính: bộ xử lý dữ liệu vận hành, cơ chế phối hợp giữa nhiều agent và cơ chế tích lũy, cải thiện năng lực xử lý qua quá trình sử dụng. Trong kiến trúc OpsAgent, dữ liệu quan sát từ hệ thống, bao gồm metrics, logs và traces, được xử lý và chuyển đổi thành các mô tả có cấu trúc để phục vụ quá trình phân tích. Các agent chuyên trách thực hiện những nhiệm vụ khác nhau dưới sự điều phối của Orchestrator. Hệ thống còn sử dụng cơ chế kiểm tra chéo (Cross-review), trong đó các agent xem xét kết quả và bằng chứng do những agent khác đưa ra nhằm phát hiện thông tin còn thiếu hoặc các nhận định cần được điều chỉnh.
 
-Đề tài còn triển khai bộ thực nghiệm có thể tái lập với kịch bản tiêm lỗi, Ground Truth, đánh giá định lượng và lịch sử Benchmark Run. Đây là mở rộng đã hiện thực so với đề cương ban đầu; tuy nhiên **chưa đồng nghĩa với việc sử dụng benchmark chính thức của NIKA**. Intent assurance liên tục, rollback tự động, telemetry thời gian thực và kiểm chứng trên mạng production vẫn nằm ngoài phạm vi.
+Mặc dù OpsAgent không trực tiếp nghiên cứu cấu hình thiết bị mạng, nhưng nghiên cứu cung cấp cơ sở tham khảo cho việc thiết kế kiến trúc Multi-Agent với các thành phần có trách nhiệm chuyên biệt.
+
+## 1.3. Nhận xét và khoảng trống nghiên cứu
+
+Qua các công trình đã khảo sát, có thể nhận thấy LLM và AI Agent đang được ứng dụng trong nhiều nhiệm vụ quản lý và vận hành mạng. Các nghiên cứu tổng quan của Hong và cộng sự [1] và Zhang và cộng sự [7] cho thấy tiềm năng của LLM trong tự động hóa vận hành, đồng thời chỉ ra những thách thức về độ tin cậy, kiến thức chuyên ngành và tính an toàn.
+
+Trong lĩnh vực cấu hình mạng, LLM-NetCFG [2] nghiên cứu việc chuyển đổi yêu cầu ngôn ngữ tự nhiên thành cấu hình thiết bị, trong khi NetConfArena [5] tập trung đánh giá khả năng thực hiện các tác vụ cấu hình của AI Agent trong môi trường có thể thực thi. Đối với xử lý sự cố, NIKA [3] đánh giá khả năng phát hiện, định vị và xác định nguyên nhân gốc; NETARENA [4] cung cấp phương pháp đánh giá AI Agent dựa trên tính đúng đắn, độ an toàn và thời gian thực thi. Bên cạnh đó, Bajpai [8] trình bày hướng tiếp cận sử dụng AIOps và Machine Learning để tự động hóa quy trình xử lý sự cố mạng.
+
+Về kiến trúc hệ thống, OpsAgent [6] đề xuất phương pháp tổ chức các agent chuyên trách và phối hợp thực hiện nhiệm vụ quản lý sự cố trong môi trường microservice. Công trình cung cấp cơ sở tham khảo cho việc thiết kế hệ thống Multi-Agent, nhưng không trực tiếp tập trung vào cấu hình và xử lý sự cố trên thiết bị mạng.
+
+Nhìn chung, các nghiên cứu đã cung cấp những phương pháp và công cụ cho từng nhóm nhiệm vụ. Trong phạm vi các tài liệu khảo sát, việc thiết kế và tích hợp các chức năng lập kế hoạch, tương tác thiết bị, phân tích trạng thái và hỗ trợ khắc phục sự cố trong một kiến trúc Multi-Agent thống nhất vẫn là vấn đề cần tiếp tục nghiên cứu và đánh giá.
+
+**Bảng 1.1. Tổng hợp đóng góp và khoảng trống của các nghiên cứu liên quan**
+
+| Tài liệu | Hướng nghiên cứu                                                 | Đóng góp đối với đề tài                                                                                                                                        | Hạn chế và khoảng trống liên quan                                                                                                                             |
+| -------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [1]      | Khảo sát ứng dụng LLM trong quản lý và vận hành mạng             | Cung cấp cơ sở tổng quan để xác định các nhóm nhiệm vụ mà LLM có thể hỗ trợ, gồm cấu hình, quản lý sự cố, bảo mật và điều phối hoạt động mạng.                 | Là nghiên cứu khảo sát, chưa đề xuất một quy trình Multi-Agent hoàn chỉnh có khả năng kiểm soát việc thực thi trên thiết bị mạng.                             |
+| [2]      | Quản lý cấu hình mạng Zero-Touch bằng LLM                        | Làm cơ sở cho việc chuyển đổi yêu cầu ngôn ngữ tự nhiên thành cấu hình, đồng thời cho thấy sự cần thiết của bước xác minh trước khi triển khai.                | Chủ yếu tập trung vào sinh và kiểm tra cấu hình; chưa đánh giá toàn diện quá trình troubleshooting, Human-in-the-loop và truy vết thực thi.                   |
+| [3]      | Benchmark AI Agent trong Network Troubleshooting                 | Cung cấp cách phân tách nhiệm vụ thành phát hiện, định vị và xác định nguyên nhân gốc; là cơ sở tham khảo cho mô hình Ground Truth và các chỉ số đánh giá RCA. | Tập trung vào đánh giá Agent; không cung cấp đầy đủ một hệ thống quản trị tích hợp gồm quản lý người dùng, thiết bị, phê duyệt cấu hình và nhật ký kiểm toán. |
+| [4]      | Benchmark động cho AI Agent trong Network Automation             | Gợi ý cách đánh giá hành vi Agent dựa trên tính đúng đắn, độ an toàn và thời gian thực thi trong môi trường có thể tương tác.                                  | Mục tiêu chính là xây dựng benchmark tổng quát; chưa tập trung vào quy trình điều phối Multi-Agent và Human-in-the-loop trên GNS3.                            |
+| [5]      | Benchmark cấu hình mạng theo vòng kín                            | Khẳng định kết quả cấu hình cần được đánh giá theo trạng thái và hành vi thực tế của mạng thay vì chỉ so sánh chuỗi lệnh.                                      | Chưa bao quát đầy đủ bài toán quản trị thiết bị, phân quyền, audit và chẩn đoán nguyên nhân sự cố trong một ứng dụng quản trị thống nhất.                     |
+| [6]      | Multi-Agent cho quản lý sự cố trong hệ thống microservice        | Cung cấp cơ sở thiết kế các Agent chuyên trách, Orchestrator và cơ chế kiểm tra chéo dựa trên bằng chứng.                                                      | Đối tượng nghiên cứu là microservice với metrics, logs và traces; không trực tiếp xử lý cấu hình hoặc giao thức trên thiết bị mạng.                           |
+| [7]      | Khảo sát AIOps trong kỷ nguyên LLM                               | Hệ thống hóa các nguồn dữ liệu, nhiệm vụ quản lý sự cố và phương pháp ứng dụng LLM trong vận hành hệ thống.                                                    | Phạm vi nghiên cứu rộng và chủ yếu mang tính khảo sát; chưa cụ thể hóa quy trình tương tác, phê duyệt và kiểm chứng trên thiết bị mạng.                       |
+| [8]      | Ứng dụng AIOps và Machine Learning trong Network Troubleshooting | Cung cấp mô hình tham khảo cho chuỗi thu thập dữ liệu, phát hiện bất thường, RCA, dự đoán và khắc phục sự cố.                                                  | Kiến trúc được trình bày ở mức tổng quan; chưa tích hợp LLM, các Agent chuyên trách và cơ chế điều phối thực thi có kiểm soát.                                |
+
+Bảng 1.1 cho thấy các công trình đã cung cấp cơ sở quan trọng cho từng khía cạnh riêng lẻ của bài toán, bao gồm ứng dụng LLM, sinh cấu hình, Network Troubleshooting, kiến trúc Multi-Agent và phương pháp benchmark. Tuy nhiên, trong phạm vi các tài liệu khảo sát, chưa có công trình nào đồng thời tích hợp việc tiếp nhận yêu cầu bằng ngôn ngữ tự nhiên, lập kế hoạch, tương tác trực tiếp với thiết bị, thu thập bằng chứng, phân tích nguyên nhân gốc, phê duyệt thay đổi cấu hình và đánh giá kết quả trong một quy trình Multi-Agent thống nhất trên môi trường GNS3. Khoảng trống này là cơ sở để đề tài xác lập hướng tiếp cận được trình bày tại mục 1.4.
+
+## 1.4. Hướng tiếp cận của đề tài
+
+Trên cơ sở phân tích các công trình liên quan và xác định những vấn đề cần tiếp tục nghiên cứu, đề tài lựa chọn hướng tiếp cận xây dựng hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng thông qua giao tiếp bằng ngôn ngữ tự nhiên. Hệ thống được thiết kế theo kiến trúc phân chia nhiệm vụ, trong đó mô hình ngôn ngữ lớn đảm nhiệm vai trò phân tích yêu cầu và hỗ trợ ra quyết định, còn các thành phần điều phối và xử lý nghiệp vụ chịu trách nhiệm kiểm soát quá trình thực hiện. Cách tiếp cận này nhằm khai thác khả năng xử lý ngôn ngữ của LLM, đồng thời hạn chế việc để mô hình trực tiếp quyết định và thực thi những thao tác có thể làm thay đổi trạng thái thiết bị mạng.
+
+Về tổ chức kiến trúc, hệ thống sử dụng các Agent chuyên trách, bao gồm Planner Agent, Configuration Agent, Network Agent và Analyst Agent. Planner Agent phân tích yêu cầu và xây dựng kế hoạch ở mức nghiệp vụ; Configuration Agent chuyển yêu cầu thay đổi đã lập kế hoạch thành câu lệnh CLI phù hợp; Network Agent tương tác với thiết bị thông qua công cụ quản trị mạng; Analyst Agent phân tích thông tin và đánh giá kết quả xử lý. Thành phần điều phối trung tâm kiểm soát thứ tự thực hiện, trạng thái nhiệm vụ và các điều kiện nghiệp vụ trong từng giai đoạn.
+
+Đối với quá trình thực thi, đề tài tổ chức các nhiệm vụ thành những thao tác có cấu trúc, xác định rõ thiết bị liên quan, thứ tự thực hiện, quan hệ phụ thuộc và phạm vi truy cập. Thông tin thiết bị được quản lý tập trung nhằm giới hạn đối tượng mà hệ thống có thể tương tác, đồng thời các thao tác đọc thông tin và thay đổi cấu hình được phân biệt để áp dụng cơ chế kiểm soát phù hợp. Đặc biệt, những thao tác làm thay đổi cấu hình thiết bị phải trải qua bước phê duyệt của người dùng trước khi thực thi. Hệ thống cũng thực hiện kiểm tra tính nhất quán của nội dung đã được phê duyệt nhằm hạn chế nguy cơ thực thi những thay đổi ngoài phạm vi cho phép.
+
+Bên cạnh đó, đề tài chú trọng khả năng theo dõi và truy vết quá trình xử lý thông qua việc quản lý trạng thái nhiệm vụ, ghi nhận các thao tác thực thi và lưu trữ lịch sử hoạt động. Mỗi yêu cầu của người dùng được liên kết với một nhiệm vụ cụ thể, cho phép theo dõi tiến trình từ giai đoạn tiếp nhận, lập kế hoạch đến thực hiện và đánh giá kết quả. Những thông tin này hỗ trợ việc kiểm tra, phân tích các tình huống phát sinh và xác định nguyên nhân khi nhiệm vụ không đạt kết quả mong đợi. Đồng thời, hệ thống áp dụng các cơ chế bảo vệ thông tin xác thực thiết bị nhằm hạn chế việc truy cập và sử dụng thông tin nhạy cảm không cần thiết.
+
+Về thực nghiệm, đề tài triển khai hệ thống trong môi trường mô phỏng GNS3 với các thiết bị mạng ảo hóa và những kịch bản cấu hình, xử lý sự cố được xác định trước. Các kịch bản thực nghiệm được xây dựng dựa trên trạng thái ban đầu, yêu cầu nhiệm vụ, nguyên nhân sự cố và kết quả mong đợi, tạo điều kiện đánh giá hoạt động của hệ thống theo những tiêu chí có thể kiểm chứng. Quá trình đánh giá tập trung vào khả năng hoàn thành nhiệm vụ, độ chính xác trong xác định nguyên nhân sự cố, hiệu quả khắc phục, mức độ tuân thủ các điều kiện an toàn và thời gian thực hiện. Kết quả được ghi nhận và tổng hợp nhằm phục vụ việc phân tích hiệu quả của hệ thống trong những điều kiện thử nghiệm khác nhau.
+
+Phạm vi nghiên cứu của đề tài tập trung vào việc thiết kế, xây dựng và đánh giá hệ thống Multi-Agent trong môi trường mạng mô phỏng. Các nội dung như kiểm chứng trên hạ tầng mạng thực tế, giám sát telemetry liên tục, tự động khôi phục cấu hình và bảo đảm chính sách mạng trong toàn bộ vòng đời vận hành chưa được xem xét trong phạm vi triển khai. Thông qua hướng tiếp cận này, đề tài hướng đến việc đánh giá tính khả thi của việc kết hợp LLM, kiến trúc Multi-Agent và các cơ chế kiểm soát thực thi trong một hệ thống hỗ trợ quản trị mạng có khả năng theo dõi, kiểm chứng và đánh giá kết quả.
 
 ---
 
 # CHƯƠNG 2. CƠ SỞ LÝ THUYẾT VÀ CÔNG NGHỆ
 
-## 2.1. Large Language Model
+## 2.1. Tổng quan về mô hình ngôn ngữ lớn (Large Language Models)
 
-LLM là mô hình học sâu được huấn luyện trên tập dữ liệu văn bản lớn để ước lượng phân bố xác suất của token tiếp theo. Nhờ học các mẫu ngôn ngữ và biểu diễn ngữ nghĩa, LLM có thể thực hiện nhiều tác vụ như phân loại ý định, trích xuất thực thể, sinh nội dung có cấu trúc và tổng hợp thông tin. Trong đề tài, LLM không được huấn luyện lại mà được truy cập qua NVIDIA API bằng `ChatNVIDIA`.
+### 2.1.1. Khái niệm mô hình ngôn ngữ lớn
 
-Hai tác vụ sử dụng LLM là lập kế hoạch và phân tích kết quả. Planner nhận yêu cầu, public inventory và JSON Schema của `ExecutionPlanCreate`; đầu ra được Pydantic kiểm tra. Khi JSON không hợp lệ, tác tử cung cấp lỗi validation để mô hình sửa, tối đa hai lần thử lại; lời gọi có timeout 90 giây. Analyst nhận danh sách kết quả thực thi đã cấu trúc và trả về các trường diễn giải: `summary`, `findings`, `likely_causes`, `recommendations`, `requires_more_data`; đồng thời xuất `is_anomaly` và danh sách `root_causes` có cấu trúc (device, interface, fault_type) để phục vụ chấm RCA.
+Mô hình ngôn ngữ lớn (Large Language Model – LLM) là một lớp mô hình học sâu được huấn luyện trên tập dữ liệu văn bản quy mô lớn nhằm học các quy luật và mối quan hệ trong ngôn ngữ tự nhiên. Theo Zhao và cộng sự [9], LLM có khả năng thực hiện nhiều nhiệm vụ xử lý ngôn ngữ tự nhiên như sinh văn bản, trả lời câu hỏi, dịch máy, tóm tắt và phân tích nội dung. Sự phát triển của các mô hình này gắn liền với việc mở rộng quy mô tham số, dữ liệu huấn luyện và tài nguyên tính toán, kết hợp với những cải tiến về kiến trúc và phương pháp huấn luyện.
 
-Các tham số được đặt theo hướng giảm biến thiên: `temperature=0` và tắt chế độ suy luận mở rộng của model trong adapter hiện dùng. Dù vậy, tính xác định tuyệt đối không được bảo đảm. Schema validation chỉ chứng minh đúng cấu trúc, không chứng minh lệnh mạng đúng ngữ nghĩa. Vì vậy, đầu ra LLM tiếp tục phải chịu kiểm tra inventory, dependency, access mode và approval.
+Về nguyên lý hoạt động, nhiều mô hình ngôn ngữ sinh văn bản sử dụng phương pháp dự đoán xác suất xuất hiện của token tiếp theo dựa trên các token đã có trong ngữ cảnh. Thông qua quá trình huấn luyện, mô hình học được những đặc trưng ngôn ngữ và có thể tạo ra phản hồi phù hợp với dữ liệu đầu vào. Tuy nhiên, khả năng tạo ra văn bản mạch lạc không đồng nghĩa với việc mọi thông tin được sinh ra đều chính xác.
+
+### 2.1.2. Kiến trúc Transformer
+
+Theo Vaswani và cộng sự [10], Transformer là kiến trúc mạng nơ-ron được xây dựng dựa trên cơ chế Attention nhằm mô hình hóa mối quan hệ giữa các thành phần trong chuỗi dữ liệu. Khác với những kiến trúc mạng hồi quy truyền thống, Transformer không phụ thuộc vào cơ chế hồi quy để xử lý toàn bộ chuỗi, qua đó tạo điều kiện thuận lợi cho việc xử lý song song trong quá trình huấn luyện và nâng cao khả năng học các quan hệ phụ thuộc giữa những vị trí trong chuỗi.
+
+Một thành phần quan trọng của Transformer là Self-Attention, cho phép mô hình tổng hợp thông tin từ những vị trí khác nhau trong chuỗi. Cơ chế Scaled Dot-Product Attention được biểu diễn như sau:
+
+$$
+\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+$$
+
+Trong đó, $Q$, $K$ và $V$ lần lượt là các ma trận truy vấn, khóa và giá trị; $d_k$ là số chiều của vector khóa. Phép toán softmax chuẩn hóa các điểm Attention thành trọng số, từ đó xác định mức độ đóng góp của các vector giá trị vào biểu diễn đầu ra.
+
+### 2.1.3. Hạn chế của mô hình ngôn ngữ lớn
+
+Mặc dù đạt được nhiều tiến bộ trong xử lý và sinh ngôn ngữ tự nhiên, các mô hình ngôn ngữ lớn vẫn tồn tại những hạn chế về độ chính xác, tính nhất quán và khả năng kiểm chứng thông tin. Những vấn đề này đặc biệt đáng lưu ý khi LLM được tích hợp vào các hệ thống yêu cầu độ tin cậy cao hoặc có khả năng tác động đến môi trường bên ngoài.
+
+Một trong những hạn chế đáng chú ý là hiện tượng hallucination, khi mô hình tạo ra nội dung có vẻ hợp lý nhưng không được hỗ trợ bởi nguồn thông tin hoặc không phản ánh đúng thực tế. Theo Ji và cộng sự (2023) [11], hiện tượng này có thể biểu hiện qua việc tạo ra thông tin không nhất quán với dữ liệu nguồn hoặc sai lệch so với tri thức thực tế, làm giảm độ tin cậy của kết quả trong các nhiệm vụ đòi hỏi tính chính xác.
+
+Bên cạnh đó, chất lượng phản hồi của LLM phụ thuộc vào cách diễn đạt yêu cầu, ngữ cảnh và dữ liệu đầu vào. Những thay đổi trong cách cung cấp thông tin có thể dẫn đến kết quả khác nhau, ngay cả với các yêu cầu tương tự. Ngoài ra, mô hình có thể đưa ra lập luận thiếu chính xác hoặc không tuân thủ đầy đủ các ràng buộc kỹ thuật, đặc biệt trong những nhiệm vụ yêu cầu xử lý nhiều bước.
+
+Trong lĩnh vực quản trị và tự động hóa mạng, các hạn chế này có thể dẫn đến việc phân tích sai trạng thái thiết bị, xác định không chính xác nguyên nhân sự cố hoặc đề xuất cấu hình không phù hợp. Nếu được thực thi mà không qua kiểm tra, những kết quả này có nguy cơ gây ra thay đổi ngoài mong muốn và ảnh hưởng đến hoạt động của hệ thống mạng.
+
+Do đó, việc ứng dụng LLM trong quản trị mạng cần kết hợp với các cơ chế kiểm tra tính hợp lệ, xác minh kết quả và kiểm soát thực thi. Những biện pháp như đối chiếu trạng thái thiết bị, kiểm tra cấu hình và yêu cầu phê duyệt trước khi thực hiện thay đổi góp phần hạn chế rủi ro. Đây là cơ sở cho việc phát triển các hệ thống AI Agent vừa khai thác khả năng của LLM, vừa duy trì sự kiểm soát đối với những thao tác trên hạ tầng mạng.
 
 ## 2.2. AI Agent và Multi-Agent System
 
-AI Agent là thành phần nhận quan sát, lựa chọn hành động và tạo kết quả nhằm đạt mục tiêu trong một môi trường. Một agent thực dụng thường gồm mô hình ra quyết định, trạng thái hoặc ngữ cảnh, công cụ tương tác và cơ chế phản hồi. MAS là tập hợp nhiều agent phối hợp thông qua giao diện hoặc giao thức chung.
+### 2.2.1. Khái niệm AI Agent
 
-Trong đề tài, khái niệm “agent” được sử dụng theo vai trò ứng dụng:
+AI Agent là một thực thể có khả năng nhận thông tin từ môi trường, đưa ra quyết định và thực hiện hành động nhằm đạt được mục tiêu xác định. Theo Wooldridge và Jennings (1995) [12], các đặc tính quan trọng của agent bao gồm tính tự chủ (autonomy), khả năng phản ứng với môi trường (reactivity), tính chủ động (pro-activeness) và khả năng tương tác xã hội (social ability).
 
-- **Planner Agent:** dùng LLM để tạo execution plan có cấu trúc.
-- **Network Agent:** không dùng LLM; kiểm tra tham số và gọi Network Tool.
-- **Analyst Agent:** dùng LLM để phân tích output và tạo phản hồi tiếng Việt.
+Trong các hệ thống trí tuệ nhân tạo hiện đại, LLM có thể được sử dụng làm thành phần hỗ trợ ra quyết định cho agent. Theo Xi và cộng sự (2025) [13], các LLM-based Agent có thể kết hợp khả năng xử lý ngôn ngữ tự nhiên với các cơ chế lập kế hoạch, ghi nhớ, sử dụng công cụ và tương tác với môi trường, qua đó hỗ trợ thực hiện những nhiệm vụ phức tạp đòi hỏi nhiều bước xử lý liên tiếp.
 
-LangGraph phụ trách chuyển bước cấp cao; ba handler planning, execution và analysis thực hiện quy tắc của từng node. Các handler không được xem là tác tử LLM mà là thành phần phần mềm tất định. Thiết kế này tránh dùng một “siêu tác tử” vừa suy luận, giữ credential, thực thi và tự xác nhận kết quả.
+Khác với chatbot chỉ tạo phản hồi văn bản, AI Agent có thể tham gia vào quy trình thực hiện nhiệm vụ thông qua việc lựa chọn hành động và tiếp nhận kết quả từ những công cụ bên ngoài. Tuy nhiên, không phải mọi agent đều bắt buộc sử dụng LLM; một số agent có thể hoạt động dựa trên quy tắc hoặc các cơ chế xử lý xác định trước, tùy thuộc vào mục tiêu và yêu cầu hệ thống.
 
-## 2.3. Intent-Based Networking
+### 2.2.2. Khái niệm Multi-Agent System
 
-RFC 9315 định nghĩa intent là tập mục tiêu vận hành và kết quả mong muốn được mô tả theo cách khai báo, không chỉ định cách đạt được [1]. IBN bao gồm hai nhóm chức năng: intent fulfillment chuyển intent thành hành động; intent assurance quan sát và xác nhận mạng tiếp tục tuân thủ intent.
+Multi-Agent System (MAS) là hệ thống gồm nhiều agent hoạt động trong một môi trường và có khả năng tương tác để thực hiện những nhiệm vụ hoặc đạt được các mục tiêu xác định. Các agent có thể phối hợp, trao đổi thông tin và phân chia trách nhiệm trong quá trình thực hiện nhiệm vụ chung.
 
-Đề tài hỗ trợ một phần của intent fulfillment: người dùng nhập yêu cầu tiếng Việt, Planner biến yêu cầu thành operation và command, sau đó Orchestrator thực thi theo điều kiện. Tuy nhiên, không phải mọi câu lệnh ngôn ngữ tự nhiên đều là intent đúng nghĩa. Yêu cầu “chạy `show ip route` trên P1” là chỉ thị thao tác cụ thể, còn yêu cầu “duy trì kết nối giữa hai site khi một đường truyền lỗi” gần với intent vì mô tả kết quả mong muốn. Phiên bản hiện tại chưa có mô hình trạng thái mong muốn bền vững, phát hiện intent drift hoặc vòng assurance liên tục; do đó hệ thống chỉ mới tiếp cận IBN ở lớp giao diện và phân rã yêu cầu.
+Trong những hệ thống ứng dụng LLM, kiến trúc Multi-Agent cho phép phân chia nhiệm vụ thành các chức năng chuyên biệt. Theo Wu và cộng sự (2024) [14], framework AutoGen được đề xuất nhằm hỗ trợ xây dựng các ứng dụng LLM thông qua sự tương tác giữa nhiều agent, trong đó các agent có thể được cấu hình với vai trò, công cụ và phương thức phối hợp khác nhau.
 
-## 2.4. Network Automation
+Cách tiếp cận Multi-Agent tạo điều kiện tổ chức các nhiệm vụ phức tạp thành nhiều bước xử lý có trách nhiệm rõ ràng, đồng thời hỗ trợ phân công và theo dõi tiến trình thực hiện của từng agent trong hệ thống. Tuy nhiên, hiệu quả của hệ thống phụ thuộc vào cách thiết kế cơ chế phối hợp và kiểm soát thông tin giữa các thành phần.
 
-Network Automation là việc sử dụng phần mềm để thực hiện có kiểm soát các tác vụ cấu hình, kiểm tra, giám sát và quản lý vòng đời mạng. Các thành phần cơ bản gồm inventory, credential management, driver kết nối, task runner, orchestration, validation và audit.
+### 2.2.3. Cơ chế phối hợp và những thách thức của Multi-Agent System
 
-Trong hệ thống, inventory được lưu ở PostgreSQL; thiết bị liên kết với brand, category và credential. Network Tool sử dụng `device_type` để chọn driver Netmiko. Operation được thực thi theo `display_order` và dependency `ON_SUCCESS` hoặc `ON_COMPLETION`. Lệnh đọc dùng `send_command`; lệnh ghi dùng `send_config_set`. Kết quả được lưu ở mức mapping thiết bị, lần thực thi và action log.
+Quá trình phối hợp giữa các agent có thể được tổ chức theo cơ chế tập trung, phân tán hoặc phân cấp. Trong mô hình tập trung, một thành phần điều phối chịu trách nhiệm quản lý luồng thực thi và phân công nhiệm vụ. Trong mô hình phân tán, các agent có thể trao đổi thông tin và phối hợp trực tiếp với nhau. Đối với mô hình phân cấp, các agent được tổ chức theo các cấp quản lý và thực thi khác nhau.
 
-## 2.5. Network Troubleshooting và Root Cause Analysis
+Theo Wu và cộng sự (2024) [14], sự phối hợp giữa nhiều agent có thể được sử dụng để xây dựng những quy trình xử lý linh hoạt, trong đó các agent trao đổi thông tin, gọi công cụ và kết hợp kết quả để thực hiện nhiệm vụ.
 
-Troubleshooting là quy trình giảm dần không gian giả thuyết thông qua quan sát và kiểm tra. Root Cause Analysis (RCA) đi xa hơn việc xác định triệu chứng: mục tiêu là tìm nguyên nhân nền tảng có khả năng giải thích chuỗi sự kiện. Một quy trình RCA đáng tin cậy phải phân biệt dữ kiện quan sát, giả thuyết và kết luận; đồng thời nêu bằng chứng phản chứng hoặc mức độ thiếu dữ liệu.
+Tuy nhiên, việc sử dụng nhiều agent cũng làm gia tăng độ phức tạp trong điều phối, quản lý trạng thái, giao tiếp và kiểm soát quá trình thực thi. Vì vậy, việc xây dựng hệ thống Multi-Agent cần xác định rõ vai trò, phạm vi trách nhiệm và phương thức trao đổi dữ liệu giữa các agent, đồng thời bảo đảm tính nhất quán và khả năng kiểm soát trong toàn bộ quy trình xử lý.
 
-Analyst Agent của đề tài được prompt để giữ nguyên hostname, địa chỉ IP, interface và mã lỗi; phân biệt dữ kiện với suy luận; không khẳng định nguyên nhân nếu thiếu bằng chứng. Phần diễn giải `likely_causes` vẫn là nhận định dựa trên bằng chứng; song evaluator v4 đã có đối chiếu một kết luận cấu trúc độc lập của Agent với Ground Truth và cung cấp Precision/Recall/F1. Chưa có cơ chế tự hiệu chuẩn xác suất tin cậy, kho tri thức RCA chuyên dụng hoặc xác minh nhân quả bằng can thiệp độc lập; không nên đồng nhất điểm trên scenario với một chứng minh nguyên nhân trong mọi hệ thống mạng.
+## 2.3. Network Automation
 
-## 2.6. Các phương pháp kiểm tra và kiểm soát thực thi cấu hình
+### 2.3.1. Khái niệm Network Automation
 
-Kiểm soát cấu hình nên được áp dụng theo nhiều lớp:
+Network Automation (tự động hóa mạng) là việc ứng dụng phần mềm và các cơ chế điều khiển tự động nhằm thực hiện những tác vụ liên quan đến cấu hình, giám sát và quản lý hệ thống mạng. Phương pháp này giúp giảm thao tác thủ công, nâng cao hiệu quả và bảo đảm tính nhất quán trong quản lý thiết bị mạng.
 
-1. **Kiểm tra đầu vào:** xác thực người dùng, phân quyền RBAC và kiểm tra schema.
-2. **Giới hạn phạm vi:** chỉ cho Planner sử dụng thiết bị từ inventory; `SOURCE` và `CONTEXT` chỉ được `READ`.
-3. **Kiểm tra kế hoạch:** dependency chỉ tham chiếu operation đứng trước; không cho phép device trùng trong một operation; operation có device phải có command.
-4. **Kiểm tra trước thực thi:** thao tác `WRITE` phải có approval; câu lệnh thực tế phải khớp `commands_snapshot` và `request_hash` đã phê duyệt.
-5. **Kiểm tra bởi thiết bị hoặc giao thức:** NETCONF định nghĩa khả năng `validate`, `test-only` và confirmed commit để giảm rủi ro trước khi áp dụng [3]. Phiên bản hiện tại của đề tài sử dụng CLI qua Netmiko/Nornir nên chưa có các bảo đảm giao dịch này.
-6. **Kiểm tra hậu điều kiện:** chạy lệnh xác minh sau thay đổi và so sánh trạng thái thực tế với mục tiêu. Planner được hướng dẫn tách bước xác minh, nhưng hệ thống chưa có bộ kiểm chứng ngữ nghĩa độc lập bắt buộc cho mọi cấu hình.
-7. **Khôi phục:** tạo checkpoint, rollback hoặc cấu hình ngược khi xác minh thất bại. Cơ chế này chưa được triển khai.
+Các nghiên cứu về tự động hóa mạng hướng đến việc giảm sự phụ thuộc vào thao tác thủ công và tăng khả năng vận hành nhất quán trong những môi trường mạng có cấu trúc phức tạp. Đặc biệt, các phương pháp Zero-Touch Management hướng đến khả năng tự động hóa các hoạt động quản lý và vận hành với sự giám sát phù hợp của con người [15].
 
-Ngoài ra, credential được mã hóa đối xứng bằng `pgcrypto` với AES-256. Public API chỉ trả metadata; password và enable secret chỉ được giải mã trong bộ nhớ khi chuẩn bị kết nối. Agent LLM không nhận khóa mã hóa hoặc credential.
+Trong thực tế, Network Automation có thể bao gồm những thành phần như hệ thống quản lý thiết bị, mô hình dữ liệu, cơ chế kết nối, bộ thực thi tác vụ và thành phần điều phối. Những thành phần này hỗ trợ tổ chức các thao tác trên nhiều thiết bị thành các quy trình có thể kiểm tra và thực hiện lại.
 
-## 2.7. LangGraph
+### 2.3.2. Nguyên lý hoạt động và yêu cầu của Network Automation
 
-LangGraph là thư viện xây dựng workflow tác tử theo mô hình đồ thị trạng thái. Mỗi node thực hiện một bước xử lý và trả phần state cần cập nhật; edge quy định thứ tự chuyển bước. Trong đề tài, LangGraph sở hữu luồng cấp cao `check_gns3 → plan → execute → analyze`. Với tác vụ chẩn đoán thiếu bằng chứng, graph rẽ sang `investigate`, chạy các kiểm tra READ-only trên thiết bị nghi ngờ hoặc láng giềng một hop rồi quay lại `analyze`; khi đủ bằng chứng hoặc đạt giới hạn cấu hình, node `finalize` mới tạo phản hồi cuối.
+Tự động hóa mạng có thể được thực hiện ở mức tác vụ hoặc mức quy trình, tùy thuộc vào phạm vi và yêu cầu vận hành của hệ thống. Tự động hóa tác vụ tập trung vào một thao tác cụ thể như thu thập thông tin thiết bị, kiểm tra trạng thái hoặc thay đổi cấu hình. Trong khi đó, tự động hóa quy trình kết hợp nhiều tác vụ theo trình tự xác định, có thể bao gồm điều kiện thực thi, quan hệ phụ thuộc và xử lý ngoại lệ nhằm bảo đảm tính nhất quán trong quá trình vận hành mạng.
 
-Hệ thống biên dịch hai graph. Graph message mới thực hiện đầy đủ bốn bước; graph approval đi vào `execute → analyze` sau khi khôi phục Task bằng `operation_device_id`. Cách tách điểm vào phù hợp với đặc tính chờ phê duyệt kéo dài. Graph không sử dụng checkpointer làm nguồn trạng thái nghiệp vụ độc lập: Task, Operation, mapping, Approval và audit vẫn được lưu bởi domain service trong PostgreSQL. Thiết kế này tránh sai lệch giữa checkpoint và trạng thái đã được phê duyệt.
+Theo nghiên cứu tổng quan về Zero-Touch Management [15], các hệ thống tự động hóa có thể sử dụng dữ liệu giám sát, thông tin trạng thái và các cơ chế ra quyết định nhằm hỗ trợ điều chỉnh hoạt động mạng. Trong những hệ thống có cơ chế phản hồi, kết quả quan sát được sử dụng để đánh giá và lựa chọn những hành động tiếp theo, qua đó hình thành quy trình điều khiển có khả năng thích ứng với sự thay đổi của môi trường mạng.
 
-## 2.8. Netmiko và Nornir
+Để bảo đảm độ tin cậy, một hệ thống Network Automation cần chú trọng khả năng kiểm soát thao tác, xử lý lỗi, ghi nhận kết quả và xác minh trạng thái sau thực thi. Ngoài ra, tính idempotent là một đặc tính quan trọng đối với các thao tác có thể thực hiện lặp lại mà không gây ra những thay đổi ngoài mong muốn sau lần thực hiện đầu tiên. Đặc tính này góp phần duy trì tính nhất quán của cấu hình và hạn chế rủi ro khi thực hiện lại các tác vụ tự động hóa.
 
-**Netmiko** là thư viện Python chuẩn hóa việc kết nối CLI tới thiết bị mạng đa nhà cung cấp. API cung cấp các phương thức như `send_command` cho lệnh quan sát và `send_config_set` cho tập lệnh cấu hình [11]. Backend `NetmikoNetworkTool` của đề tài mở kết nối theo device config, thực thi tuần tự và luôn gọi `disconnect()` trong khối `finally`.
+## 2.4. Network Troubleshooting và Root Cause Analysis
 
-**Nornir** là framework tự động hóa thuần Python có inventory, task và runner dạng plugin. `ThreadedRunner` cho phép thực thi task trên nhiều host bằng nhóm luồng [12]. Trong đề tài, `NornirNetworkTool` tạo inventory động trong bộ nhớ từ PostgreSQL và sử dụng plugin `nornir-netmiko`; không tạo tệp YAML chứa secret. Backend được lựa chọn bằng biến `NETWORK_BACKEND`. Tuy nhiên, Orchestrator hiện duyệt mapping thiết bị tuần tự, và mỗi lần gọi tool chỉ tạo inventory cho một thiết bị; vì vậy lợi ích song song hóa nhiều thiết bị của Nornir chưa được khai thác đầy đủ.
+### 2.4.1. Khái niệm Network Troubleshooting
 
-## 2.9. GNS3 và GNS3 API
+Network Troubleshooting là quá trình phát hiện, phân tích và xử lý những sự cố ảnh hưởng đến hoạt động của hệ thống mạng. Quá trình này thường bao gồm nhận diện triệu chứng, thu thập thông tin, xây dựng giả thuyết, xác định vị trí lỗi, kiểm tra nguyên nhân và xác minh trạng thái sau xử lý.
 
-GNS3 là nền tảng mô phỏng/emulation mạng cho phép xây dựng topology gồm router, switch, máy ảo và các liên kết. Kiến trúc GNS3 có controller quản lý project, compute và cung cấp REST API cho backend [13]. Đây là môi trường phù hợp để kiểm thử thay đổi mạng mà không tác động hạ tầng sản xuất.
+Trong nghiên cứu về ứng dụng LLM vào quản lý và vận hành mạng, Hong và cộng sự (2025) [1] khảo sát các hướng ứng dụng mô hình ngôn ngữ lớn nhằm hỗ trợ những nhiệm vụ vận hành, bao gồm phân tích và xử lý sự cố mạng.
 
-Trong đề tài, các node Cisco IOS trong GNS3 được tiếp cận qua các cổng console/Telnet được ánh xạ tới máy host. Cấu hình có `GNS3_IP`, `GNS3_PORT` và `GNS3_PROJECT_ID`. Tuy nhiên, provider hiện chỉ gọi `GET /v2/version` để xác nhận GNS3 Server khả dụng trước khi chạy workflow. Hệ thống chưa sử dụng API để đọc node/link, mở project, bật/tắt node hoặc đồng bộ topology. Inventory vận hành hiện được quản lý trong PostgreSQL.
+Các nguồn thông tin phục vụ quá trình chẩn đoán có thể bao gồm trạng thái giao diện mạng, bảng định tuyến, cấu hình thiết bị, nhật ký hệ thống và kết quả kiểm tra kết nối. Việc tổng hợp những dữ liệu này giúp xác định các biểu hiện bất thường và hỗ trợ khoanh vùng sự cố.
 
-## 2.10. Đánh giá RCA theo Ground Truth và nghiên cứu NIKA
+### 2.4.2. Root Cause Analysis
 
-Ground Truth là nhãn sự cố đã được xác định cho một kịch bản. Để chấm chính xác, dự đoán của Agent phải thể hiện thành dữ liệu có cấu trúc, không thể dựa vào việc một câu trả lời chỉ nhắc đến các từ khóa đúng. NIKA 0.2 [14, 15] dùng RootCause là cặp `resource_id` và `fault_type`. Các cặp dự đoán và Ground Truth tạo thành hai tập; bộ chấm tính TP/FP/FN, Precision, Recall, F1 và phân tích riêng Localization cũng như Fault Type.
+Root Cause Analysis (RCA) là quá trình phân tích nhằm xác định nguyên nhân gốc gây ra sự cố thay vì chỉ xử lý các triệu chứng quan sát được. Trong hệ thống mạng, một nguyên nhân có thể tạo ra nhiều biểu hiện khác nhau tại các thiết bị và dịch vụ có quan hệ phụ thuộc. Vì vậy, quá trình RCA cần phân biệt giữa triệu chứng, vị trí lỗi và nguyên nhân dẫn đến sự cố.
 
-Đề tài ánh xạ các trường đó thành device/interface/fault_type của Cisco IOS. Scorer có thể xác nhận đồng thời đúng tài nguyên và đúng loại lỗi, nhưng vẫn phụ thuộc chất lượng nhãn kịch bản. Phương pháp này là đánh giá kết quả chẩn đoán có cấu trúc, không phải bằng chứng nhân quả hoặc tự kiểm chứng lại mọi trạng thái thiết bị. Công thức và minh chứng được trình bày chi tiết ở Chương 4.
+Theo Wang và cộng sự (2025) [3], NIKA đề xuất môi trường đánh giá AI Agent cho bài toán Network Troubleshooting, trong đó phân chia hoạt động chẩn đoán thành ba nhiệm vụ gồm phát hiện sự cố (Detection), xác định vị trí lỗi (Localization) và xác định nguyên nhân gốc (Root Cause Identification).
 
-## 2.11. FastAPI, PostgreSQL, kiến trúc domain và kiểm thử
+Đối với hệ thống sử dụng AI Agent, kết quả phân tích nguyên nhân cần được liên kết với bằng chứng thu thập từ môi trường. Việc đưa ra kết luận khi chưa có đủ thông tin có thể dẫn đến đề xuất biện pháp khắc phục không phù hợp. Do đó, cần đối chiếu kết quả phân tích với trạng thái thiết bị trước khi kết luận.
 
-Backend sử dụng FastAPI và Pydantic cho HTTP contract, SQLAlchemy cho ánh xạ persistence, PostgreSQL cho dữ liệu nghiệp vụ, JSONB cho snapshot/evidence. Kiến trúc domain chia router, service, repository và provider; các agent không truy cập trực tiếp ORM hoặc thông tin xác thực thiết bị. Migration SQL có version, checksum và cơ chế tránh chạy đồng thời. Pytest phục vụ kiểm tra tính đúng của tác tử, approval và bộ chấm.
+## 2.5. Các phương pháp kiểm tra và kiểm soát thực thi cấu hình
 
-Cần phân biệt **unit test** kiểm tra công thức, luồng và hợp đồng phần mềm với **integration test** chạy trên lab GNS3. Số lượng unit test PASS không thể suy ra tỷ lệ chẩn đoán đúng của mô hình trên tất cả scenario.
+### 2.5.1. Kiểm tra cấu hình trước và sau thực thi
+
+Trong các hệ thống tự động hóa mạng, việc thay đổi cấu hình cần được kiểm soát nhằm hạn chế nguy cơ gián đoạn dịch vụ hoặc làm thay đổi trạng thái mạng ngoài mong muốn. Quá trình kiểm soát có thể bao gồm xác thực yêu cầu, phân quyền thực thi, kiểm tra tính hợp lệ của kế hoạch, xác định phạm vi tác động và đánh giá trạng thái mạng trước khi thay đổi cấu hình, nhằm bảo đảm các thao tác được thực hiện đúng mục tiêu và yêu cầu kỹ thuật.
+
+Trong nghiên cứu của Lira và cộng sự (2024) [2], việc ứng dụng LLM để hỗ trợ quản lý cấu hình mạng được kết hợp với quá trình xác minh nhằm kiểm tra tính phù hợp của cấu hình được tạo ra, qua đó góp phần hạn chế những sai lệch giữa yêu cầu ban đầu và kết quả cấu hình.
+
+Bên cạnh đó, NetConfArena của Liu và cộng sự (2026) [5] nhấn mạnh việc đánh giá kết quả cấu hình thông qua môi trường mạng có thể thực thi. Cách tiếp cận này cho phép kiểm tra kết quả dựa trên trạng thái mạng đạt được, thay vì chỉ đánh giá tính hợp lệ về cú pháp của các câu lệnh, đồng thời hỗ trợ phát hiện những vấn đề có thể phát sinh trong quá trình vận hành hệ thống.
+
+Sau khi thực thi, hệ thống cần thu thập trạng thái thiết bị và đối chiếu với kết quả mong muốn. Trong trường hợp không đáp ứng điều kiện kiểm chứng, hệ thống cần ghi nhận lỗi và thực hiện quy trình xử lý phù hợp, đồng thời lưu lại thông tin thực thi để phục vụ việc phân tích và khắc phục sự cố.
+
+### 2.5.2. Human-in-the-loop và cơ chế phê duyệt
+
+Human-in-the-loop là cơ chế tích hợp sự tham gia của con người vào một hoặc nhiều bước ra quyết định trong quy trình xử lý tự động.
+
+Trong lĩnh vực quản trị mạng, cơ chế này phù hợp với các thao tác có khả năng thay đổi trạng thái thiết bị hoặc ảnh hưởng đến hoạt động của dịch vụ. Thay vì cho phép hệ thống thực hiện mọi hành động được đề xuất, người quản trị có thể xem xét và phê duyệt những thay đổi trước khi thực thi.
+
+Quy trình phê duyệt cần gắn với nội dung thay đổi cụ thể, phạm vi tác động và danh tính người phê duyệt. Bên cạnh đó, việc ghi nhận nhật ký hoạt động giúp hỗ trợ truy vết các quyết định và những thao tác đã được thực hiện.
+
+Cơ chế Human-in-the-loop góp phần hạn chế quyền tự quyết trực tiếp của AI Agent đối với các hành động có rủi ro, nhưng bản thân việc phê duyệt không bảo đảm cấu hình được chấp thuận luôn chính xác hoặc an toàn.
+
+## 2.6. Mô hình Pregel và nguyên lý điều phối đồ thị
+
+### 2.6.1. Mô hình Pregel và Bulk Synchronous Parallel
+
+Theo Malewicz và cộng sự (2010) [16], Pregel là một hệ thống được đề xuất nhằm xử lý đồ thị quy mô lớn trên môi trường tính toán song song. Pregel sử dụng mô hình lập trình hướng đỉnh (vertex-centric), trong đó các đỉnh thực hiện tính toán cục bộ và trao đổi thông tin thông qua cơ chế truyền thông điệp.
+
+Mô hình Pregel được xây dựng dựa trên nguyên lý Bulk Synchronous Parallel (BSP). Theo đó, quá trình tính toán được chia thành các vòng xử lý gọi là superstep, với những điểm đồng bộ giữa các vòng liên tiếp.
+
+Trong mỗi superstep, các đỉnh đang hoạt động có thể nhận những thông điệp từ vòng trước, thực hiện tính toán, cập nhật trạng thái cục bộ và gửi thông điệp cho các đỉnh khác. Những thông điệp được gửi sẽ được xử lý ở superstep tiếp theo.
+
+Quá trình tính toán kết thúc khi các đỉnh đều ngừng hoạt động và không còn thông điệp đang chờ xử lý.
+
+### 2.6.2. Nguyên lý thực thi theo Superstep
+
+Dựa trên nguyên lý Pregel, quá trình thực thi có thể được mô tả thông qua các vòng xử lý có đồng bộ trạng thái. Mỗi vòng sử dụng dữ liệu đã có từ vòng trước để xác định hoạt động tính toán và tạo ra các kết quả phục vụ vòng tiếp theo.
+
+Ở mức khái quát, một chu trình thực thi dựa trên superstep có thể được chia thành ba giai đoạn:
+
+1. Xác định các thành phần cần thực thi dựa trên trạng thái hiện tại và thông tin được cập nhật từ vòng trước.
+2. Thực hiện tính toán tại những thành phần đã được lựa chọn, đồng thời tạo ra các cập nhật hoặc thông điệp.
+3. Đồng bộ các cập nhật để hình thành trạng thái sử dụng cho superstep kế tiếp.
+
+Cách tổ chức này cho phép biểu diễn các quá trình xử lý có quan hệ phụ thuộc, trong đó kết quả của một vòng được sử dụng làm dữ liệu đầu vào cho những vòng tiếp theo.
+
+Nguyên lý superstep cũng cung cấp cơ sở tham khảo cho các hệ thống điều phối workflow dạng đồ thị. Tuy nhiên, việc vận dụng Pregel vào điều phối AI Agent không đồng nghĩa với việc triển khai một hệ thống xử lý đồ thị phân tán tương đương Pregel gốc.
+
+## 2.7. Cơ sở đánh giá hệ thống AI Agent trong quản trị mạng
+
+### 2.7.1. Phương pháp đánh giá AI Agent trong môi trường mạng
+
+Việc đánh giá hệ thống AI Agent trong quản trị mạng cần xem xét không chỉ khả năng tạo phản hồi phù hợp mà còn tính chính xác của các hành động và trạng thái mạng sau thực thi. Khác với các nhiệm vụ xử lý ngôn ngữ tự nhiên thông thường, kết quả của một tác vụ cấu hình hoặc xử lý sự cố mạng cần được kiểm chứng thông qua trạng thái thực tế của thiết bị và các điều kiện kỹ thuật xác định trước.
+
+Theo Wang và cộng sự (2025) [3], NIKA cung cấp môi trường đánh giá AI Agent trong bài toán Network Troubleshooting, tập trung vào ba nhiệm vụ có mức độ phức tạp tăng dần: phát hiện sự cố (Detection), xác định vị trí lỗi (Localization) và phân tích nguyên nhân gốc (Root Cause Analysis). Phương pháp này cho phép đánh giá riêng từng khả năng chẩn đoán, thay vì chỉ dựa trên kết luận tổng thể của agent.
+
+Bên cạnh đó, Zhou và cộng sự (2026) [4] đề xuất NETARENA, một framework đánh giá AI Agent trong các nhiệm vụ tự động hóa mạng thông qua môi trường có thể thực thi. Nghiên cứu xem xét đồng thời tính đúng đắn (Correctness), tính an toàn (Safety) và thời gian thực hiện (Latency). Tương tự, Liu và cộng sự (2026) [5] đề xuất NetConfArena, trong đó kết quả cấu hình được kiểm chứng bằng các phép kiểm tra thực thi trên môi trường mạng giả lập, thay vì chỉ so sánh những câu lệnh do mô hình tạo ra với đáp án tham chiếu.
+
+Từ các nghiên cứu trên, việc đánh giá hệ thống Multi-Agent có thể được tổ chức dựa trên những kịch bản thực nghiệm xác định trước, bao gồm trạng thái ban đầu của mạng, yêu cầu nhiệm vụ, kết quả mong đợi và các điều kiện kiểm chứng. Kết quả thực thi được đối chiếu với dữ liệu chuẩn (Ground Truth) hoặc trạng thái mạng mục tiêu để xác định mức độ hoàn thành nhiệm vụ và những hạn chế của hệ thống.
+
+### 2.7.2. Các tiêu chí đánh giá
+
+Các tiêu chí đánh giá được lựa chọn nhằm phản ánh khả năng hoàn thành nhiệm vụ, chất lượng chẩn đoán, hiệu quả khắc phục sự cố, mức độ an toàn và chi phí thực thi của hệ thống Multi-Agent. Việc đánh giá được thực hiện dựa trên các kịch bản thực nghiệm có điều kiện kiểm chứng và kết quả mong đợi được xác định trước.
+
+**Tỷ lệ hoàn thành nhiệm vụ (Task Success Rate – TSR).** Chỉ số này phản ánh tỷ lệ lượt thực nghiệm mà hệ thống hoàn thành nhiệm vụ và đáp ứng các điều kiện kiểm chứng đã xác định:
+
+$$
+TSR = \frac{N_{\mathrm{success}}}{N_{\mathrm{total}}} \times 100\%
+$$
+
+Trong đó, $N_{\mathrm{success}}$ là số lượt thực nghiệm hoàn thành nhiệm vụ thành công và $N_{\mathrm{total}}$ là tổng số lượt thực nghiệm hợp lệ được đưa vào đánh giá.
+
+**Độ chính xác trong chẩn đoán sự cố (Diagnostic Accuracy).** Dựa trên cách phân chia nhiệm vụ trong nghiên cứu NIKA [3], khả năng chẩn đoán được đánh giá theo ba cấp độ:
+
+- **Detection Accuracy:** phản ánh tỷ lệ trường hợp hệ thống xác định chính xác trạng thái có hoặc không có sự cố.
+- **Localization Accuracy:** phản ánh tỷ lệ trường hợp hệ thống xác định đúng thiết bị hoặc thành phần gây lỗi theo tiêu chí định vị đã xác định.
+- **Root Cause Accuracy:** phản ánh tỷ lệ trường hợp hệ thống xác định đúng nguyên nhân gốc của sự cố so với dữ liệu chuẩn (Ground Truth).
+
+Đối với từng tiêu chí, độ chính xác được xác định bằng tỷ lệ số trường hợp dự đoán đúng trên tổng số trường hợp hợp lệ thuộc phạm vi đánh giá tương ứng:
+
+$$
+Accuracy = \frac{N_{\mathrm{correct}}}{N_{\mathrm{evaluated}}} \times 100\%
+$$
+
+Trong đó, $N_{\mathrm{correct}}$ là số trường hợp được xác định chính xác và $N_{\mathrm{evaluated}}$ là tổng số trường hợp được đánh giá. Kết quả được xem là chính xác khi đáp ứng quy tắc đối chiếu với Ground Truth đã được xác định trước.
+
+**Tỷ lệ khắc phục sự cố thành công (Remediation Success Rate – RSR).** Chỉ số này phản ánh tỷ lệ trường hợp hệ thống thực hiện biện pháp khắc phục và đạt được trạng thái mạng mục tiêu sau khi kiểm chứng. Chỉ số được tính trên các trường hợp hợp lệ thuộc phạm vi đánh giá khắc phục sự cố:
+
+$$
+RSR = \frac{N_{\mathrm{remediated}}}{N_{\mathrm{remediation}}} \times 100\%
+$$
+
+Trong đó, $N_{\mathrm{remediated}}$ là số trường hợp khắc phục sự cố thành công và $N_{\mathrm{remediation}}$ là tổng số trường hợp được đưa vào đánh giá khắc phục. Việc xác định thành công phải dựa trên trạng thái thực tế của thiết bị và các điều kiện kiểm chứng đã quy định.
+
+**Tính an toàn (Safety).** Tiêu chí này phản ánh khả năng hệ thống tuân thủ các chính sách và ràng buộc trong quá trình thực thi, bao gồm quyền truy cập, phạm vi thiết bị được phép thao tác, yêu cầu phê duyệt và điều kiện an toàn của cấu hình. Một phương pháp đánh giá là xác định tỷ lệ lượt thực nghiệm không phát sinh hành động vi phạm chính sách:
+
+$$
+SafetyRate = \frac{N_{\mathrm{safe}}}{N_{\mathrm{safety}}} \times 100\%
+$$
+
+Trong đó, $N_{\mathrm{safe}}$ là số lượt thực nghiệm không xảy ra hành động vi phạm chính sách và $N_{\mathrm{safety}}$ là tổng số lượt thực nghiệm hợp lệ được đánh giá về an toàn. Chỉ số này được sử dụng khi hệ thống có quy tắc xác định và ghi nhận hành vi vi phạm rõ ràng.
+
+**Thời gian thực thi (Latency).** Chỉ số này phản ánh khoảng thời gian hệ thống cần để xử lý một nhiệm vụ, tính từ thời điểm bắt đầu đến khi hoàn thành hoặc đạt trạng thái kết thúc được quy định:
+
+$$
+Latency = t_{\mathrm{end}} - t_{\mathrm{start}}
+$$
+
+Trong đó, $t_{\mathrm{start}}$ là thời điểm bắt đầu xử lý và $t_{\mathrm{end}}$ là thời điểm kết thúc. Đối với nhiệm vụ có cơ chế phê duyệt của con người, thời gian chờ phê duyệt cần được phân biệt với thời gian xử lý của hệ thống AI nhằm bảo đảm kết quả đánh giá phản ánh đúng hiệu năng thực thi.
+
+**Số lượt tương tác (Interaction Turns).** Chỉ số này phản ánh số lượt tương tác được ghi nhận trong quá trình thực hiện nhiệm vụ, chẳng hạn các lượt trao đổi giữa Agent và mô hình ngôn ngữ hoặc những bước tương tác được hệ thống theo dõi. Chỉ số được xác định bằng tổng số lượt tương tác hợp lệ theo quy tắc đếm đã thiết lập:
+
+$$
+T_{\mathrm{interaction}} = \sum_{i=1}^{n} 1 = n
+$$
+
+Trong đó, $T_{\mathrm{interaction}}$ là tổng số lượt tương tác được ghi nhận và $n$ là số lượt đáp ứng quy tắc đếm. Chỉ số này hỗ trợ phân tích mức độ phức tạp và chi phí tương tác trong quá trình xử lý nhiệm vụ.
+
+Việc kết hợp các tiêu chí trên cho phép đánh giá hệ thống Multi-Agent trên nhiều phương diện, bao gồm khả năng hoàn thành nhiệm vụ, độ chính xác của kết quả chẩn đoán, hiệu quả khắc phục sự cố, mức độ an toàn và hiệu năng thực thi. Các tiêu chí này là cơ sở để xây dựng phương pháp thực nghiệm, tổng hợp số liệu và phân tích kết quả đánh giá hệ thống trong các chương tiếp theo.
 
 ---
 
 # CHƯƠNG 3. PHÂN TÍCH, THIẾT KẾ VÀ XÂY DỰNG HỆ THỐNG
 
-## 3.1. Phân tích yêu cầu hệ thống
+## 3.1. Phương pháp nghiên cứu
 
-### 3.1.1. Yêu cầu chức năng
+### 3.1.1. Phương pháp nghiên cứu tài liệu
 
-Căn cứ nhiệm vụ trong đề cương giữa kỳ, nhóm cụ thể hóa hệ thống thành các chức năng đã có mã nguồn: (1) xác thực người dùng, quản lý phiên đăng nhập và phân quyền; (2) quản lý brand, category, device và credential thiết bị; (3) tạo, đặt tên, xem lại hội thoại; (4) tiếp nhận yêu cầu tiếng Việt và tạo Task; (5) lập kế hoạch gồm các operation cùng quan hệ phụ thuộc; (6) thực thi lệnh READ và hỗ trợ thực thi WRITE sau phê duyệt; (7) ghi nhận trạng thái, activity event, task execution và device action log; (8) Analyst tổng hợp phân tích và phản hồi; (9) quản lý Benchmark Scenario, tiêm lỗi GNS3, cleanup, lưu Run; (10) đánh giá tự động GOAL/RCA, thời gian và lượt tương tác; (11) tra cứu Audit Log cùng bộ lọc và phân trang; (12) giao diện web theo các module quản trị.
+**Mục đích.** Xây dựng cơ sở lý thuyết cho đề tài, tìm hiểu các phương pháp đã được nghiên cứu và xác định hướng tiếp cận phù hợp để xây dựng hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng.
 
-Đối tượng sử dụng là người quản trị hệ thống, người quản trị mạng có quyền thực thi/phê duyệt và người được cấp quyền xem thông tin. Quyền được gán dựa trên cặp chức năng quản lý – hành động, không chỉ kiểm tra đăng nhập. Dữ liệu nhạy cảm như password thiết bị, token và Ground Truth benchmark không được truyền tùy tiện tới Agent hay các API công khai.
+**Nội dung thực hiện.** Thu thập, khảo sát và phân tích các công trình khoa học liên quan đến Large Language Model, AI Agent, Multi-Agent System, Network Automation và Network Troubleshooting. Quá trình phân tích tập trung vào kiến trúc hệ thống, phương pháp tương tác với thiết bị mạng, cơ chế phối hợp giữa các agent, kết quả đạt được và hạn chế của các nghiên cứu trước đó.
 
-### 3.1.2. Yêu cầu phi chức năng
+**Kết quả.** Cơ sở lý thuyết và tổng quan nghiên cứu được tổng hợp tại Chương 1 và Chương 2. Kết quả khảo sát là căn cứ lựa chọn kiến trúc điều phối tập trung, phân chia vai trò giữa các agent, sử dụng công cụ mạng để tương tác với môi trường và áp dụng cơ chế kiểm soát đối với hành động cấu hình.
 
-| Nhóm yêu cầu | Phương án đã hiện thực | Phạm vi chưa bảo đảm |
-| --- | --- | --- |
-| Tính toàn vẹn | Pydantic schema; kiểm tra device ID; ràng buộc operation/dependency; transaction lưu kế hoạch và một số thao tác nghiệp vụ | Không phải mọi thao tác CLI trên nhiều thiết bị đều có rollback giao dịch |
-| An toàn | RBAC; mã hóa credential; Approval Gate; đối chiếu snapshot/hash trước WRITE | Chưa có bộ chấm Safety định lượng và chính sách chặn mọi lệnh nguy hiểm ở mức vendor |
-| Truy vết | Task, Operation, Mapping, Activity Event, Task Execution, Device Action Log, Audit Log | Chưa có hệ thống phân tích sự kiện bảo mật độc lập |
-| Khả năng bảo trì | Module hóa backend theo domain; router/service/repository/provider; hợp đồng Agent/NetworkTool | Chưa có CI xác minh toàn bộ lab tự động |
-| Khả năng kiểm thử | Unit test cho Agent, service, approval, benchmark, scorer và schema; Benchmark Engine có Ground Truth | Chưa có ma trận kết quả thống kê lớn và kiểm thử trên production |
-| Tính mở rộng | Hỗ trợ Netmiko/Nornir và có cơ chế tách nhà cung cấp LLM qua adapter | Multi-device concurrency và fault tolerance đa node chưa được đánh giá đầy đủ |
+### 3.1.2. Phương pháp phân tích và thiết kế hệ thống
 
-### 3.1.3. Phạm vi và tác nhân
+**Mục đích.** Xác định các yêu cầu của hệ thống, phân chia trách nhiệm giữa các thành phần và xây dựng kiến trúc Multi-Agent phù hợp với các tác vụ cấu hình, chẩn đoán và khắc phục sự cố mạng.
 
-Hệ thống chạy trong phòng lab GNS3; không thao tác trên thiết bị production. Người dùng cuối tiếp xúc với giao diện quản trị; Agent được gọi gián tiếp qua service và workflow, không truy cập trực tiếp secret hoặc ORM. Planner chỉ nhìn inventory công khai; Network Agent nhận lệnh cụ thể đã được xác nhận; Analyst chỉ đọc kết quả lệnh. Riêng Benchmark Engine được phép tiêm lỗi và hoàn nguyên theo kịch bản để tổ chức thực nghiệm: đây là thao tác của hạ tầng kiểm thử, không phải hành động khắc phục do Agent tự quyết định.
+**Nội dung thực hiện.** Phân tích quy trình quản trị mạng, xác định các chức năng chính và phân bổ nhiệm vụ cho các agent chuyên trách. Thiết kế cơ chế điều phối, phương thức trao đổi thông tin và luồng xử lý yêu cầu giữa các thành phần. UML được sử dụng để mô tả tác nhân, chức năng và hoạt động của hệ thống thông qua use-case diagram và activity diagram.
 
-## 3.2. Kiến trúc tổng thể hệ thống
+**Kết quả.** Kiến trúc tổng thể, đặc tả chức năng của từng agent, sơ đồ tương tác và quy trình xử lý các nhiệm vụ quản trị mạng được trình bày trong các mục tiếp theo của Chương 3.
 
-Ứng dụng theo kiến trúc client–server gồm React/TypeScript ở lớp trình bày, FastAPI ở lớp HTTP, các domain nghiệp vụ trong backend, lớp Agent orchestration, PostgreSQL và các provider giao tiếp thiết bị. Những domain đang có gồm Identity, Inventory, Conversation, Execution, Evaluation, Benchmark và Audit. Các lớp router chủ yếu nhận dữ liệu, xác thực và gọi service; repository quản lý truy cập SQLAlchemy/PostgreSQL; provider phụ trách hệ thống bên ngoài.
+### 3.1.3. Phương pháp xây dựng hệ thống
+
+**Mục đích.** Hiện thực hóa kiến trúc Multi-Agent đã thiết kế, xây dựng hệ thống có khả năng tiếp nhận yêu cầu bằng ngôn ngữ tự nhiên và hỗ trợ quản trị viên thực hiện các tác vụ trên thiết bị mạng trong môi trường mô phỏng.
+
+**Nội dung thực hiện.** Sử dụng Python và LangGraph để phát triển các agent và tổ chức quy trình phối hợp giữa chúng. Tích hợp LLM để phân tích yêu cầu và hỗ trợ đưa ra quyết định. Sử dụng Netmiko, Nornir và SSH/Telnet để thu thập thông tin, thực thi các lệnh kiểm tra và cấu hình trên thiết bị mạng.
+
+Các thành phần chức năng gồm Orchestrator, Planner Agent, Network Agent, Analyst Agent và thành phần hỗ trợ tri thức mạng. Cơ chế Human-in-the-loop được tích hợp để quản trị viên xem xét và phê duyệt các thay đổi cấu hình trước khi thực thi. Backend sử dụng FastAPI và PostgreSQL; frontend sử dụng React và TypeScript để cung cấp giao diện quản trị, hội thoại, theo dõi tác vụ, phê duyệt và đánh giá benchmark.
+
+**Kết quả.** Hệ thống Multi-Agent có khả năng tương tác với môi trường mạng GNS3 và thực hiện các chức năng cấu hình, chẩn đoán và hỗ trợ khắc phục sự cố.
+
+### 3.1.4. Phương pháp thực nghiệm
+
+**Mục đích.** Kiểm tra khả năng hoạt động của hệ thống Multi-Agent trong các tình huống quản trị mạng cụ thể, xác định mức độ đáp ứng yêu cầu chức năng và thu thập dữ liệu phục vụ đánh giá.
+
+**Nội dung thực hiện.** Xây dựng topology mạng trong GNS3 và thiết lập các kịch bản kiểm thử với trạng thái ban đầu, thao tác tiêm lỗi, Ground Truth, điều kiện xác minh và thao tác cleanup được xác định trước. Các kịch bản được thực hiện trong điều kiện tương đương; hệ thống ghi nhận kết quả chẩn đoán, thời gian thực thi, số lượt tương tác và dấu vết hoạt động của các agent.
+
+**Kết quả.** Bộ dữ liệu thực nghiệm gồm Benchmark Scenario, Benchmark Run, Task, Execution, Evaluation và các chỉ số quan sát. Kết quả tổng hợp được trình bày tại Chương 4.
+
+### 3.1.5. Phương pháp đánh giá
+
+**Mục đích.** Đánh giá mức độ hoàn thành các mục tiêu nghiên cứu, xác định khả năng, hiệu quả và những hạn chế của hệ thống Multi-Agent trong các nhiệm vụ cấu hình và xử lý sự cố mạng.
+
+**Nội dung thực hiện.** Kết hợp đánh giá định lượng và phân tích định tính. Các tiêu chí định lượng gồm Task Success Rate, Detection Accuracy, Localization Accuracy, Root Cause Accuracy, Remediation Success Rate, Safety, Latency và Interaction Turns. Cách lựa chọn tiêu chí tham khảo phương pháp đánh giá AI Agent trong NIKA [3], NETARENA [4] và NetConfArena [5]. Phân tích định tính tập trung vào bằng chứng thu thập được, nguyên nhân của trường hợp thất bại, khả năng kiểm soát thao tác ghi và giới hạn của môi trường thực nghiệm.
+
+**Kết quả.** Các bảng số liệu, biểu đồ và nhận xét đánh giá phản ánh khả năng hoàn thành nhiệm vụ, độ chính xác, tính an toàn, hiệu năng và hạn chế của hệ thống.
+
+## 3.2. Phân tích yêu cầu hệ thống
+
+### 3.2.1. Các tác nhân và phạm vi sử dụng
+
+Hệ thống được xây dựng nhằm hỗ trợ người quản trị thực hiện các nhiệm vụ quản lý tài nguyên, cấu hình, kiểm tra và xử lý sự cố trên thiết bị mạng. Các chức năng đã triển khai được tổ chức thành các nhóm: tổng quan và thống kê; hội thoại với hệ thống Multi-Agent; theo dõi Task và phê duyệt thao tác cấu hình; quản lý thiết bị, credential và danh mục thiết bị; quản lý Benchmark Scenario, Benchmark Run và Evaluation; quản lý Audit Log; quản lý người dùng, vai trò và quyền truy cập; cấu hình hệ thống.
+
+Tác nhân con người của hệ thống là **người dùng đã được xác thực**. Phạm vi thao tác của từng người dùng không được gắn cứng tại giao diện mà được xác định bằng cơ chế Role-Based Access Control (RBAC), dựa trên vai trò, chức năng quản lý và hành động được cấp. Dữ liệu seed hiện định nghĩa bốn vai trò gồm **Super Administrator**, **System Administrator**, **Network Engineer** và **Network Operator**. Trong đó, Super Administrator phục vụ quản trị toàn bộ nền tảng; các vai trò còn lại được cấp quyền theo ma trận permission và có thể được điều chỉnh tại chức năng Access Control. Vì quyền của vai trò có thể thay đổi, tên vai trò chỉ biểu thị nhóm trách nhiệm, còn quyền truy cập thực tế phải được xác định từ dữ liệu phân quyền tại thời điểm xử lý yêu cầu.
+
+Ngoài người dùng, hệ thống tương tác với ba nhóm tác nhân kỹ thuật bên ngoài. **Dịch vụ LLM** tiếp nhận prompt có kiểm soát và trả về kế hoạch hoặc kết quả phân tích. **GNS3 API** cung cấp thông tin project, node và môi trường topology phục vụ thực nghiệm. **Thiết bị mạng trong GNS3** tiếp nhận kết nối SSH/Telnet từ NetworkTool để thực thi lệnh kiểm tra hoặc cấu hình. Thông tin xác thực thiết bị được lấy từ Credential Service và chỉ được chuyển đến lớp công cụ mạng khi thực thi; credential không được cung cấp trực tiếp cho LLM.
+
+Planner Agent, Network Agent, Analyst Agent, Orchestrator và Benchmark Engine là các thành phần xử lý **nội bộ**, không phải người dùng độc lập của hệ thống. Planner Agent chỉ sử dụng ngữ cảnh yêu cầu và inventory cần thiết để tạo kế hoạch. Network Agent thực thi Operation thông qua NetworkTool sau khi vượt qua các điều kiện phụ thuộc và Approval Gate. Analyst Agent phân tích kết quả thực thi và bằng chứng thu thập được. Orchestrator điều phối trạng thái workflow, còn Benchmark Engine quản lý việc tiêm lỗi, xác minh, đánh giá và cleanup theo Scenario. Việc phân tách này ngăn Agent tự do truy cập cơ sở dữ liệu, credential hoặc thiết bị ngoài phạm vi đã được service kiểm soát.
+
+Phạm vi triển khai của đề tài được giới hạn trong môi trường mạng mô phỏng GNS3 có kiểm soát. Các thao tác WRITE phải được người dùng có quyền phê duyệt trước khi thực thi. Hoạt động điều tra bổ sung chỉ sử dụng thao tác READ; hoạt động tiêm lỗi và cleanup chỉ được thực hiện trong quy trình benchmark. Hệ thống chưa được thiết kế để tự động vận hành mạng production hoặc tự quyết định mọi thay đổi cấu hình mà không có sự giám sát của con người.
 
 ```mermaid
-flowchart TD
-    U["Người quản trị"] --> FE["React / TypeScript"]
-    FE --> API["FastAPI REST API"]
-    API --> ID["Identity / RBAC"]
-    API --> CON["Conversation"]
-    API --> BM["Benchmark Engine"]
-    CON --> W["LangGraph Workflow"]
-    W --> PA["Planner Agent (LLM)"]
-    W --> EO["Execution Orchestrator"]
-    W --> AA["Analyst Agent (LLM)"]
-    EO --> NA["Network Agent"]
-    NA --> TOOL["NetworkTool: Netmiko / Nornir"]
-    TOOL --> DEV["Cisco IOS trên GNS3"]
-    BM --> TOOL
-    BM --> EV["Evaluation v4 / TSR"]
-    API --> DB["PostgreSQL"]
-    CON --> DB
-    EO --> DB
-    BM --> DB
-    EV --> DB
+flowchart LR
+    subgraph ACTORS[Người dùng đã xác thực]
+        SA[Super Administrator]
+        SYSA[System Administrator]
+        NE[Network Engineer]
+        NO[Network Operator]
+    end
+
+    subgraph SYSTEM[Hệ thống Network Multi-Agent]
+        RBAC[Authentication và RBAC]
+        ADMIN[Users, Roles, Access Control và Settings]
+        INVENTORY[Devices, Credentials và Device Catalog]
+        CHAT[Chat và Conversation]
+        TASK[Task, Operation, Approval và Activity]
+        MAS[Orchestrator, Planner, Configuration, Network và Analyst Agent]
+        BENCH[Benchmark Scenario và Benchmark Run]
+        EVAL[Evaluation và Dashboard]
+        AUDIT[Audit Log]
+    end
+
+    subgraph EXTERNAL[Tác nhân kỹ thuật bên ngoài]
+        LLM[Dịch vụ LLM]
+        GNS3[GNS3 API]
+        DEV[Thiết bị mạng trong GNS3]
+    end
+
+    SA --> RBAC
+    SYSA --> RBAC
+    NE --> RBAC
+    NO --> RBAC
+
+    RBAC -->|Kiểm tra permission| ADMIN
+    RBAC -->|Kiểm tra permission| INVENTORY
+    RBAC -->|Kiểm tra permission| CHAT
+    RBAC -->|Kiểm tra permission| TASK
+    RBAC -->|Kiểm tra permission| BENCH
+    RBAC -->|Kiểm tra permission| EVAL
+    RBAC -->|Kiểm tra permission| AUDIT
+
+    CHAT -->|Tạo yêu cầu| TASK
+    TASK -->|Điều phối workflow| MAS
+    MAS <-->|Prompt và structured output| LLM
+    MAS -->|Đọc inventory, nhận credential khi thực thi| INVENTORY
+    MAS -->|SSH hoặc Telnet qua NetworkTool| DEV
+    BENCH <-->|Project, node và topology| GNS3
+    BENCH -->|Tiêm lỗi, xác minh và cleanup| DEV
+    BENCH -->|Tạo Task chẩn đoán| TASK
+    TASK --> EVAL
+    ADMIN --> AUDIT
+    INVENTORY --> AUDIT
+    TASK --> AUDIT
 ```
 
-**Phân tách nguồn sự thật:** LangGraph giữ dữ liệu chuyển tiếp giữa các node; trạng thái nghiệp vụ dài hạn của Task, Operation, Approval, Conversation và Benchmark được lưu ở PostgreSQL. Khôi phục sau phê duyệt dựa trên bản ghi đã lưu, thay vì phụ thuộc vào một checkpoint in-memory của LangGraph.
+_Hình 3.1. Sơ đồ tác nhân, phạm vi chức năng và các hệ thống bên ngoài theo triển khai thực tế._
 
-**Ranh giới GNS3:** GNS3 Provider hiện kiểm tra khả dụng server bằng endpoint version; topology vật lý được cấu hình tại GNS3. Thực thi CLI thực tế thông qua console/đầu nối thiết bị được lưu trong Inventory; chưa có module đồng bộ toàn bộ graph node–link từ REST API GNS3.
+### 3.2.2. Yêu cầu chức năng
 
-## 3.3. Thiết kế kiến trúc Multi-Agent
+Yêu cầu chức năng xác định những khả năng hệ thống cung cấp cho người dùng trong phạm vi quyền được cấp. Các yêu cầu được tổ chức theo các nhóm nghiệp vụ đã triển khai trên frontend và backend.
 
-| Tác tử/thành phần | Đầu vào | Chức năng | Đầu ra và giới hạn |
-| --- | --- | --- | --- |
-| Planner Agent | Yêu cầu tiếng Việt, danh sách thiết bị được phép, JSON Schema | Phân rã yêu cầu thành kế hoạch; chọn operation, mapping, dependency và READ/WRITE | ExecutionPlanCreate; không giải mã credential, không chạy CLI |
-| Network Agent | Operation và danh sách command cho mapping | Kiểm tra input và gọi NetworkTool qua adapter | NetworkExecutionResult; không dùng LLM, không tự chọn mạng đích |
-| Analyst Agent | Command outputs, hostname, trạng thái thực thi | Tóm tắt phát hiện, giả thuyết, khuyến nghị; tạo kết luận RCA dạng JSON | AnalysisResult; không kết nối hay sửa thiết bị |
-| Planning Orchestrator | Message/Conversation | Gọi Planner, kiểm tra device ID, lưu kế hoạch | Task/plan đã xác thực |
-| Execution Orchestrator | Task và graph operation | Kiểm tra dependency, Approval Gate, thực thi và cập nhật trạng thái | Execution/result/action logs |
-| Analysis Orchestrator | Kết quả thực thi | Lưu kết luận có cấu trúc vào timeline và tạo FINAL_RESPONSE | Message cuối cùng cùng dấu vết phân tích |
+1. **Quản lý danh tính và quyền truy cập (Identity and Access Management)** <br> Hệ thống hỗ trợ đăng nhập, làm mới token, đăng xuất, quản lý session, người dùng, vai trò và ma trận permission. Mỗi permission được xác định theo cặp chức năng–hành động và được gán cho vai trò. Identity Service xác thực access token, kiểm tra session, trạng thái tài khoản và quyền trước khi cho phép thực hiện nghiệp vụ được bảo vệ.
 
-Hệ thống là kiến trúc **đa tác tử có điều phối tập trung**, không phải các LLM tự hội thoại tự do. Network Agent không sử dụng mô hình ngôn ngữ, nhưng là tác tử chuyên trách thực thi trong pipeline. Planner và Analyst gọi mô hình qua NVIDIA AI endpoint với JSON output được Pydantic kiểm tra; có cơ chế thử lại khi phản hồi không hợp lệ. Analyst được hướng dẫn giữ nguyên hostname, interface, mã lỗi và phân biệt dữ kiện với suy luận.
+2. **Quản lý thiết bị và thông tin kết nối (Device Inventory and Credential Management)** <br> Hệ thống cho phép quản lý thiết bị, brand, category, Netmiko driver và credential. Credential được lưu ở dạng mã hóa và chỉ được giải mã trong quá trình chuẩn bị kết nối. Inventory cung cấp thông tin thiết bị công khai cho Planner và thông tin kết nối cần thiết cho NetworkTool.
+
+3. **Tương tác với AI Agent (Natural Language Interaction)** <br> Người dùng có thể gửi yêu cầu bằng ngôn ngữ tự nhiên, xem và đổi tên hội thoại, theo dõi Activity Timeline, yêu cầu phê duyệt và phản hồi cuối. Mỗi USER_REQUEST hợp lệ có thể tạo một Task gồm nhiều Operation; frontend truy vấn API để cập nhật tiến trình và hiển thị kết quả theo thứ tự xử lý.
+
+4. **Lập kế hoạch và điều phối tác vụ (Task Planning and Orchestration)** <br> Agent chuyển yêu cầu thành Execution Plan có cấu trúc, gồm các Operation, thông tin thiết bị và quan hệ phụ thuộc. Các quan hệ được tổ chức theo Directed Acyclic Graph (DAG). Kế hoạch phải được kiểm tra tính hợp lệ trước khi lưu trữ và thực thi.
+
+5. **Thực thi tác vụ mạng (Network Task Execution)** <br> Network Agent thực thi các Operation thông qua NetworkTool sử dụng backend Netmiko hoặc Nornir theo cấu hình. Hệ thống phân biệt thao tác READ để thu thập thông tin và WRITE để thay đổi cấu hình. Quá trình thực thi tuân thủ dependency, lưu Execution và Device Action Log, đồng thời cập nhật trạng thái Task, Operation và mapping thiết bị.
+
+6. **Phê duyệt và kiểm soát cấu hình (Approval and Execution Control)** <br> Các thao tác ghi phải được phê duyệt trước khi thực thi. Hệ thống sử dụng Approval Gate để kiểm tra trạng thái phê duyệt, Commands Snapshot và SHA-256 Request Hash nhằm bảo đảm nội dung lệnh không bị thay đổi sau khi được chấp thuận. Hệ thống hỗ trợ xử lý yêu cầu bị từ chối, hết hạn và tiếp tục Task sau khi có quyết định hợp lệ.
+
+7. **Phân tích và chẩn đoán sự cố mạng (Network Diagnosis and Root Cause Analysis)** <br> Analyst Agent phân tích output thực thi, nhận diện bất thường và trả kết luận có cấu trúc gồm trạng thái sự cố, vị trí và loại nguyên nhân. Khi bằng chứng chưa đầy đủ, workflow thực hiện Evidence-Guided Investigation bằng các Operation READ-only trong giới hạn số vòng cấu hình. Evidence Coverage và Causal Evidence Gate được sử dụng để phân biệt root cause đã được xác nhận với suspected cause hoặc trường hợp chưa đủ dữ liệu.
+
+8. **Quản lý lịch sử và nhật ký (Task Tracking and Audit Logging)** <br> Hệ thống lưu trữ thông tin Task, Operation, Execution, Device Action Log và Task Activity Event nhằm theo dõi toàn bộ quá trình xử lý. Bên cạnh đó, Audit Log ghi nhận những hoạt động nghiệp vụ quan trọng để hỗ trợ kiểm tra, tìm kiếm và truy vết.
+
+9. **Quản lý thực nghiệm và đánh giá (Benchmark and Evaluation)** <br> Hệ thống hỗ trợ tạo và cập nhật Benchmark Scenario, chạy Benchmark Run, đóng băng scenario snapshot, kiểm tra precondition, tiêm lỗi, xác minh, liên kết Task, chấm Evaluation và cleanup môi trường. Ground Truth được tách khỏi dữ liệu cung cấp cho Agent. Kết quả được đánh giá bằng Detection, Localization, Fault Type, Structured RCA, Task Success Rate, Latency và Interaction Turns.
+
+10. **Thống kê và trình bày kết quả (Dashboard and Reporting)** <br> Hệ thống tổng hợp dữ liệu thiết bị, Task, trạng thái thực thi và Benchmark Evaluation để hiển thị các chỉ số và biểu đồ trên Dashboard. Người dùng có thể lọc dữ liệu đánh giá theo thời gian, theo dõi Task Outcome và xu hướng thời gian thực thi.
+
+### 3.2.3. Yêu cầu phi chức năng
+
+Yêu cầu phi chức năng xác định các đặc tính chất lượng cần đáp ứng trong quá trình xây dựng và vận hành hệ thống. Đối với hệ thống Multi-Agent hỗ trợ quản trị mạng, các yêu cầu này tập trung vào bảo mật, tính an toàn, độ tin cậy, hiệu năng và khả năng bảo trì.
+
+1. **Bảo mật và kiểm soát truy cập (Security and Access Control)** <br> Hệ thống phải xác thực access token, kiểm tra session và quyền RBAC trước khi thực hiện thao tác được bảo vệ. Mật khẩu người dùng được băm; refresh token được lưu dưới dạng hash và được xoay khi làm mới phiên. Credential thiết bị được mã hóa, còn khóa API và các bí mật cấu hình chỉ được quản lý tại backend, không chuyển xuống frontend hoặc cung cấp trực tiếp cho LLM.
+
+2. **Tính toàn vẹn và nhất quán dữ liệu (Data Integrity and Consistency)** <br> PostgreSQL là nguồn dữ liệu chuẩn cho vòng đời Conversation, Task, Operation, Approval, Execution, Benchmark và Evaluation. Những cập nhật liên quan phải sử dụng transaction và khóa dữ liệu khi cần thiết. Commands Snapshot và Request Hash được kiểm tra để bảo đảm nội dung thực thi không khác nội dung đã được phê duyệt; LangGraph state không thay thế dữ liệu nghiệp vụ đã lưu.
+
+3. **Tính an toàn trong thực thi (Execution Safety)** <br> Hệ thống phải phân biệt rõ thao tác READ và WRITE. Các lệnh WRITE chỉ được thực hiện sau khi vượt qua Approval Gate, trong khi những yêu cầu chưa được duyệt, bị từ chối hoặc hết hạn phải được ngăn thực thi. Các thao tác điều tra bổ sung được giới hạn ở chế độ READ nhằm hạn chế thay đổi ngoài ý muốn.
+
+4. **Độ tin cậy và xử lý lỗi (Reliability and Fault Handling)** <br> Hệ thống phải phát hiện và ghi nhận lỗi gọi LLM, structured output không hợp lệ, lỗi kết nối thiết bị và lỗi CLI. Timeout, retry và schema validation được áp dụng tại các vị trí phù hợp. Khi một Operation thất bại, dependency được xử lý theo điều kiện đã xác định. Benchmark cleanup có retry và bước xác minh để tránh ghi nhận môi trường đã khôi phục khi trạng thái thiết bị chưa đúng.
+
+5. **Hiệu năng (Performance)** <br> Hệ thống cần kiểm soát timeout của LLM và thiết bị, đồng thời tách những thao tác mạng đồng bộ khỏi luồng xử lý bất đồng bộ khi cần thiết. Thời gian hoạt động của AI workflow được ghi nhận riêng với thời gian chờ phê duyệt của người dùng. Dashboard và các bảng dữ liệu sử dụng phân trang hoặc giới hạn phạm vi truy vấn để tránh tải toàn bộ lịch sử trong một lần.
+
+6. **Khả năng quan sát và truy vết (Observability and Traceability)** <br> Các sự kiện quan trọng trong vòng đời Task phải được ghi nhận thông qua Activity Event, Execution, Device Action Log và Audit Log. Benchmark Run phải liên kết được với Scenario snapshot, Conversation, Task và Evaluation. Dữ liệu cần hỗ trợ truy xuất quá trình lập kế hoạch, thực thi, phê duyệt, phân tích và cleanup.
+
+7. **Khả năng bảo trì và mở rộng (Maintainability and Extensibility)** <br> Hệ thống được tổ chức theo các lớp trình bày, API, Core Domain Services, AI và điều phối, tích hợp và lưu trữ. Backend phân chia domain theo module; NetworkTool trừu tượng hóa Netmiko/Nornir; các lớp tích hợp cô lập LLM và GNS3. Cấu trúc này hạn chế phụ thuộc trực tiếp và hỗ trợ thay đổi công nghệ hoặc bổ sung chức năng.
+
+8. **Khả năng sử dụng (Usability)** <br> Giao diện phải được tổ chức thống nhất, hỗ trợ tiếng Việt và tiếng Anh, hiển thị rõ trạng thái Task, tiến trình Agent, yêu cầu phê duyệt và kết quả benchmark. Các biểu mẫu, bộ lọc, phân trang và thông báo lỗi cần giúp người dùng nhận biết trạng thái hiện tại và hành động tiếp theo.
+
+9. **Khả năng kiểm thử và tái lập (Testability and Reproducibility)** <br> Mỗi Benchmark Scenario phải xác định precondition, thao tác tiêm lỗi, điều kiện xác minh, Ground Truth và cleanup. Benchmark Run lưu snapshot của phiên bản Scenario tại thời điểm bắt đầu để tránh thay đổi dữ liệu đánh giá giữa chừng. Mỗi lượt chạy được lưu độc lập và chỉ kết thúc cleanup sau khi trạng thái khôi phục đã được kiểm chứng.
+
+## 3.3. Công nghệ và môi trường triển khai
+
+### 3.3.1. LangGraph
+
+LangGraph được sử dụng làm framework điều phối quy trình xử lý của hệ thống Multi-Agent, hỗ trợ tổ chức và quản lý sự phối hợp giữa các AI Agent. Framework này cung cấp mô hình đồ thị trạng thái (State Graph), trong đó các nút (node) biểu diễn những bước xử lý, còn các cạnh (edge) xác định luồng chuyển tiếp. Cơ chế này cho phép tổ chức quy trình nhiều giai đoạn, hỗ trợ rẽ nhánh có điều kiện và duy trì thông tin trạng thái trong suốt quá trình thực thi.
+
+Trong hệ thống, LangGraph tổ chức các bước xử lý chính, bao gồm kiểm tra môi trường GNS3, phân tích yêu cầu, lập kế hoạch, tương tác với thiết bị mạng và đánh giá kết quả. Các thành phần trao đổi thông tin thông qua trạng thái dùng chung, đồng thời lựa chọn hướng xử lý dựa trên kết quả của những bước trước đó. Đối với nhiệm vụ chẩn đoán sự cố, quy trình có thể chuyển sang bước điều tra bổ sung khi thông tin ban đầu chưa đủ để xác định nguyên nhân. Việc sử dụng LangGraph giúp quản lý luồng xử lý rõ ràng và tạo điều kiện mở rộng các chức năng của hệ thống.
+
+### 3.3.2. Netmiko và Nornir
+
+Netmiko và Nornir được sử dụng để hỗ trợ tương tác và tự động hóa thao tác trên thiết bị mạng. Trong đó, Netmiko đảm nhiệm việc thiết lập kết nối SSH, gửi lệnh và thu thập kết quả thông qua giao diện dòng lệnh (Command-Line Interface – CLI). Nornir cung cấp các thành phần quản lý danh sách thiết bị (Inventory), tổ chức tác vụ và hỗ trợ thực thi trên nhiều thiết bị theo quy trình thống nhất.
+
+Trong kiến trúc backend, hệ thống xây dựng lớp `NetworkTool` nhằm trừu tượng hóa quá trình tương tác với thiết bị mạng. Tùy theo cấu hình, lớp này có thể sử dụng Netmiko trực tiếp hoặc kết hợp Nornir với plugin Netmiko để thực hiện các tác vụ kiểm tra trạng thái và thay đổi cấu hình. `NetworkTool` cung cấp giao diện thực thi thống nhất cho các thành phần xử lý nghiệp vụ và AI Agent, giúp hạn chế sự phụ thuộc vào chi tiết triển khai của từng thư viện.
+
+Việc tách biệt lớp tương tác thiết bị khỏi logic điều phối giúp nâng cao tính mô-đun, thuận tiện cho quá trình bảo trì và mở rộng hệ thống. Đồng thời, cách tổ chức này cho phép thay đổi hoặc bổ sung phương thức kết nối thiết bị mà không cần điều chỉnh đáng kể các thành phần Multi-Agent.
+
+### 3.3.3. GNS3 và môi trường giả lập mạng
+
+GNS3 (Graphical Network Simulator 3) được sử dụng để xây dựng môi trường mạng phục vụ phát triển, kiểm thử và đánh giá hệ thống. Nền tảng này cho phép thiết lập các topology gồm thiết bị định tuyến, chuyển mạch và những liên kết mạng thông qua môi trường ảo hóa, giúp thực hiện các thao tác cấu hình và chẩn đoán mà không ảnh hưởng đến hạ tầng mạng thực tế.
+
+Trong phạm vi đề tài, các topology được thiết kế để mô phỏng những tình huống vận hành và sự cố như sai cấu hình địa chỉ IP, giao diện bị vô hiệu hóa hoặc thông tin định tuyến không chính xác. Mỗi kịch bản thực nghiệm được xác định dựa trên trạng thái ban đầu, nguyên nhân sự cố và kết quả mong đợi. Môi trường GNS3 cho phép tái tạo các điều kiện thử nghiệm, hỗ trợ kiểm tra và đánh giá kết quả xử lý theo những tiêu chí được thiết lập trước.
+
+Backend tích hợp GNS3 Provider để giao tiếp với GNS3 Server, kiểm tra khả năng truy cập và khai thác thông tin topology phục vụ quá trình chẩn đoán. Trong khi GNS3 Provider đảm nhiệm tương tác với môi trường mô phỏng, các thao tác kiểm tra trạng thái và thay đổi cấu hình bên trong thiết bị được thực hiện thông qua lớp `NetworkTool`. Sự phân tách này giúp xác định rõ trách nhiệm của từng thành phần và bảo đảm tính độc lập giữa quản lý môi trường mạng và thực thi lệnh trên thiết bị.
+
+### 3.3.4. Các công nghệ phát triển ứng dụng
+
+Hệ thống được phát triển theo kiến trúc phân tách frontend và backend, kết hợp với cơ sở dữ liệu quan hệ và dịch vụ cung cấp mô hình ngôn ngữ lớn. Các công nghệ được lựa chọn nhằm bảo đảm tính mô-đun, thuận tiện cho quá trình phát triển, kiểm thử, bảo trì và mở rộng hệ thống.
+
+Về phía frontend, ứng dụng sử dụng React kết hợp TypeScript để xây dựng giao diện theo hướng thành phần và hỗ trợ kiểm tra kiểu dữ liệu. Vite được sử dụng để thiết lập môi trường phát triển, React Router đảm nhiệm điều hướng giữa các trang, trong khi Tailwind CSS và shadcn/ui hỗ trợ xây dựng giao diện nhất quán, có khả năng tái sử dụng. Thư viện Axios được tích hợp để thực hiện các yêu cầu HTTP và trao đổi dữ liệu với backend.
+
+Về phía backend, hệ thống được xây dựng bằng Python với framework FastAPI, cung cấp các REST API nghiệp vụ thông qua tiền tố /api/v1. FastAPI đảm nhiệm tiếp nhận yêu cầu, điều phối đến các thành phần xử lý nghiệp vụ và trả về kết quả tương ứng. Thư viện Pydantic được sử dụng để định nghĩa cấu trúc dữ liệu và kiểm tra tính hợp lệ của dữ liệu đầu vào, đầu ra, bảo đảm tính nhất quán trong quá trình giao tiếp giữa các thành phần.
+
+Về cơ sở dữ liệu, PostgreSQL được sử dụng để lưu trữ thông tin thiết bị mạng, nhiệm vụ, trạng thái thực thi, lịch sử hoạt động và kết quả thực nghiệm. Backend tích hợp SQLAlchemy để ánh xạ các mô hình dữ liệu với bảng quan hệ, đồng thời hỗ trợ truy vấn và cập nhật dữ liệu. Cách tổ chức này giúp tách biệt lớp truy cập dữ liệu khỏi logic nghiệp vụ và thuận tiện cho việc bảo trì hệ thống.
+Về tích hợp mô hình ngôn ngữ lớn, backend sử dụng LangChain kết hợp NVIDIA AI Endpoint để tương tác với các mô hình LLM đã được huấn luyện sẵn. LangChain hỗ trợ tổ chức thông điệp, gửi yêu cầu và xử lý phản hồi từ mô hình, phục vụ hoạt động của Planner Agent và Analyst Agent trong quá trình phân tích yêu cầu, lập kế hoạch và đánh giá kết quả. Việc sử dụng API cho phép hệ thống khai thác khả năng của LLM mà không cần triển khai mô hình trực tiếp trên hạ tầng cục bộ.
+
+Về môi trường triển khai, Docker Compose được sử dụng để tổ chức các dịch vụ backend, PostgreSQL và pgAdmin trong quá trình phát triển và kiểm thử. Công cụ này hỗ trợ quản lý cấu hình, kết nối và các thành phần phụ thuộc giữa những container. Trong đó, pgAdmin phục vụ việc quản lý và kiểm tra dữ liệu PostgreSQL. Cách triển khai này giúp đơn giản hóa quá trình khởi tạo và bảo đảm tính nhất quán của môi trường kiểm thử.
+
+## 3.4. Thiết kế kiến trúc tổng thể hệ thống
+
+### 3.4.1. Kiến trúc tổng thể
+
+Hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng được xây dựng theo kiến trúc phân lớp. Kiến trúc tổng thể gồm lớp trình bày, lớp API, các dịch vụ nghiệp vụ cốt lõi, thành phần điều phối Multi-Agent, lớp tích hợp và lớp lưu trữ. Cách tổ chức này phân tách trách nhiệm giữa giao diện người dùng, xử lý nghiệp vụ, suy luận bằng LLM, tương tác thiết bị và quản lý dữ liệu.
+
+Người dùng truy cập hệ thống thông qua ứng dụng web React/TypeScript. Phạm vi chức năng của Super Administrator, System Administrator, Network Engineer và Network Operator được xác định bằng RBAC. Frontend chỉ giao tiếp với FastAPI qua HTTP/REST và không truy cập trực tiếp cơ sở dữ liệu, LLM hoặc thiết bị mạng.
+
+Backend FastAPI cung cấp API cho các dịch vụ cốt lõi đã triển khai, gồm Identity và Access Control, Inventory và Credential, Conversation và Task Execution, Benchmark và Evaluation, Audit Log. Identity Service thực hiện xác thực, quản lý session và kiểm tra quyền. Các dịch vụ nghiệp vụ sử dụng Persistence Layer dựa trên SQLAlchemy để đọc và ghi PostgreSQL.
+
+Thành phần Multi-Agent sử dụng LangGraph và Orchestrator để phối hợp Planner Agent, Configuration Agent, Network Agent và Analyst Agent. Planner, Configuration và Analyst tương tác với NVIDIA AI Endpoint thông qua lớp tích hợp LLM. Workflow kiểm tra GNS3 Server thông qua lớp tích hợp GNS3, trong khi Network Agent sử dụng lớp tích hợp thiết bị dựa trên Netmiko hoặc Nornir để thực thi lệnh. Benchmark Service cũng sử dụng lớp tích hợp thiết bị để kiểm tra baseline, tiêm lỗi, xác minh và cleanup. Các kết nối đến thiết bị được thực hiện qua SSH hoặc Telnet trong phạm vi inventory và credential đã quản lý.
+
+Backend, PostgreSQL và công cụ quản trị cơ sở dữ liệu được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend hiện được vận hành như ứng dụng riêng và kết nối đến backend qua API. Redis, Message Queue và WebSocket không được đưa vào kiến trúc vì chưa được sử dụng trong phiên bản hệ thống hiện tại.
+
+```mermaid
+flowchart TB
+    ACTOR["Người dùng hệ thống<br/>Super Administrator · System Administrator<br/>Network Engineer · Network Operator"]
+
+    subgraph SYSTEM["HỆ THỐNG NETWORK MULTI-AGENT"]
+        subgraph PRESENTATION["Lớp trình bày"]
+            FE["Web Application<br/>React · TypeScript"]
+        end
+
+        subgraph API_LAYER["Lớp API"]
+            API["API Layer<br/>FastAPI REST API"]
+        end
+
+        subgraph CORE["Lớp dịch vụ nghiệp vụ cốt lõi"]
+            IDENTITY["Identity & Access<br/>Authentication · Session · RBAC"]
+            INVENTORY["Inventory & Credential"]
+            OPERATIONS["Conversation & Task Execution"]
+            BENCHMARK["Benchmark & Evaluation"]
+            AUDIT["Audit Log"]
+        end
+
+        subgraph AI["Lớp AI và điều phối"]
+            ORCHESTRATION["LangGraph & Orchestrator"]
+            AGENTS["Planner · Configuration · Network · Analyst Agent"]
+        end
+
+        subgraph INTEGRATION["Lớp tích hợp"]
+            LLMINT["LLM Integration"]
+            GNS3INT["GNS3 Integration"]
+            NETINT["Network Device Integration<br/>Netmiko · Nornir"]
+        end
+
+        subgraph DATA["Lớp lưu trữ"]
+            PERSISTENCE["Persistence Layer<br/>SQLAlchemy"]
+            DB[("PostgreSQL")]
+        end
+
+        subgraph INFRASTRUCTURE["Hạ tầng triển khai"]
+            DEPLOY["Docker Compose<br/>FastAPI · PostgreSQL · pgAdmin"]
+        end
+
+        FE -->|HTTP / REST| API
+        API --> IDENTITY
+        API --> INVENTORY
+        API --> OPERATIONS
+        API --> BENCHMARK
+        API --> AUDIT
+        API -->|Khởi chạy tác vụ AI| ORCHESTRATION
+
+        ORCHESTRATION --> AGENTS
+        ORCHESTRATION -->|Đọc và cập nhật trạng thái| OPERATIONS
+        ORCHESTRATION -->|Lấy ngữ cảnh thiết bị| INVENTORY
+        AGENTS -->|Planner, Configuration và Analyst| LLMINT
+        ORCHESTRATION -->|Kiểm tra môi trường| GNS3INT
+        AGENTS -->|Network Agent| NETINT
+        BENCHMARK -->|Tiêm lỗi, xác minh, cleanup| NETINT
+
+        IDENTITY --> PERSISTENCE
+        INVENTORY --> PERSISTENCE
+        OPERATIONS --> PERSISTENCE
+        BENCHMARK --> PERSISTENCE
+        AUDIT --> PERSISTENCE
+        PERSISTENCE -->|SQL| DB
+
+        DEPLOY -.-> API
+        DEPLOY -.-> DB
+    end
+
+    subgraph EXTERNAL["Dịch vụ và môi trường bên ngoài"]
+        LLM["NVIDIA AI Endpoint"]
+        GNS3["GNS3 Server / API"]
+        DEV["Thiết bị mạng trong GNS3"]
+    end
+
+    ACTOR --> FE
+    LLMINT <-->|HTTPS / API| LLM
+    GNS3INT <-->|HTTP / REST| GNS3
+    NETINT <-->|SSH / Telnet| DEV
+```
+
+_Hình 3.2. Sơ đồ kiến trúc tổng thể của hệ thống Network Multi-Agent theo các thành phần đã triển khai._
+
+### 3.4.2. Các thành phần chức năng và mối quan hệ
+
+Kiến trúc hệ thống gồm các thành phần chức năng được tổ chức theo từng lớp như Hình 3.2.
+
+**Lớp trình bày (Presentation Layer).** Web Application được xây dựng bằng React và TypeScript, cung cấp giao diện đăng nhập, Dashboard, hội thoại với AI, theo dõi Task, phê duyệt thay đổi cấu hình, quản lý thiết bị và credential, quản lý Benchmark Scenario và Benchmark Run, xem Evaluation, Audit Log, người dùng và quyền truy cập. Frontend chịu trách nhiệm hiển thị dữ liệu và tiếp nhận thao tác của người dùng, nhưng không trực tiếp thực hiện nghiệp vụ, truy vấn PostgreSQL hoặc kết nối thiết bị mạng.
+
+**Lớp API (API Layer).** FastAPI cung cấp các REST API dưới tiền tố `/api/v1`, tiếp nhận yêu cầu HTTP từ frontend, kiểm tra cấu trúc dữ liệu đầu vào và chuyển yêu cầu đến thành phần xử lý phù hợp. API Layer không chứa nghiệp vụ xác thực hoặc phân quyền; các router sử dụng Identity Service để xác thực phiên và kiểm tra permission trước khi gọi Core Domain Services. Đối với yêu cầu hội thoại hoặc tiếp tục Task sau phê duyệt, API Layer đồng thời kích hoạt Multi-Agent Workflow.
+
+**Các dịch vụ nghiệp vụ cốt lõi (Core Domain Services).** Các nghiệp vụ của hệ thống được phân chia theo domain:
+
+- **Identity & Access** quản lý người dùng, vai trò, permission, mật khẩu, access token, refresh token và vòng đời session; thực hiện Authentication và RBAC.
+- **Inventory & Credential** quản lý thiết bị, brand, category, thông tin kết nối và credential đã mã hóa; cung cấp ngữ cảnh thiết bị cho quá trình lập kế hoạch và thực thi.
+- **Conversation & Task Execution** quản lý hội thoại, message, Task, Operation, dependency, ánh xạ thiết bị, Approval, Execution, Activity và Device Action Log.
+- **Benchmark & Evaluation** quản lý Scenario, Run, Ground Truth, quá trình tiêm lỗi, xác minh, cleanup và kết quả đánh giá có cấu trúc.
+- **Audit Log** cung cấp dữ liệu truy vết các hành động nghiệp vụ quan trọng phục vụ giám sát và kiểm toán.
+
+Domain Service chịu trách nhiệm thực hiện quy tắc nghiệp vụ và phối hợp các Repository trong phạm vi domain. Đây là lớp trung gian giữa API, Multi-Agent Core, lớp tích hợp và cơ sở dữ liệu; frontend và Agent không truy cập Repository trực tiếp.
+
+**Lõi Multi-Agent (Multi-Agent Core).** Thành phần này sử dụng LangGraph và các Orchestrator để phối hợp bốn Agent chuyên trách. Planner Agent phân tích yêu cầu và tạo kế hoạch có cấu trúc ở mức nghiệp vụ; Configuration Agent chuyển yêu cầu của Operation WRITE thành CLI phù hợp với thiết bị; Network Agent thực thi Operation đã được kiểm soát; Analyst Agent phân tích kết quả và tạo kết luận chẩn đoán. Orchestrator liên kết hoạt động của các Agent với Domain Service, kiểm tra dependency, Approval Gate, trạng thái thực thi và điều kiện thu thập bằng chứng. LangGraph quản lý thứ tự và nhánh xử lý của workflow, nhưng không thay thế các Domain Service trong việc quản lý dữ liệu nghiệp vụ dài hạn.
+
+**Lớp tích hợp (Integration Layer).** Lớp này cô lập hệ thống khỏi chi tiết của những công nghệ và dịch vụ bên ngoài:
+
+- **LLM Integration** sử dụng LangChain và `ChatNVIDIA` để gửi prompt đến NVIDIA AI Endpoint, nhận phản hồi và chuyển kết quả cho Planner, Configuration hoặc Analyst Agent.
+- **GNS3 Integration** sử dụng GNS3 Provider để kiểm tra khả năng truy cập GNS3 Server trước khi hệ thống lập kế hoạch hoặc phân tích tác vụ mạng.
+- **Network Device Integration** cung cấp `NetworkTool` với backend Netmiko hoặc Nornir, chuẩn bị kết nối từ inventory và credential, thực thi lệnh qua SSH/Telnet và chuẩn hóa kết quả trả về. Thành phần này được Network Agent sử dụng trong workflow; Benchmark Run Service cũng sử dụng nó để kiểm tra baseline, tiêm lỗi, xác minh và cleanup.
+
+**Lớp lưu trữ (Persistence Layer).** Repository và SQLAlchemy đảm nhiệm ánh xạ, truy vấn và cập nhật dữ liệu trong PostgreSQL. Cơ sở dữ liệu lưu người dùng, session, quyền truy cập, inventory, credential, conversation, task, operation, approval, execution, benchmark, evaluation và audit. PostgreSQL là nguồn dữ liệu chuẩn đối với trạng thái nghiệp vụ của hệ thống.
+
+**Hạ tầng triển khai.** Backend, PostgreSQL và pgAdmin được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend được vận hành như một ứng dụng riêng và kết nối đến backend qua REST API. NVIDIA AI Endpoint, GNS3 Server và các thiết bị mạng trong GNS3 nằm ngoài ranh giới ứng dụng nhưng được truy cập thông qua các lớp tích hợp tương ứng.
+
+Mối quan hệ giữa các thành phần được thiết kế theo nguyên tắc giới hạn trách nhiệm. Planner Agent không nhận credential và không chạy CLI; Network Agent không dùng LLM để tự lựa chọn mục tiêu hoặc diễn giải kết quả; Analyst Agent không kết nối và không thay đổi cấu hình thiết bị. Các thao tác WRITE phải được kiểm soát bởi Execution Service và Approval Gate trước khi Network Agent thực thi. Sự phân tách này làm giảm phạm vi ảnh hưởng khi một thành phần tạo kết quả không hợp lệ và hỗ trợ kiểm tra toàn bộ quá trình xử lý.
+
+### 3.4.3. Cơ chế trao đổi và quản lý dữ liệu
+
+Frontend và backend trao đổi dữ liệu bằng HTTP/REST. Sau khi đăng nhập, frontend gửi thông tin xác thực trong các yêu cầu đến API. Router sử dụng Identity Service để kiểm tra tính hợp lệ của access token, trạng thái session, trạng thái tài khoản và permission tương ứng với chức năng được yêu cầu. Chỉ khi các điều kiện này được thỏa mãn, yêu cầu mới được chuyển đến Domain Service. Giao diện cập nhật tiến trình Task bằng cách truy vấn dữ liệu từ API; phiên bản hiện tại không sử dụng WebSocket hoặc Message Queue.
+
+Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message của người dùng trước khi API kích hoạt LangGraph Workflow. Planner Agent nhận nội dung yêu cầu cùng danh sách thiết bị được phép sử dụng, sau đó gọi NVIDIA AI Endpoint qua HTTPS/API. Structured output trả về được kiểm tra bằng schema trước khi Planning Orchestrator chuyển kế hoạch thành các bản ghi Task, Operation, Operation Dependency và Operation Device. Cách thực hiện này bảo đảm kế hoạch chỉ được đưa vào thực thi sau khi có cấu trúc hợp lệ và đã được liên kết với dữ liệu nghiệp vụ.
+
+Trong quá trình thực thi, Execution Orchestrator đọc lại Task, Operation, dependency, mapping thiết bị và Approval từ Execution Service. Với Operation READ, Network Agent có thể gọi NetworkTool để thu thập trạng thái. Với Operation WRITE, workflow chỉ tiếp tục khi Approval Gate xác nhận nội dung đã được phê duyệt và vẫn khớp với command snapshot. NetworkTool lấy thông tin kết nối thông qua Inventory Service và Device Connection Provider, sau đó gửi lệnh đến thiết bị bằng SSH hoặc Telnet. Output của thiết bị được chuẩn hóa, lưu thành Execution và Device Action Log, rồi chuyển cho Analyst Agent làm bằng chứng phân tích.
+
+Planner Agent, Configuration Agent và Analyst Agent trao đổi với NVIDIA AI Endpoint thông qua lớp tích hợp LLM; API key và cấu hình model được quản lý tại backend, không được gửi xuống frontend. Network Agent không gọi LLM. Analyst nhận output thực thi, thông tin thiết bị và evidence đã thu thập để tạo `AnalysisResult`. Khi evidence chưa đầy đủ, workflow có thể tạo các bước điều tra READ-only bổ sung trong giới hạn số vòng đã cấu hình; kết quả cuối cùng được lưu thành Message và dữ liệu đánh giá có cấu trúc.
+
+GNS3 Provider giao tiếp với GNS3 Server qua HTTP/REST để kiểm tra khả năng truy cập môi trường. Topology và trạng thái các node được quản lý tại GNS3; phiên bản hiện tại chưa đồng bộ toàn bộ graph node–link vào cơ sở dữ liệu của hệ thống. Hoạt động CLI bên trong thiết bị được thực hiện qua NetworkTool dựa trên thông tin kết nối trong Inventory. Đối với benchmark, Benchmark Service đọc Scenario đã lưu, kiểm tra precondition, sử dụng NetworkTool để tiêm lỗi và xác minh trạng thái, tạo yêu cầu chẩn đoán qua workflow, lưu Evaluation, sau đó thực hiện cleanup và kiểm chứng trạng thái khôi phục.
+
+PostgreSQL được sử dụng làm nguồn dữ liệu chuẩn đối với vòng đời Conversation, Task, Operation, Approval, Execution, Benchmark Run và Evaluation. Mọi thay đổi nghiệp vụ dài hạn được thực hiện thông qua Domain Service và Repository. Các cập nhật cần bảo đảm tính nhất quán, chẳng hạn xoay session hoặc xử lý phê duyệt hết hạn, sử dụng transaction và cơ chế khóa dữ liệu phù hợp tại tầng lưu trữ.
+
+LangGraph state chỉ chứa dữ liệu chuyển tiếp cần thiết giữa các node trong một lượt xử lý, chẳng hạn Conversation, Message, Task, Execution Result, Analysis Result, vòng điều tra và mức độ bao phủ evidence. State này không được sử dụng như nguồn dữ liệu cạnh tranh với PostgreSQL. Trước mỗi giai đoạn quan trọng, Orchestrator đọc lại trạng thái nghiệp vụ đã lưu để hạn chế việc thực thi dựa trên dữ liệu cũ.
+
+Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Operation, Approval và command snapshot trong PostgreSQL rồi kết thúc lượt workflow hiện tại. Sau khi người dùng đưa ra quyết định, API tải lại Task và khởi chạy workflow tiếp tục từ giai đoạn thực thi. Nhờ đó, hệ thống không phải duy trì một tiến trình LangGraph hoặc kết nối HTTP liên tục trong toàn bộ thời gian chờ phê duyệt, đồng thời vẫn bảo đảm tính tuần tự, khả năng truy vết và tính nhất quán của nội dung đã được chấp thuận.
+
+## 3.5. Thiết kế kiến trúc Multi-Agent
+
+| Tác tử/thành phần      | Đầu vào                                                       | Chức năng                                                                         | Đầu ra và giới hạn                                              |
+| ---------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Planner Agent          | Yêu cầu người dùng, inventory công khai, topology neighbor, diagnostic playbook và JSON Schema | Phân tích ý định; tạo Operation, device mapping, READ/WRITE, dependency và yêu cầu cấu hình | ExecutionPlanCreate; không sinh CLI WRITE, không kết nối thiết bị |
+| Configuration Agent    | Kế hoạch, yêu cầu cấu hình, thiết bị và interface hợp lệ       | Chuyển yêu cầu của từng Operation WRITE thành CLI và chuẩn hóa lệnh                 | Kế hoạch có commands WRITE; không kết nối hoặc thực thi trên thiết bị |
+| Network Agent          | Operation và danh sách command cho mapping                    | Kiểm tra input và gọi NetworkTool qua adapter                                     | NetworkExecutionResult; không dùng LLM, không tự chọn mạng đích |
+| Analyst Agent          | Command outputs, hostname, trạng thái thực thi                | Tóm tắt phát hiện, giả thuyết, khuyến nghị; tạo kết luận RCA dạng JSON            | AnalysisResult; không kết nối hay sửa thiết bị                  |
+| Planning Orchestrator  | Message/Conversation                                          | Gọi Planner, kiểm tra device ID, lưu kế hoạch                                     | Task/plan đã xác thực                                           |
+| Execution Orchestrator | Task và graph operation                                       | Kiểm tra dependency, Approval Gate, thực thi và cập nhật trạng thái               | Execution/result/action logs                                    |
+| Analysis Orchestrator  | Kết quả thực thi                                              | Lưu kết luận có cấu trúc vào timeline và tạo FINAL_RESPONSE                       | Message cuối cùng cùng dấu vết phân tích                        |
+
+### 3.5.1. Planner Agent
+
+Planner Agent chịu trách nhiệm **phân tích ý định và đề xuất kế hoạch thực hiện ở mức nghiệp vụ**. Agent chuyển yêu cầu ngôn ngữ tự nhiên thành `ExecutionPlanCreate`, xác định Operation, thiết bị, chế độ READ/WRITE và dependency. Planner tạo lệnh cho bước READ thu thập dữ liệu; với bước WRITE, Planner chỉ mô tả `configuration_requirements` và không tự sinh CLI cấu hình.
+
+Đầu vào của Planner gồm nội dung yêu cầu, danh sách thiết bị được phép sử dụng, thông tin inventory công khai, danh sách interface đã biết, quan hệ topology neighbor, diagnostic playbook phù hợp và JSON Schema của `ExecutionPlanCreate`. Thông tin inventory cung cấp `device_id`, hostname, brand, category, device type, location và interface cần thiết cho quá trình lập kế hoạch, nhưng không chứa username, password, secret hoặc khóa mã hóa credential. Planner chỉ được tham chiếu những thiết bị và interface có trong ngữ cảnh đầu vào, không được tự tạo thiết bị hoặc suy đoán cổng vật lý không tồn tại.
+
+Đối với mỗi yêu cầu, Planner thực hiện các nhiệm vụ sau:
+
+1. Xác định loại Task, chẳng hạn cấu hình, chẩn đoán hoặc tác vụ tổng hợp.
+2. Phân rã mục tiêu thành danh sách Operation có thứ tự và `operation_intent` rõ ràng.
+3. Tạo `operation_parameters`: Operation READ chứa `command` hoặc `commands`; Operation WRITE chứa `configuration_requirements` mô tả mục tiêu cấu hình.
+4. Gán Operation cho thiết bị bằng `device_id`, xác định vai trò SOURCE, TARGET hoặc CONTEXT và lựa chọn `access_mode` READ/WRITE.
+5. Thiết lập dependency giữa các Operation bằng `ON_SUCCESS` hoặc `ON_COMPLETION`, chỉ tham chiếu đến bước đứng trước để giữ kế hoạch ở dạng DAG.
+6. Tách bước thu thập dữ liệu, thay đổi cấu hình và xác minh kết quả thành các Operation phù hợp.
+
+Với yêu cầu cấu hình, Planner mô tả mục tiêu, tham số và ràng buộc của thay đổi trong `configuration_requirements`. Operation WRITE phải phụ thuộc vào các bước kiểm tra cần thiết và sau khi được Configuration Agent bổ sung CLI, kế hoạch phải vượt qua Approval Gate trước khi Network Agent thực thi.
+
+Với yêu cầu chẩn đoán, Planner ưu tiên tạo các Operation READ nhằm thu thập evidence theo diagnostic playbook. Khi cần quan sát thiết bị lân cận, Agent sử dụng topology neighbor và ánh xạ interface đã được cung cấp, không tự suy đoán quan hệ mạng. Những Operation do vòng điều tra bổ sung tạo ra cũng bị giới hạn ở lệnh READ-only để tránh thay đổi cấu hình trong quá trình thu thập bằng chứng.
+
+Kết quả từ LLM phải là một JSON object phù hợp với `ExecutionPlanCreate`. Planner kiểm tra dữ liệu bằng Pydantic. Nếu phản hồi sai JSON, Operation READ thiếu command, Operation WRITE thiếu yêu cầu cấu hình hoặc vi phạm schema, Agent gửi lại lỗi validation để mô hình sửa trong giới hạn retry và timeout. Planning Orchestrator tiếp tục kiểm tra device ID, thứ tự và dependency trước khi chuyển các Operation WRITE cho Configuration Agent.
+
+Planner Agent không lưu trực tiếp dữ liệu nghiệp vụ, không giải mã credential, không sinh CLI WRITE, không mở kết nối SSH/Telnet, không phê duyệt cấu hình và không thực thi command. Việc tách lập kế hoạch khỏi sinh cấu hình giúp thu hẹp trách nhiệm của Planner và cho phép kiểm tra riêng từng đầu ra.
+
+### 3.5.2. Configuration Agent
+
+Configuration Agent nhận kế hoạch đã được Planner xác thực, danh sách thiết bị và interface hợp lệ. Agent chỉ xử lý Operation WRITE: đọc `configuration_requirements`, loại thiết bị và sinh danh sách CLI phù hợp với `device_type`. Kết quả phải ánh xạ chính xác tới từng `operation_order`; không được bổ sung, bỏ sót hoặc thay đổi thứ tự Operation.
+
+Các lệnh sinh ra được chuẩn hóa để loại `configure terminal`, `end`, `write memory` và các lệnh quản lý phiên do NetworkTool đảm nhiệm. Planning Orchestrator kiểm tra lại tên interface theo inventory trước khi lưu kế hoạch. Configuration Agent không nhận credential, không kết nối thiết bị, không phê duyệt và không thực thi cấu hình. Đầu ra của Agent vẫn phải qua schema validation, Approval Gate và command snapshot.
+
+### 3.5.3. Network Agent
+
+Network Agent là bộ thực thi không sử dụng LLM để ra quyết định và không tự tạo câu lệnh cấu hình. Thành phần này nhận Operation, command và ánh xạ thiết bị đã được Planner và Configuration Agent tạo, được Planning/Execution Orchestrator kiểm tra, sau đó gọi `NetworkTool`. Lệnh READ dùng để quan sát trạng thái; lệnh WRITE chỉ được thực thi khi các điều kiện phê duyệt đã thỏa mãn. Kết quả được chuẩn hóa thành `NetworkExecutionResult`.
+
+### 3.5.4. Analyst Agent
+
+Analyst Agent phân tích kết quả thực thi và tạo `AnalysisResult` gồm tóm tắt, phát hiện, nguyên nhân, khuyến nghị và dữ liệu phục vụ đánh giá chẩn đoán. Với nhiệm vụ xử lý sự cố, Agent có thể nêu trạng thái bất thường, root cause, độ tin cậy, khoảng trống bằng chứng và kiểm tra bổ sung. Causal Evidence Gate đối chiếu kết luận với bằng chứng trước khi xác nhận.
 
 Với phiên bản đánh giá mới, Analyst trả thêm `is_anomaly` và `root_causes` gồm `device`, `interface` (có thể null) và `fault_type`. Dữ liệu đó do Agent tạo dựa trên output quan sát, **không phải do evaluator trích ngược từ Ground Truth hoặc tìm từ khóa trong văn bản**. Nếu Agent không thể tạo JSON hợp lệ, Analysis Orchestrator sử dụng phản hồi dự phòng để bảo toàn trải nghiệm hội thoại nhưng bộ chấm không coi phản hồi dự phòng là kết luận RCA hợp lệ.
 
-## 3.4. Vai trò và cơ chế điều phối giữa các Agent
+### 3.5.5. Orchestrator và cơ chế điều phối
 
-LangGraph sử dụng graph chính `check_gns3 → plan → execute → analyze → (investigate → analyze)* → finalize → END` và graph tiếp tục sau approval bắt đầu tại `execute`. Workflow đầu tiên được kích hoạt từ một USER_REQUEST. Planning node tạo Task và sơ đồ operations. Execution node duyệt kế hoạch và gọi Network Agent. Analysis node đánh giá độ đầy đủ của bằng chứng; finalize chỉ tạo phản hồi cuối sau khi đã kết luận hoặc đạt số vòng bổ sung `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi vẫn chờ phê duyệt, workflow phát thông báo APPROVAL_REQUEST.
+Hệ thống sử dụng kiến trúc đa tác tử có điều phối tập trung. Planning Orchestrator gọi Planner, kiểm tra device ID, gọi Configuration Agent cho Operation WRITE, xác minh command/interface và lưu kế hoạch. Execution Orchestrator xác định thứ tự thực thi, kiểm tra dependency, xử lý Approval Gate và gọi Network Agent. Analysis Orchestrator tổng hợp dữ liệu, gọi Analyst Agent, kiểm tra bằng chứng và chuẩn bị kết quả để workflow lựa chọn bước tiếp theo.
+
+Kế hoạch gồm Task, TaskOperation, OperationDependency và TaskOperationDevice. Dependency hỗ trợ `ON_SUCCESS` và `ON_COMPLETION`; Planner chỉ được tham chiếu Operation đứng trước để tránh chu trình. Trạng thái được đọc lại từ cơ sở dữ liệu trước khi thực thi, giúp tránh chạy lại những thao tác đã hoàn tất.
+
+### 3.5.6. Quy trình thực thi Multi-Agent trên LangGraph
+
+LangGraph sử dụng graph chính `check_gns3 → plan → execute → analyze → (investigate → analyze)* → finalize → END` và graph tiếp tục sau approval bắt đầu tại `execute`. Workflow đầu tiên được kích hoạt từ một USER_REQUEST. Trong node `plan`, Planner tạo kế hoạch nghiệp vụ và Configuration Agent bổ sung CLI cho Operation WRITE trước khi Task cùng sơ đồ Operation được lưu. Execution node duyệt kế hoạch và gọi Network Agent. Analysis node đánh giá độ đầy đủ của bằng chứng; finalize chỉ tạo phản hồi cuối sau khi đã kết luận hoặc đạt số vòng bổ sung `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi vẫn chờ phê duyệt, workflow phát thông báo APPROVAL_REQUEST.
 
 Các giới hạn vận hành được ngoại hóa qua biến môi trường: retry và timeout của Planner/Analyst, số vòng điều tra, ngưỡng confidence và giới hạn token Analyst. Cách này cho phép hiệu chỉnh thực nghiệm mà không thay đổi mã nguồn; các giới hạn bảo đảm hợp đồng như command READ-only và kích thước schema vẫn được cố định trong code.
 
-Kế hoạch thực thi gồm các bản ghi Task, TaskOperation, OperationDependency và TaskOperationDevice. Operation có thứ tự hiển thị, tham số command và phân loại chế độ đọc/ghi. Dependency hỗ trợ điều kiện `ON_SUCCESS` và `ON_COMPLETION`; Planner chỉ được tham chiếu operation đứng trước để không tạo chu trình. Execution Orchestrator đọc lại state từ DB, xử lý mapping hợp lệ, bỏ qua thao tác đã hoàn tất và cập nhật trạng thái theo kết quả.
-
 Một approval có thể làm quy trình tạm dừng trong khoảng thời gian dài. Để tránh thực thi lại các lệnh đã xong, nhánh resume dùng Task và mapping đã lưu. Phần chờ quyết định của con người được ghi thành activity timeline và được loại trừ khỏi cách đo thời gian workflow AI mới.
 
-## 3.5. Cơ chế quản lý thiết bị và topology
+```mermaid
+flowchart TD
+    START([Yêu cầu người dùng]) --> CHECK[check_gns3]
+    CHECK --> PLAN[plan / Planner + Configuration Agent]
+    PLAN --> EXEC[execute / Network Agent]
+    EXEC -->|Chờ WRITE approval| WAIT[Approval Gate]
+    WAIT -->|Approved| EXEC
+    WAIT -->|Rejected hoặc Expired| FINAL[finalize]
+    EXEC --> ANALYZE[analyze / Analyst Agent]
+    ANALYZE -->|Thiếu bằng chứng| INVESTIGATE[investigate / READ-only]
+    INVESTIGATE --> ANALYZE
+    ANALYZE -->|Đủ bằng chứng hoặc đạt giới hạn| FINAL
+    FINAL --> END([Phản hồi cuối])
+```
 
-Inventory được chuẩn hóa thành các nguồn dữ liệu Brand, Category, Credential và Device. Thiết bị chứa hostname, host/port, loại driver và liên kết đến credential. Brand/Category phục vụ phân loại; service kiểm tra tham số kết nối và đối tượng liên quan. Có API quản lý kho thiết bị và giao diện thêm/sửa/xem danh sách.
+_Hình 3.3. Sơ đồ workflow Multi-Agent trên LangGraph._
 
-Credential thiết bị độc lập với tài khoản đăng nhập hệ thống. Password và enable secret được mã hóa khi lưu bằng pgcrypto; khóa mã hóa đến từ biến môi trường, không được đưa vào git. Khi NetworkTool chuẩn bị kết nối, repository nội bộ mới giải mã theo nhu cầu, qua NetworkService/DeviceConnectionProvider. Pydantic response không đưa ciphertext hoặc plaintext ra API công khai. Mục tiêu của cách thiết kế này là ngăn LLM và frontend tiếp xúc với bí mật kết nối.
+## 3.6. Thiết kế các quy trình xử lý nghiệp vụ
 
-Topology liên kết mạng chưa có biểu diễn node–link đầy đủ trong DB. Điều này giới hạn các phép suy luận về đường đi hoặc fault propagation dựa trên topology. Topology thực nghiệm được cố định trong GNS3 và kịch bản chứa nhãn `topology`.
+### 3.6.1. Quy trình tiếp nhận và phân tích yêu cầu
 
-## 3.6. Quy trình tiếp nhận và phân tích yêu cầu
+Người dùng đăng nhập và gửi yêu cầu qua giao diện hội thoại. Conversation Service lưu USER_REQUEST, xác định Conversation và kích hoạt workflow nền. LangGraph kiểm tra GNS3, tạo Task và chuyển yêu cầu cho Planner. Kế hoạch sau khi kiểm tra được lưu thành các Operation, dependency và mapping thiết bị. Frontend lấy Message và Activity Timeline để hiển thị tiến trình.
 
-(1) Người dùng đăng nhập; Identity cấp access/refresh token và duy trì user session. (2) Frontend gửi message với Bearer token. (3) ConversationService lưu USER_REQUEST và Conversation nếu đây là tin đầu; ID người dùng lấy từ phiên xác thực. (4) API trả kết quả tạo message, workflow chạy ở background. (5) LangGraph kiểm tra GNS3, Planning Orchestrator tạo Task và gọi Planner. (6) Pydantic/ExecutionService kiểm tra kế hoạch và lưu một lần các operations, dependencies, device mappings. (7) Execution Orchestrator gọi Network Agent cho các mapping đủ điều kiện. (8) Analyst phân tích output, lưu Activity Event `ANALYSIS_COMPLETED` và tạo `FINAL_RESPONSE`. (9) Frontend lấy message và timeline để trình bày.
+### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
 
-Đối với message tiếp theo trong hội thoại, endpoint tương ứng chỉ kích hoạt workflow cho người gửi USER; message AGENT không tự sinh Task. Conversation có tính năng tạo tiêu đề từ model, đổi tiêu đề và quản lý danh sách. Trạng thái được đọc qua các API theo Task để phục vụ giao diện tiến trình.
+Planner nhận yêu cầu cùng inventory công khai và tạo kế hoạch có cấu trúc. Planning Orchestrator xác minh thiết bị, thứ tự và quan hệ phụ thuộc trước khi lưu. Execution Orchestrator chỉ chạy các mapping đủ điều kiện. Operation READ được thực hiện trực tiếp; Operation WRITE chuyển sang trạng thái chờ phê duyệt. Sau thực thi, kết quả được lưu và cung cấp cho Analyst.
 
-## 3.7. Quy trình chẩn đoán và khắc phục sự cố
+### 3.6.3. Quy trình chẩn đoán sự cố và phân tích nguyên nhân gốc
 
-Với tác vụ chẩn đoán, Planner thường tạo các operation READ như xem interface, bảng định tuyến, neighbor hoặc cấu hình liên quan. Network Agent thu thập output thực từ Cisco IOS qua Netmiko/Nornir. Analyst trả `confidence`, khoảng trống bằng chứng và các kiểm tra bổ sung có cấu trúc. Khi cần, Orchestrator ánh xạ hostname sang device ID hợp lệ, giới hạn command ở `show`, `ping`, `traceroute`, ưu tiên quan sát hai đầu liên kết theo topology GNS3 và lưu lượt bổ sung thành Operation/Execution trước khi phân tích lại. Kết luận dạng cấu trúc được lưu độc lập với văn bản báo cáo để phục vụ Ground Truth evaluation.
+Với tác vụ chẩn đoán, Planner tạo các Operation READ để thu thập trạng thái interface, route, neighbor hoặc cấu hình liên quan. Analyst tổng hợp bằng chứng và đưa ra root cause có cấu trúc. Khi còn thiếu dữ liệu, Orchestrator chỉ tạo kiểm tra bổ sung thuộc nhóm `show`, `ping` hoặc `traceroute`, ưu tiên thiết bị mục tiêu và láng giềng một hop. Causal Evidence Gate xác nhận hoặc hạ mức kết luận dựa trên bằng chứng thực tế.
 
-Hệ thống có **khả năng thực thi cấu hình theo kế hoạch đã được tạo sẵn và được phê duyệt**; không đồng nghĩa Analyst tự quyết định thực hiện remediation. Chưa có vòng tự động tạo kế hoạch mới từ kết luận RCA, quy trình xác minh kết quả hậu sửa chữa cho mọi lệnh, rollback tự động hoặc closed-loop self-healing. Trong Benchmark Engine, `cleanup` là hành động khôi phục môi trường thử nghiệm theo kịch bản, không được tính là Agent đã khắc phục lỗi thành công.
+```mermaid
+flowchart TD
+    A[Thu thập bằng chứng ban đầu] --> B[Analyst phân tích]
+    B --> C{Đủ required evidence?}
+    C -->|Có| D[Causal Evidence Gate]
+    D --> E{Root cause được xác nhận?}
+    E -->|Có| F[Finalize kết luận]
+    E -->|Không| G[Ghi nhận suspected hoặc unknown]
+    C -->|Không| H{Còn vòng điều tra?}
+    H -->|Có| I[Tạo Operation READ bổ sung]
+    I --> J[Thu thập từ thiết bị hoặc peer]
+    J --> B
+    H -->|Không| G
+    G --> F
+```
 
-## 3.8. Cơ chế kiểm tra, Human-in-the-loop và Audit Log
+_Hình 3.4. Quy trình chẩn đoán và thu thập bổ sung bằng chứng._
 
-**Approval Gate** phân biệt READ có thể tiếp tục và WRITE phải xin phép. Lệnh WRITE chưa được duyệt làm mapping chuyển `WAITING_APPROVAL`; thao tác không kết nối thiết bị khi trạng thái PENDING. Phê duyệt lưu snapshot danh sách lệnh, request hash SHA-256 và metadata cần thiết. Khi tiếp tục, engine tính lại hash theo canonical JSON rồi so với snapshot; nếu lệnh khác đi, mapping bị đánh dấu FAILED mà không gửi lệnh. REJECTED hoặc EXPIRED cũng không được thực thi. Quyền quyết định thuộc người dùng có permission phù hợp; các quy tắc timeout và trạng thái được kiểm tra ở backend.
+### 3.6.4. Quy trình phê duyệt và kiểm soát thực thi
 
-**Ba loại dấu vết cần phân biệt:** (i) `task_activity_events` ghi các mốc workflow/Agent/approval, (ii) `task_executions` ghi lần thực thi và thông tin gọi công cụ, (iii) `device_action_logs` ghi lệnh thực tế gửi tới thiết bị và output/status. Ngoài ra, domain Audit sở hữu `audit_logs` để truy vết các thao tác quản trị ở cấp hệ thống. Audit API hỗ trợ lọc actor, action, resource, trạng thái, khoảng thời gian và phân trang; có giao diện tra cứu/filter ngày ở frontend. Audit Log là append-only ở API, không cho client sửa/xóa. Các log không được chứa password, refresh token hoặc secret.
+Approval Gate phân biệt READ và WRITE. Với WRITE, backend lưu snapshot câu lệnh, request hash SHA-256, thời hạn và người có quyền quyết định. Sau khi phê duyệt, engine tính lại hash từ nội dung canonical và chỉ thực thi khi dữ liệu vẫn khớp snapshot. Quyết định REJECTED hoặc EXPIRED kết thúc thao tác mà không kết nối thiết bị.
 
-**Giới hạn:** cơ chế approval/hash là kiểm soát phạm vi thay đổi và tính toàn vẹn nội dung đã duyệt, không phải bằng chứng rằng mọi cấu hình được phê duyệt đều an toàn theo chính sách mạng. Chỉ số Safety trong Evaluation vẫn là NOT_APPLICABLE khi chưa có bộ kiểm chứng độc lập.
+```mermaid
+sequenceDiagram
+    actor User as Quản trị viên mạng
+    participant FE as Frontend
+    participant API as Backend API
+    participant EO as Execution Orchestrator
+    participant DB as PostgreSQL
+    participant NA as Network Agent
+    participant DEV as Thiết bị GNS3
 
-## 3.9. Thiết kế giao diện và triển khai hệ thống
+    EO->>DB: Lưu approval request, snapshot và hash
+    EO-->>FE: Thông báo WAITING_APPROVAL
+    User->>FE: Phê duyệt hoặc từ chối
+    FE->>API: Gửi quyết định
+    API->>DB: Lưu quyết định và người phê duyệt
+    API->>EO: Tiếp tục workflow
+    EO->>DB: Đọc lại Operation và snapshot
+    EO->>EO: Kiểm tra trạng thái, timeout và hash
+    alt Approved và dữ liệu nhất quán
+        EO->>NA: Thực thi Operation WRITE
+        NA->>DEV: Gửi lệnh cấu hình
+        DEV-->>NA: Trả kết quả
+        NA-->>EO: NetworkExecutionResult
+    else Rejected, Expired hoặc hash không khớp
+        EO->>DB: Ghi trạng thái kết thúc hoặc FAILED
+    end
+```
+
+_Hình 3.5. Sequence Diagram của quy trình Approval Gate._
+
+### 3.6.5. Quy trình kiểm tra kết quả và ghi nhận nhật ký
+
+Sau mỗi thao tác, hệ thống ghi trạng thái và dữ liệu kết quả gắn với Task, Operation và thiết bị. `task_activity_events` lưu các mốc workflow và approval; `task_executions` lưu từng lần gọi công cụ; `device_action_logs` lưu lệnh thực tế cùng output; `audit_logs` ghi sự kiện quản trị cấp hệ thống. Nhật ký hỗ trợ truy vết nhưng không thay thế kiểm chứng trạng thái mạng sau cấu hình.
+
+## 3.7. Thiết kế dữ liệu và cơ sở dữ liệu
+
+### 3.7.1. Mô hình dữ liệu và sơ đồ ERD
+
+PostgreSQL quản lý dữ liệu theo các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Các thực thể được liên kết bằng khóa ngoại để truy vết từ yêu cầu người dùng đến Task, kế hoạch, lần thực thi, hành động trên thiết bị và kết quả đánh giá.
+
+```mermaid
+erDiagram
+    USERS ||--o{ CONVERSATIONS : owns
+    USERS ||--o{ USER_SESSIONS : has
+    USERS }o--o{ ROLES : assigned
+    ROLES }o--o{ PERMISSIONS : grants
+    CREDENTIALS ||--o{ DEVICES : authenticates
+    BRANDS ||--o{ DEVICES : classifies
+    CATEGORIES ||--o{ DEVICES : groups
+    CONVERSATIONS ||--o{ MESSAGES : contains
+    CONVERSATIONS ||--o{ TASKS : creates
+    TASKS ||--o{ TASK_OPERATIONS : contains
+    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : depends
+    TASK_OPERATIONS ||--o{ TASK_OPERATION_DEVICES : targets
+    DEVICES ||--o{ TASK_OPERATION_DEVICES : assigned
+    TASKS ||--o{ TASK_EXECUTIONS : records
+    TASKS ||--o{ TASK_ACTIVITY_EVENTS : emits
+    TASKS ||--o{ DEVICE_ACTION_LOGS : logs
+    BENCHMARK_SCENARIOS ||--o{ BENCHMARK_RUNS : instantiates
+    BENCHMARK_RUNS }o--o| TASKS : evaluates
+    TASKS ||--o| TASK_EVALUATIONS : receives
+    TASK_EVALUATIONS ||--o{ TASK_EVALUATION_METRICS : contains
+    USERS ||--o{ AUDIT_LOGS : acts
+```
+
+_Hình 3.6. Sơ đồ quan hệ thực thể rút gọn của hệ thống._
+
+### 3.7.2. Quản lý thiết bị và thông tin kết nối
+
+Inventory được chuẩn hóa thành Brand, Category, Credential và Device. Thiết bị chứa hostname, host/port, driver và liên kết credential. Password và enable secret được mã hóa khi lưu; chỉ lớp kết nối nội bộ được giải mã khi cần. Planner và frontend không nhận plaintext hoặc ciphertext của thông tin xác thực.
+
+### 3.7.3. Quản lý Task, Operation và Execution
+
+Task đại diện cho nhiệm vụ phát sinh từ yêu cầu người dùng. Mỗi Task chứa nhiều Operation; dependency biểu diễn điều kiện thực thi giữa các Operation; bảng ánh xạ Operation–Device quản lý vai trò, access mode và trạng thái trên từng thiết bị. Task Execution lưu từng lần thực thi, Device Action Log ghi lệnh và output, còn Task Activity Event ghi các sự kiện quan trọng trong vòng đời nhiệm vụ.
+
+### 3.7.4. Quản lý kết quả đánh giá và Audit Log
+
+Benchmark Scenario mô tả kịch bản, trạng thái ban đầu, injection, Ground Truth và cleanup; Benchmark Run đại diện cho một lần chạy độc lập. Task Evaluation và Evaluation Metric lưu điểm, giá trị mong đợi, giá trị thực tế và bằng chứng. Audit Log ghi các thao tác nghiệp vụ cần kiểm toán độc lập với phản hồi ngôn ngữ tự nhiên của Agent.
+
+## 3.8. Xây dựng và triển khai hệ thống
+
+### 3.8.1. Xây dựng Backend và API
+
+Backend được phát triển bằng FastAPI và tổ chức theo domain. Router tiếp nhận HTTP request và kiểm tra quyền; Service thực hiện logic nghiệp vụ; Repository truy xuất dữ liệu; Schema và Model định nghĩa hợp đồng dữ liệu. Các Agent không trực tiếp thao tác ORM hoặc cơ sở dữ liệu.
+
+### 3.8.2. Xây dựng giao diện quản trị
 
 Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và hệ component shadcn; sử dụng các thư viện bảng, form, trạng thái và giao tiếp HTTP phù hợp. Các feature hiện có gồm Login/Profile, Dashboard, Chatbot/Conversation, Tasks, Devices, Credentials, Device Catalog, Users, Roles/Access Control, Audit Logs, Benchmark Scenarios, Benchmark Runs và Evaluations. Giao diện chat hỗ trợ danh sách hội thoại, activity timeline, hiển thị yêu cầu approval và mở chi tiết Task; trang Benchmark hỗ trợ nhập action/check/Ground Truth và xem kết quả chạy.
 
 Trang Evaluations hiển thị lịch sử đánh giá, GOAL/RCA, Remediation/Safety, Latency và Interaction Turns, cùng các kết quả có cấu trúc của v4 gồm RCA F1, Precision, Recall, Localization F1, Fault Type F1 và Detection. Trang tổng quan TSR trình bày tỷ lệ, số mẫu hợp lệ và phân loại run. Phiên bản evaluator được hiển thị nhằm phân biệt cách chấm từ khóa cũ với bộ chấm v4.
 
-Backend chạy trên FastAPI; PostgreSQL duy trì dữ liệu và pgcrypto; Docker Compose cấu hình api, db, migrate và pgAdmin. Giao diện frontend được phát triển độc lập và kết nối REST API cùng token. Một số module hiển thị/biểu đồ còn có mã dữ liệu mẫu ở repository, vì vậy không nên mặc nhiên khẳng định mọi thống kê trên mọi trang đều xuất phát từ dữ liệu production.
+### 3.8.3. Tích hợp LLM và các công cụ mạng
 
-## 3.10. Phân hệ Benchmark và Evaluation đã triển khai
+Planner Agent và Analyst Agent gọi LLM qua NVIDIA AI Endpoint; phản hồi được kiểm tra bằng Pydantic trước khi chuyển sang bước tiếp theo. Network Agent sử dụng `NetworkTool` thay vì gọi LLM, nhờ đó quyền thực thi lệnh được giữ tại tầng ứng dụng. Các thư viện I/O đồng bộ được gọi theo cách không chặn vòng lặp bất đồng bộ của FastAPI.
+
+### 3.8.4. Triển khai và cấu hình môi trường
+
+Backend, PostgreSQL, migration và pgAdmin được tổ chức bằng Docker Compose. Cấu hình kết nối cơ sở dữ liệu, khóa xác thực, LLM provider và network backend được quản lý qua biến môi trường. Frontend chạy bằng Vite trong quá trình phát triển và kết nối REST API bằng access token. GNS3 Server hoạt động như môi trường thực nghiệm bên ngoài các dịch vụ nghiệp vụ.
+
+### 3.8.5. Giao diện các nhóm API
+
+| Nhóm API     | Chức năng chính                                           |
+| ------------ | --------------------------------------------------------- |
+| Identity     | Đăng nhập, phiên, người dùng, vai trò và quyền truy cập   |
+| Inventory    | Thiết bị, danh mục thiết bị và credential kết nối         |
+| Conversation | Hội thoại, tin nhắn và yêu cầu xử lý AI                   |
+| Execution    | Task, Operation, kết quả thực thi và quyết định phê duyệt |
+| Benchmark    | Scenario, Benchmark Run và Cleanup                        |
+| Evaluation   | Kết quả đánh giá và các metric                            |
+| Audit        | Nhật ký kiểm toán và bộ lọc tra cứu                       |
+
+Các API nghiệp vụ dùng tiền tố `/api/v1`. Frontend không trực tiếp kết nối thiết bị; mọi thao tác được chuyển đến Service và Orchestrator tương ứng. FastAPI cung cấp thêm health endpoint và tài liệu OpenAPI phục vụ phát triển, kiểm thử tích hợp.
+
+## 3.9. Thiết kế hệ thống thực nghiệm và đánh giá
+
+### 3.9.1. Thiết kế Benchmark Scenario và Ground Truth
 
 Benchmark Scenario có `scenario_key`, version, mô tả, topology, initial_message, preconditions, injection, fault_verification, ground_truth, evaluation_required_terms và cleanup. Engine thực hiện kiểm tra điều kiện trước; tiêm lỗi bằng các action có schema; xác minh trạng thái sự cố; sau đó phát hành run sẵn sàng để Chat của Agent giải quyết. Khi bắt đầu Chat, run liên kết tới conversation/source message; khi nhận FINAL_RESPONSE, lưu Evaluation và hoàn tất run. Cleanup được retry có giới hạn bằng kết nối mới và chỉ hoàn tất sau khi READ check suy ra từ action xác nhận thiết bị đã phục hồi; runner dừng nếu không thể xác nhận nhằm bảo toàn tính độc lập giữa các kịch bản. Cơ chế này có thể quản lý scenario, lịch sử và trạng thái chuẩn bị/chạy/hoàn thành/thất bại/cleanup.
 
+### 3.9.2. Quy trình tiêm lỗi, kiểm thử và khôi phục môi trường
+
 Các nhóm injection đã có bộ dựng command bao gồm shutdown/no shutdown interface, điều chỉnh network OSPF, MPLS trên interface, default route, IP/mask, ACL và BGP neighbor shutdown/no shutdown. Có các seed chứa các tình huống interface down, OSPF, MPLS, cấu hình IP, ACL, Loopback0 và BGP. Sự hiện diện của seed/chương trình dựng command **không mặc nhiên xác nhận đã chạy thành công tất cả scenario trong lab**.
+
+Quy trình thực nghiệm gồm kiểm tra precondition, tiêm lỗi, xác minh fault, gửi yêu cầu cho hệ thống Multi-Agent, thu thập kết quả, chấm điểm và cleanup. Nếu không xác minh được trạng thái khôi phục, runner dừng trước kịch bản tiếp theo để tránh làm sai lệch dữ liệu.
+
+### 3.9.3. Cơ chế thu thập và đánh giá kết quả
 
 Ground Truth được lưu ở snapshot của lần chạy để việc cập nhật scenario về sau không thay đổi căn cứ chấm của run cũ. `BenchmarkObservationRepository` đọc kết luận Agent từ Activity Event `ANALYSIS_COMPLETED`, đếm các lần Agent gọi tool và lấy mốc timestamp để tính thời gian. Evaluator v4 xuất dữ liệu từng metric với `expected_value`, `actual_value`, `evidence`; lưu vào các bảng Evaluation và metric, kết quả API chỉ đọc được người có quyền truy cập yêu cầu. TSR được tổng hợp bằng truy vấn SQL từ toàn bộ Benchmark Run, không lấy mẫu chỉ theo các dòng giao diện đã tải.
 
-## 3.11. Thiết kế lưu trữ và quản lý phiên bản cơ sở dữ liệu
+### 3.9.4. Quy tắc tính toán các chỉ số đánh giá
 
-PostgreSQL dùng SQLAlchemy models và repositories cho các nhóm dữ liệu: identity/RBAC; device/credential; conversation/message; task/operation/dependency/mapping/approval; activity/execution/action logs; benchmark_scenarios/benchmark_runs; task_evaluations/task_evaluation_metrics; audit_logs. Các bảng liên hệ bằng ID để truy từ yêu cầu gốc đến Task, lệnh mạng và Evaluation.
+Tỷ lệ hoàn thành nhiệm vụ được tính trên các lượt có GOAL PASS hoặc GOAL FAIL hợp lệ:
 
-Mã migration trong `migrations/versions/` có lịch sử từ 0001 đến 0007; runner quản lý checksum, transaction và advisory lock. Vì schema khởi tạo của một số môi trường đã có các đối tượng từ migration về sau, repository cũng có tiện ích kiểm tra và đối soát lịch sử bootstrap trước khi tiếp tục migrate. Theo kết quả vận hành do nhóm cung cấp, môi trường phát triển đã đồng bộ toàn bộ 0001–0007. Evaluator v4 và cấu trúc submission không cần migration mới vì sử dụng các cột JSONB và enum metric đã có.
+$$
+TSR=\frac{N_{pass}}{N_{pass}+N_{fail}}\times100\%
+$$
 
-## 3.12. Kiểm thử và giới hạn thiết kế
+Với RCA, gọi $P$ là tập cặp tài nguyên–loại lỗi dự đoán và $G$ là Ground Truth:
 
-Mã nguồn chứa unit test cho tác tử, workflow, domain/API, approval/timeouts, tính toàn vẹn schema, migration và benchmark. Với bộ lệnh kiểm thử được nhóm cung cấp ngày 03/11/2026, 42 bài kiểm thử thuộc bốn tập con NIKA-style RCA, Benchmark Observation, Benchmark Service và Analyst Agent đều thành công; một cảnh báo serializer Pydantic vẫn tồn tại trong test dữ liệu giả lập. Đây là bằng chứng kiểm tra logic tại môi trường phát triển, chưa thay thế kiểm thử tích hợp GNS3 trên quy mô lớn.
+$$
+TP=|P\cap G|,\qquad FP=|P-G|,\qquad FN=|G-P|
+$$
 
-Thiết kế ưu tiên khả năng truy vết và kiểm soát thay vì trao toàn quyền cho LLM. Những điểm chưa được triển khai/kiểm chứng đầy đủ gồm GNS3 topology graph trong DB, telemetry liên tục, self-healing, rollback đa thiết bị, evaluator Safety/Remediation, phân quyền chi tiết theo miền thiết bị và benchmark dài hạn trên nhiều seed/mô hình.
+$$
+Precision=\frac{TP}{TP+FP},\qquad Recall=\frac{TP}{TP+FN}
+$$
+
+$$
+F1=\frac{2\times Precision\times Recall}{Precision+Recall}
+$$
+
+Active Latency được tính từ thời điểm tạo Task đến phản hồi cuối, sau khi loại trừ các khoảng chờ phê duyệt hợp lệ:
+
+$$
+T_{active}=T_{final}-T_{task}-T_{approval}
+$$
+
+Interaction Turns là số lần Agent gọi công cụ trong phạm vi Task, không phải số tin nhắn hoặc số bước suy luận nội bộ. Remediation và Safety chỉ được ghi PASS/FAIL khi có bộ chấm và bằng chứng tương ứng; nếu chưa triển khai đầy đủ, metric phải được phân loại NOT_APPLICABLE.
 
 ---
 
@@ -321,40 +1045,105 @@ Thiết kế ưu tiên khả năng truy vết và kiểm soát thay vì trao to�
 
 Chương này trình bày **những phép đánh giá đã được hiện thực** và phân biệt kết quả kiểm thử phần mềm với kết quả thực nghiệm hiệu năng của AI. Thông tin số được đưa vào chỉ khi có bằng chứng: mã nguồn và test tại nhánh develop, nhật ký pytest do nhóm cung cấp, và một ảnh chụp Evaluation phiên bản v4. Các giá trị chưa đo được trên nhiều lần chạy sẽ không được suy diễn hoặc tạo số liệu minh họa như thể là kết quả nghiên cứu.
 
-## 4.1. Môi trường thực nghiệm
+## 4.1. Mục tiêu và thiết kế thực nghiệm
 
-### 4.1.1. Hạ tầng phần mềm
+### 4.1.1. Mục tiêu thực nghiệm
 
-| Thành phần | Công nghệ và mục đích |
-| --- | --- |
-| Máy phát triển | Linux Fedora; môi trường chạy pytest do nhóm cung cấp dùng Python 3.14.8 |
-| Backend | Python, FastAPI, Pydantic, SQLAlchemy; API có prefix /api/v1 |
-| Docker API | Image xây dựng từ python:3.12-slim; Docker Compose quản lý api và các dịch vụ hỗ trợ |
-| Database | PostgreSQL, extension pgcrypto, schema/migration 0001–0007 |
-| Mô hình ngôn ngữ | Endpoint NVIDIA thông qua langchain-nvidia-ai-endpoints; Planner và Analyst gọi LLM |
-| Điều phối | LangGraph, application orchestrators và domain services |
-| Thực thi mạng | Netmiko hoặc Nornir qua NetworkTool; CLI tới Cisco IOS |
-| Mô phỏng | GNS3, topology Cisco đã cấu hình, endpoint console/host |
-| Frontend | React 19, TypeScript, Vite và giao diện quản lý Benchmark/Evaluation |
-| Công cụ kiểm thử | pytest, unit/domain tests và API/manual benchmark |
+Mục tiêu của quá trình thực nghiệm là đánh giá khả năng hoạt động của hệ thống Multi-Agent trong việc tiếp nhận và xử lý các yêu cầu chẩn đoán sự cố mạng thông qua ngôn ngữ tự nhiên. Các phép thử tập trung kiểm tra khả năng phối hợp giữa những thành phần chuyên trách, bao gồm lập kế hoạch, thu thập thông tin từ thiết bị và phân tích kết quả nhằm xác định nguyên nhân sự cố.
+Đối với nhiệm vụ chẩn đoán, nghiên cứu đánh giá khả năng phát hiện bất thường (Anomaly Detection), định vị sự cố (Fault Localization) và phân tích nguyên nhân gốc (Root Cause Analysis – RCA). Kết quả được đối chiếu với dữ liệu chuẩn (Ground Truth) của từng kịch bản thông qua các chỉ số Precision, Recall, F1-score và Exact Match. Bên cạnh đó, thời gian thực thi và số lượt tương tác giữa Agent với công cụ mạng cũng được ghi nhận nhằm xem xét đặc điểm vận hành của hệ thống.
+Thông qua quá trình thực nghiệm, đề tài hướng đến việc xác định mức độ đáp ứng của hệ thống đối với những nhiệm vụ chẩn đoán trong môi trường giả lập, đồng thời làm rõ các hạn chế ảnh hưởng đến chất lượng kết quả xử lý.
 
-Việc build và khởi động container API thành công chứng minh hệ thống đóng gói và khởi chạy được trong môi trường của nhóm, không chứng minh tự thân rằng mọi đường đi xử lý kết nối thiết bị đều đúng. Các biến kết nối và secret được cấp qua môi trường cục bộ, không sao chép vào báo cáo.
+### 4.1.2. Câu hỏi nghiên cứu và tiêu chí đánh giá
 
-### 4.1.2. Đối tượng và biến quan sát
+Để đánh giá hệ thống một cách có hệ thống, nghiên cứu xác định ba câu hỏi nghiên cứu tập trung vào khả năng hoàn thành nhiệm vụ, chất lượng chẩn đoán và thời gian thực thi.
 
-Đơn vị kiểm thử là một **Benchmark Run** gắn với một phiên bản Scenario cụ thể. Đầu vào bao gồm trạng thái lab, hành động tiêm lỗi, điều kiện xác nhận sự cố, prompt bắt đầu hội thoại và Ground Truth đã xác định. Đầu ra gồm phản hồi chẩn đoán, submission có cấu trúc từ Analyst, Evaluation theo metric, thời gian và số lần gọi công cụ. Run giữ snapshot scenario để việc chỉnh sửa kịch bản sau này không làm thay đổi đề bài đã dùng tại thời điểm chấm.
+Bảng 4.1. Các câu hỏi nghiên cứu và tiêu chí đánh giá
+
+| Mã  | Câu hỏi nghiên cứu                                                                               | Tiêu chí đánh giá                                                                       |
+| --- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| RQ1 | Hệ thống có khả năng hoàn thành các nhiệm vụ chẩn đoán sự cố mạng ở mức độ nào?                  | Task Success Rate (TSR)                                                                 |
+| RQ2 | Hệ thống có khả năng phát hiện, định vị và xác định nguyên nhân gốc của sự cố chính xác đến đâu? | Detection Score, Localization Precision/Recall/F1, RCA Precision/Recall/F1, Exact Match |
+| RQ3 | Quá trình xử lý nhiệm vụ tiêu tốn bao nhiêu thời gian và số lượt tương tác với công cụ mạng?     | Latency, Interaction Turns                                                              |
+
+Các câu hỏi được đánh giá dựa trên dữ liệu Benchmark Run và Evaluation được ghi nhận trong quá trình thực nghiệm. Đối với RQ1, kết quả hoàn thành nhiệm vụ được xác định thông qua chỉ số GOAL. Đối với RQ2, các kết quả chẩn đoán có cấu trúc được so sánh với Ground Truth nhằm xác định mức độ chính xác ở từng giai đoạn. RQ3 được xem xét thông qua những thông tin về thời gian xử lý và số lần gọi công cụ được hệ thống lưu trữ.
+
+### 4.1.3. Phạm vi và điều kiện thực nghiệm
+
+Phạm vi thực nghiệm được giới hạn trong môi trường mạng giả lập GNS3, sử dụng các thiết bị Cisco IOS và cấu hình mạng được xây dựng theo topology tham chiếu của đề tài. Các kịch bản tập trung vào những sự cố liên quan đến trạng thái giao diện, địa chỉ IP, định tuyến, MPLS, BGP và chính sách kiểm soát lưu lượng.
+Mỗi kịch bản được xác định thông qua trạng thái ban đầu, thao tác thiết lập sự cố, yêu cầu chẩn đoán và kết quả mong đợi. Quá trình thực nghiệm được tổ chức theo từng lượt riêng biệt, đồng thời thực hiện khôi phục cấu hình sau khi hoàn thành nhằm hạn chế ảnh hưởng giữa các kịch bản.
+Hệ thống sử dụng các mô hình ngôn ngữ lớn đã được phát triển sẵn thông qua NVIDIA API, không tiến hành huấn luyện hoặc tinh chỉnh mô hình. Kết quả nghiên cứu phản ánh khả năng hoạt động của hệ thống trong phạm vi môi trường và tập kịch bản được lựa chọn, chưa đại diện cho toàn bộ những tình huống phát sinh trong mạng thực tế.
+
+## 4.2. Môi trường và cấu hình thực nghiệm
+
+### 4.2.1. Hạ tầng phần cứng và phần mềm
+
+Môi trường thực nghiệm bao gồm ứng dụng Frontend, Backend, cơ sở dữ liệu PostgreSQL và hệ thống mạng giả lập GNS3. Frontend được phát triển bằng React và TypeScript, trong khi Backend sử dụng FastAPI kết hợp LangGraph để tổ chức quy trình xử lý Multi-Agent.
+
+Lớp NetworkTool tích hợp Netmiko và Nornir để thực hiện các thao tác tương tác với thiết bị mạng thông qua giao diện dòng lệnh. PostgreSQL được sử dụng để lưu trữ các thông tin nghiệp vụ, trạng thái tác vụ và kết quả đánh giá. Các thành phần Backend và cơ sở dữ liệu được hỗ trợ triển khai thông qua Docker Compose.
+
+Bảng 4.2. Cấu hình môi trường thực nghiệm
+
+| Thành phần       | Công nghệ và mục đích                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| Máy phát triển   | Linux Fedora; môi trường chạy pytest do nhóm cung cấp dùng Python 3.14.8             |
+| Backend          | Python, FastAPI, Pydantic, SQLAlchemy; API có prefix /api/v1                         |
+| Docker API       | Image xây dựng từ python:3.12-slim; Docker Compose quản lý api và các dịch vụ hỗ trợ |
+| Database         | PostgreSQL, extension pgcrypto, schema/migration 0001–0007                           |
+| Mô hình ngôn ngữ | Endpoint NVIDIA thông qua langchain-nvidia-ai-endpoints; Planner và Analyst gọi LLM  |
+| Điều phối        | LangGraph, application orchestrators và domain services                              |
+| Thực thi mạng    | Netmiko hoặc Nornir qua NetworkTool; CLI tới Cisco IOS                               |
+| Mô phỏng         | GNS3, topology Cisco đã cấu hình, endpoint console/host                              |
+| Frontend         | React 19, TypeScript, Vite và giao diện quản lý Benchmark/Evaluation                 |
+| Công cụ kiểm thử | pytest, unit/domain tests và API/manual benchmark                                    |
+
+Các thông số phần cứng và phiên bản phần mềm được xác định từ môi trường thực tế sử dụng trong quá trình thực nghiệm. Việc ghi nhận những thông tin này nhằm hỗ trợ tái lập các phép thử và xác định những yếu tố có thể ảnh hưởng đến hiệu năng hệ thống.
+
+### 4.2.2. Topology mạng thực nghiệm trên GNS3
+
+Môi trường mạng được xây dựng dựa trên cấu trúc mạng lõi MPLS kết hợp các thiết bị Provider (P), Provider Edge (PE), Customer Edge (CE) và các thiết bị chuyển mạch. Theo cấu hình tham chiếu của đề tài, hệ thống bao gồm những thiết bị P1, P2, PE1, PE2, CE-1A, CE-1B, CE-2A, CE-2B và các switch phục vụ kết nối mạng khách hàng.
+
+Các thiết bị trong mạng lõi sử dụng OSPF để trao đổi thông tin định tuyến, kết hợp MPLS để hỗ trợ chuyển tiếp lưu lượng. BGP được sử dụng để trao đổi thông tin định tuyến giữa các thiết bị PE và CE, đồng thời những cấu hình VRF được thiết lập nhằm phân tách các mạng khách hàng.
+
+![Network Topology](../images/network-topology.png)
+Hình 4.3. Topology mạng thực nghiệm trên GNS3
+
+Topology trên tạo điều kiện xây dựng những tình huống sự cố tại nhiều vị trí khác nhau, bao gồm gián đoạn liên kết, sai lệch địa chỉ IP, lỗi cấu hình OSPF, MPLS và BGP. Các thiết bị tham gia thực nghiệm được quản lý thông qua Device Inventory, cho phép Network Agent truy cập và thu thập thông tin trạng thái bằng các công cụ kết nối tương ứng.
+Trước mỗi lần chạy, trạng thái thiết bị và những điều kiện cần thiết được kiểm tra nhằm bảo đảm môi trường phù hợp với yêu cầu của kịch bản.
+
+### 4.2.3. Mô hình LLM và các tham số thực nghiệm
+
+Hệ thống sử dụng mô hình ngôn ngữ lớn thông qua NVIDIA API để hỗ trợ hoạt động của Planner Agent và Analyst Agent. Planner Agent có nhiệm vụ phân tích yêu cầu và tạo Execution Plan, trong khi Analyst Agent tổng hợp kết quả thực thi nhằm hỗ trợ xác định nguyên nhân sự cố.
+
+Các dữ liệu có cấu trúc do LLM tạo ra được kiểm tra trước khi sử dụng. Bên cạnh đó, Backend thiết lập giới hạn thời gian phản hồi, số lần kiểm tra lại kết quả và số vòng điều tra bổ sung nhằm kiểm soát quá trình xử lý.
+
+Bảng 4.3. Các tham số cấu hình của hệ thống Multi-Agent
+
+| Tham số                        | Giá trị mặc định trong mã nguồn |
+| ------------------------------ | ------------------------------- |
+| Mô hình LLM                    | Nemotron 3.5 Super              |
+| Planner Timeout                | 90 giây                         |
+| Analyst Timeout                | 120 giây                        |
+| Planner Validation Retries     | 2                               |
+| Analyst Validation Retries     | 2                               |
+| Analyst Max Completion Tokens  | 4096                            |
+| Maximum Investigation Rounds   | 2                               |
+| Diagnosis Confidence Threshold | 0,8                             |
+
+Các giá trị trong Bảng 4.3 là tham số mặc định được khai báo tại Backend. Tên mô hình và những thông số thực tế cần được xác nhận từ cấu hình sử dụng khi tiến hành thực nghiệm.
+
+### 4.3. Xây dựng các kịch bản thực nghiệm
+
+Các kịch bản thực nghiệm được xây dựng nhằm đánh giá khả năng chẩn đoán sự cố của hệ thống trong những tình huống mạng xác định trước. Mỗi Benchmark Scenario bao gồm thông tin mô tả, điều kiện ban đầu (Preconditions), thao tác tiêm lỗi (Fault Injection), điều kiện xác minh sự cố (Fault Verification), dữ liệu Ground Truth và các thao tác khôi phục (Cleanup).
+
+Bộ dữ liệu seed trong mã nguồn định nghĩa 33 kịch bản ứng viên, bao gồm 10 kịch bản cơ sở, 17 kịch bản mở rộng và 6 kịch bản liên quan đến BGP. Các kịch bản này được xây dựng cho topology tham chiếu của đề tài và không phải dữ liệu thực nghiệm được nhập trực tiếp từ NIKA [3].
+
+# 4.3.1. Đối tượng và biến quan sát
+
+Đơn vị kiểm thử là một **Benchmark Run** gắn với một phiên bản **Benchmark Scenario** cụ thể. Đầu vào bao gồm trạng thái lab, hành động tiêm lỗi, điều kiện xác nhận sự cố, prompt bắt đầu hội thoại và Ground Truth đã xác định. Đầu ra gồm phản hồi chẩn đoán, submission có cấu trúc từ Analyst, Evaluation theo metric, thời gian và số lần gọi công cụ. Run giữ snapshot scenario để việc chỉnh sửa kịch bản sau này không làm thay đổi đề bài đã dùng tại thời điểm chấm.
 
 Các biến kiểm soát cần giữ ổn định khi lặp thực nghiệm là topology, trạng thái thiết bị trước khi chạy, scenario/version, cấu hình model, prompt của Agent, adapter NetworkTool và phiên bản evaluator. Nếu khác các biến này, không nên so sánh trực tiếp một giá trị phần trăm duy nhất.
 
-## 4.2. Topology và kịch bản kiểm thử
-
-### 4.2.1. Môi trường mạng và phạm vi topology
-
-Dữ liệu cấu hình/seed của repository mô tả môi trường Cisco gồm các router P/PE/CE và switch, ví dụ P1, P2, P3, PE1, PE2, CE-1A, CE-1B, CE-2A, CE-2B và Switch1–Switch4. Phần lõi có những cấu phần OSPF/MPLS; biên PE/CE có các kịch bản BGP; lab cũng có địa chỉ IP, route và interface. Đây là mô hình phục vụ tái lập sự cố khi học tập và nghiên cứu, không phải bản sao của một hạ tầng doanh nghiệp thật.
-
-Backend quản lý thông tin đầu nối và credential trong Device Inventory. GNS3 dùng để tạo/duy trì các thiết bị và quan hệ link thực tế; ứng dụng hiện không tự động nhập toàn bộ node–link topology vào một graph database. Các kết luận localization của v4 được chấm dựa trên nhãn device/interface của scenario, không dựa trên mô hình định tuyến sinh từ topology graph.
-
-### 4.2.2. Cấu trúc một Benchmark Scenario
+### 4.3.2. Cấu trúc một Benchmark Scenario
 
 Một scenario lưu: (1) ID ổn định `scenario_key` và version, (2) tên/mô tả và topology, (3) thông điệp đầu vào cho Agent, (4) danh sách `preconditions`, (5) danh sách action `injection`, (6) `fault_verification`, (7) `ground_truth`, (8) `evaluation_required_terms` phục vụ tương thích dữ liệu cũ, và (9) các action `cleanup`.
 
@@ -372,21 +1161,21 @@ Chọn scenario/version → PREPARING
 
 Khi lỗi xảy ra trong chuẩn bị/chạy, run có thể chuyển FAILED; thao tác dọn môi trường có thể diễn ra tùy cờ cleanup. Trạng thái CLEANED nói rằng bước dọn môi trường đã được ghi nhận, **không có nghĩa GOAL của Agent đã PASS**.
 
-### 4.2.3. Các nhóm sự cố đã có schema hoặc seed
+### 4.3.3. Các nhóm sự cố đã có schema hoặc seed
 
-| Nhóm kiểm thử | Action hoặc loại lỗi có trong mã nguồn/seed | Thông tin Ground Truth cần đối chiếu |
-| --- | --- | --- |
-| Interface/Link | interface_shutdown, interface_no_shutdown; link_down, loopback_admin_down | Thiết bị, interface, loại lỗi |
-| OSPF | ospf_network_add/remove; ospf_network_missing, ospf_area_mismatch | Thiết bị, có/không có interface, loại lỗi |
-| MPLS | mpls_enable/disable; mpls_disabled | Thiết bị, interface khi có |
-| Định tuyến mặc định | default_route_add/remove; default_route_missing | Thiết bị và loại lỗi |
-| IP/subnet | interface_ip_set; wrong_ip_address, wrong_subnet_mask | Thiết bị, interface, loại lỗi |
-| ACL | acl_block/remove; acl_block, acl_traffic_block | Thiết bị, interface, loại lỗi |
-| BGP | bgp_neighbor_shutdown/no_shutdown; bgp_neighbor_admin_down | Thiết bị và loại lỗi cấu hình BGP |
+| Nhóm kiểm thử       | Action hoặc loại lỗi có trong mã nguồn/seed                               | Thông tin Ground Truth cần đối chiếu      |
+| ------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
+| Interface/Link      | interface_shutdown, interface_no_shutdown; link_down, loopback_admin_down | Thiết bị, interface, loại lỗi             |
+| OSPF                | ospf_network_add/remove; ospf_network_missing, ospf_area_mismatch         | Thiết bị, có/không có interface, loại lỗi |
+| MPLS                | mpls_enable/disable; mpls_disabled                                        | Thiết bị, interface khi có                |
+| Định tuyến mặc định | default_route_add/remove; default_route_missing                           | Thiết bị và loại lỗi                      |
+| IP/subnet           | interface_ip_set; wrong_ip_address, wrong_subnet_mask                     | Thiết bị, interface, loại lỗi             |
+| ACL                 | acl_block/remove; acl_block, acl_traffic_block                            | Thiết bị, interface, loại lỗi             |
+| BGP                 | bgp_neighbor_shutdown/no_shutdown; bgp_neighbor_admin_down                | Thiết bị và loại lỗi cấu hình BGP         |
 
 Bảng liệt kê **khả năng đã hiện thực trong schema/seed**; chưa phải bảng xác nhận tất cả các trường hợp đã vượt qua chạy thực nghiệm thủ công. Đề cương ban đầu giới hạn chủ yếu ở các lỗi tầng Data Link/Network; triển khai hiện có mở rộng thêm các tình huống định tuyến và ACL/BGP trong phòng lab.
 
-### 4.2.4. Điều kiện tái lập và chống lẫn dữ liệu
+### 4.3.4. Điều kiện tái lập và chống lẫn dữ liệu
 
 Run mới luôn lấy snapshot scenario và lưu ID nguồn hội thoại; Evaluation chỉ được tạo khi task thực sự có message `FINAL_RESPONSE`. Khi approval xảy ra, hệ thống lưu mốc tạm dừng và chờ workflow tiếp tục để hoàn tất run. Trước khi đo lượt tiếp theo phải xác nhận cleanup không gây dư ảnh hưởng, thiết bị trở về trạng thái ban đầu và kiểm tra lại preconditions. Không cộng các lần chạy không đồng nhất version hoặc trạng thái đầu vào vào cùng phép so sánh mà không giải thích.
 
@@ -394,9 +1183,9 @@ Run mới luôn lấy snapshot scenario và lưu ID nguồn hội thoại; Evalu
 
 ### 4.3.1. Các phiên bản bộ chấm
 
-Hệ thống lưu `evaluator_version` cho từng Evaluation. Ở các bản v1–v3, cách xác định GOAL/RCA dựa chủ yếu trên sự hiện diện của từ khóa bắt buộc trong phản hồi. Phương pháp này dễ triển khai nhưng có nguy cơ chấm PASS khi câu trả lời chỉ *nhắc đến* đúng thiết bị, giao thức hoặc triệu chứng mà vẫn kết luận sai.
+Hệ thống lưu `evaluator_version` cho từng Evaluation. Ở các bản v1–v3, cách xác định GOAL/RCA dựa chủ yếu trên sự hiện diện của từ khóa bắt buộc trong phản hồi. Phương pháp này dễ triển khai nhưng có nguy cơ chấm PASS khi câu trả lời chỉ _nhắc đến_ đúng thiết bị, giao thức hoặc triệu chứng mà vẫn kết luận sai.
 
-Phiên bản **db-benchmark-v4** sử dụng submission do Analyst phát ra theo cấu trúc gồm `is_anomaly` và `root_causes`. Mỗi nguyên nhân có device, interface (tùy chọn) và fault_type. Evaluator lấy Ground Truth từ snapshot kịch bản rồi so sánh hai tập cặp định danh. Cách tính tham khảo trực tiếp mô hình chấm `score_rca_v2` và tài liệu của **NIKA 0.2** [14, 15]. Đây là việc áp dụng cơ chế chấm, **không phải tái tạo toàn bộ hạ tầng NIKA, tập dữ liệu chuẩn hoặc các agent của công trình đó**.
+Phiên bản **db-benchmark-v4** sử dụng submission do Analyst phát ra theo cấu trúc gồm `is_anomaly` và `root_causes`. Mỗi nguyên nhân có device, interface (tùy chọn) và fault_type. Evaluator lấy Ground Truth từ snapshot kịch bản rồi so sánh hai tập cặp định danh. Cách tính tham khảo trực tiếp mô hình chấm `score_rca_v2` và tài liệu của **NIKA 0.2** [3], [19]. Đây là việc áp dụng cơ chế chấm, **không phải tái tạo toàn bộ hạ tầng NIKA, tập dữ liệu chuẩn hoặc các agent của công trình đó**.
 
 Phiên bản **db-benchmark-v5** giữ nguyên phép đo tập hợp của v4 nhưng dùng một taxonomy `FaultType` đóng cho cả Analyst và Ground Truth. Các alias tương đương được chuẩn hóa trước khi chấm, chẳng hạn `acl_block` về `acl_traffic_block`; các lỗi cấp thiết bị như BGP neighbor shutdown, missing OSPF network và missing default route được chuẩn hóa về resource node. Thay đổi rubric này ngăn lỗi âm giả do khác tên gọi, vì vậy kết quả v4 và v5 phải được báo cáo riêng.
 
@@ -441,7 +1230,7 @@ RCA PASS/FAIL là một quyết định nghiêm ngặt, riêng với F1: **RCA c
 
 **Fault Type** trích riêng các mã lỗi từ các cặp, không xét vị trí. Bộ chấm tương tự tính Precision, Recall, F1. Trường hợp Agent nêu đúng `link_down` nhưng gán sai thiết bị/interface có thể đạt Fault Type F1 = 1, còn Localization/RCA = 0.
 
-Việc tách hai chỉ số này giúp nhận ra *Agent sai ở đâu*: sai định vị hay sai định danh nguyên nhân. Điều này phù hợp cách thiết kế bộ chấm NIKA 0.2 [15]. Tuy nhiên một chỉ số con đạt 100% không đủ để kết luận Root Cause chính xác nếu các cặp kết hợp không khớp.
+Việc tách hai chỉ số này giúp nhận ra _Agent sai ở đâu_: sai định vị hay sai định danh nguyên nhân. Điều này phù hợp cách thiết kế bộ chấm NIKA 0.2 [19]. Tuy nhiên một chỉ số con đạt 100% không đủ để kết luận Root Cause chính xác nếu các cặp kết hợp không khớp.
 
 ### 4.3.5. Detection và GOAL
 
@@ -466,14 +1255,14 @@ TSR (%) = 100 × số run đạt GOAL
               / (số run đạt GOAL + số run không đạt)
 ```
 
-| Phân loại run | Ý nghĩa và xử lý |
-| --- | --- |
-| `passed` | Run đã hoàn tất/chạy cleanup, Evaluation có GOAL PASS; tính vào tử số và mẫu số |
-| `failed` | GOAL FAIL hoặc lỗi thực thi sau khi Chat Agent đã bắt đầu; tính vào mẫu số |
-| `in_progress` | Agent đang chạy; không đưa vào mẫu số |
-| `not_started` | Chưa tới giai đoạn chạy Agent; không đưa vào mẫu số |
-| `setup_failed` | Lỗi chuẩn bị/tiêm sự cố trước khi bắt đầu Agent; không đưa vào mẫu số |
-| `unscored` | Agent đã chạy nhưng không có GOAL được chấm và không có lỗi thực thi kết luận rõ; tách riêng, không tính vào mẫu số |
+| Phân loại run  | Ý nghĩa và xử lý                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `passed`       | Run đã hoàn tất/chạy cleanup, Evaluation có GOAL PASS; tính vào tử số và mẫu số                                     |
+| `failed`       | GOAL FAIL hoặc lỗi thực thi sau khi Chat Agent đã bắt đầu; tính vào mẫu số                                          |
+| `in_progress`  | Agent đang chạy; không đưa vào mẫu số                                                                               |
+| `not_started`  | Chưa tới giai đoạn chạy Agent; không đưa vào mẫu số                                                                 |
+| `setup_failed` | Lỗi chuẩn bị/tiêm sự cố trước khi bắt đầu Agent; không đưa vào mẫu số                                               |
+| `unscored`     | Agent đã chạy nhưng không có GOAL được chấm và không có lỗi thực thi kết luận rõ; tách riêng, không tính vào mẫu số |
 
 Mẫu số là `eligible_runs = passed + failed`. Nếu chưa có mẫu hợp lệ thì trả `success_rate=null`, **không báo 0%**. Việc cleanup thành công không đổi một run từng GOAL FAIL thành PASS. Giao diện hiển thị cả tổng run, số mẫu đủ điều kiện và từng nhóm phân loại để giải thích mẫu số.
 
@@ -488,9 +1277,9 @@ T_active_ms = FINAL_RESPONSE.created_at - Task.created_at
               - tổng độ dài hợp các khoảng chờ phê duyệt
 ```
 
-Khoảng chờ bắt đầu tại activity `APPROVAL_REQUESTED` và kết thúc tại mốc `EXECUTION_STARTED` tiếp theo khi workflow thực sự tiếp tục. Các khoảng chờ trùng/chéo được hợp nhất, không trừ hai lần. Nếu thiếu mốc tiếp tục hoặc timestamp bất hợp lý, giá trị đo được để thiếu thay vì tự gán 0.
+Khoảng chờ bắt đầu tại activity `APPROVAL_REQUESTED` và kết thúc tại mốc `EXECUTION_STARTED` tiếphttps://youtu.be/MUusl57Mg0o?t=123 theo khi workflow thực sự tiếp tục. Các khoảng chờ trùng/chéo được hợp nhất, không trừ hai lần. Nếu thiếu mốc tiếp tục hoặc timestamp bất hợp lý, giá trị đo được để thiếu thay vì tự gán 0.
 
-Giá trị `active_duration_ms` bao gồm việc Planner lập kế hoạch, Network Agent sử dụng tool, Analyst phân tích và phần overhead orchestration/database; không cộng thời gian chuẩn bị/tiêm lỗi/cleanup của Benchmark hoặc thời gian người dùng chưa phê duyệt. Các Evaluation v2 trước đây lưu `duration_ms` theo USER_REQUEST đến FINAL_RESPONSE **có tính cả chờ Approval**; frontend giữ nhãn *Legacy E2E*, không trộn vào trung bình của v3/v4.
+Giá trị `active_duration_ms` bao gồm việc Planner lập kế hoạch, Network Agent sử dụng tool, Analyst phân tích và phần overhead orchestration/database; không cộng thời gian chuẩn bị/tiêm lỗi/cleanup của Benchmark hoặc thời gian người dùng chưa phê duyệt. Các Evaluation v2 trước đây lưu `duration_ms` theo USER*REQUEST đến FINAL_RESPONSE **có tính cả chờ Approval**; frontend giữ nhãn \_Legacy E2E*, không trộn vào trung bình của v3/v4.
 
 ### 4.3.9. Interaction Turns
 
@@ -522,24 +1311,24 @@ Các trường hợp được kiểm tra trong code gồm: cặp nguyên nhân �
 
 Trong ảnh Evaluation được nhóm cung cấp sau khi triển khai, hệ thống hiển thị `db-benchmark-v4`, trạng thái Evaluation COMPLETED, GOAL PASS và RCA PASS. Bảng sau là **số đo quan sát được trên một lượt chạy**:
 
-| Metric | Giá trị ghi nhận |
-| --- | --- |
-| GOAL | PASS |
-| Root Cause Analysis | PASS |
-| RCA F1 | 100,0% |
-| RCA Precision | 100,0% |
-| RCA Recall | 100,0% |
-| Localization F1 | 100,0% |
-| Fault Type F1 | 100,0% |
-| Detection | 100,0% |
-| AI workflow active time | 22,40 giây |
-| Interaction Turns | 4 tool calls |
-| Remediation | NOT_APPLICABLE |
-| Safety | NOT_APPLICABLE |
+| Metric                  | Giá trị ghi nhận |
+| ----------------------- | ---------------- |
+| GOAL                    | PASS             |
+| Root Cause Analysis     | PASS             |
+| RCA F1                  | 100,0%           |
+| RCA Precision           | 100,0%           |
+| RCA Recall              | 100,0%           |
+| Localization F1         | 100,0%           |
+| Fault Type F1           | 100,0%           |
+| Detection               | 100,0%           |
+| AI workflow active time | 22,40 giây       |
+| Interaction Turns       | 4 tool calls     |
+| Remediation             | NOT_APPLICABLE   |
+| Safety                  | NOT_APPLICABLE   |
 
 Theo quy tắc bộ chấm v4, các điểm 100% hàm ý tập cặp nguyên nhân được đánh giá trùng Ground Truth của **run đó**, không có dự đoán thừa/bỏ sót; cờ `is_anomaly` đồng thời đúng với kịch bản tiêm lỗi. Tuy nhiên ảnh chỉ hiển thị các khối `Expected value`, `Actual value`, `Evidence` đang thu gọn nên **chưa thể trích xuất từ ảnh số lượng TP cụ thể, toàn bộ danh sách cặp nguyên nhân hay chi tiết output thiết bị**. Các nội dung đó có thể đọc qua Evaluation Details/JSONB khi tổng hợp phụ lục kết quả.
 
-**Ý nghĩa và giới hạn:** 100% là điểm cho *một mẫu*, không phải độ chính xác tổng thể của mô hình; 22,40 giây là thời gian workflow của mẫu, không phải latency trung bình; 4 tool calls là số lần gọi công cụ của mẫu, không phải giới hạn cố định. Từ một quan sát chưa thể kết luận sự khác biệt hiệu năng so với NIKA, một model khác hoặc một baseline khác.
+**Ý nghĩa và giới hạn:** 100% là điểm cho _một mẫu_, không phải độ chính xác tổng thể của mô hình; 22,40 giây là thời gian workflow của mẫu, không phải latency trung bình; 4 tool calls là số lần gọi công cụ của mẫu, không phải giới hạn cố định. Từ một quan sát chưa thể kết luận sự khác biệt hiệu năng so với NIKA, một model khác hoặc một baseline khác.
 
 ### 4.5.3. So sánh sáu đợt chạy ngày logic 27/10–01/11/2026
 
@@ -547,13 +1336,13 @@ Sáu đợt được tạo bởi Benchmark Runner với cùng tập 32 scenario 
 
 #### a) Cấu hình phần mềm của từng cohort
 
-| Ngày logic | Phiên bản và thay đổi code chính |
-| --- | --- |
-| 27/10/2026 | Baseline dùng `db-benchmark-v4`: Analyst phát `is_anomaly` và tập `root_causes`; evaluator so sánh chính xác cặp `(resource_id, fault_type)`. Runner chạy tuần tự, backfill timestamp và cleanup theo một request. Chưa có vòng LangGraph tự động quay lại thu thập evidence theo confidence. |
-| 28/10/2026 | Giữ evaluator v4 nhưng bổ sung vòng `analyze → investigate → analyze → finalize`; Analyst trả `confidence`, `evidence_gaps`, `suggested_checks`; Orchestrator chỉ tạo operation READ bổ sung, có thể kiểm tra thiết bị lân cận từ GNS3 topology. Số vòng tối đa và ngưỡng confidence được đưa ra `.env`; Planner/Analyst có validation retry, timeout và giới hạn completion token cấu hình được. |
-| 29/10/2026 | Nâng evaluator lên `db-benchmark-v5`; bổ sung taxonomy `FaultType` đóng, ánh xạ alias tương đương và chuẩn hóa một số lỗi cấp thiết bị về resource node; prompt yêu cầu tập root cause tối thiểu để giảm false positive. Cleanup được retry bằng connection mới, hậu kiểm bằng READ, runner xử lý cleanup treo trước khi chạy và dừng nếu không chứng minh được lab đã phục hồi. Các luồng quan trọng được chú thích theo từng bước để tăng khả năng kiểm toán mã nguồn. |
-| 30/10/2026 | Bổ sung package diagnostic playbook và evidence coverage gate: workflow lưu playbook áp dụng, tổng hợp evidence đã quan sát, xác định evidence còn thiếu, tạo READ operation bổ sung và chỉ finalize khi đủ evidence hoặc đạt giới hạn vòng điều tra. Scenario P3 không hợp lệ được chuyển từ `FastEthernet2/0` luôn down/down sang `FastEthernet1/0` có baseline up/up. Parser Planner được mở rộng để bóc JSON từ text, Markdown code fence, content block và dict literal, đồng thời correction prompt nhắc lại schema tối thiểu. |
-| 31/10/2026 | Bổ sung causal evidence gate cho Analyst: chỉ giữ nguyên nhân có bằng chứng cấu trúc và nằm trong phạm vi thiết bị/interface của yêu cầu; nguyên nhân chưa đủ bằng chứng được phân loại nội bộ là nghi vấn. Workflow retry diễn giải nguyên nhân một lần khi đã đủ evidence nhưng chưa tìm được RCA. Thứ tự parser MPLS/OSPF được ưu tiên trước parser interface tổng quát, đồng thời bổ sung đọc địa chỉ CIDR từ output `show interfaces`. |
+| Ngày logic | Phiên bản và thay đổi code chính                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 27/10/2026 | Baseline dùng `db-benchmark-v4`: Analyst phát `is_anomaly` và tập `root_causes`; evaluator so sánh chính xác cặp `(resource_id, fault_type)`. Runner chạy tuần tự, backfill timestamp và cleanup theo một request. Chưa có vòng LangGraph tự động quay lại thu thập evidence theo confidence.                                                                                                                                                                                                                                                                                                                                                                  |
+| 28/10/2026 | Giữ evaluator v4 nhưng bổ sung vòng `analyze → investigate → analyze → finalize`; Analyst trả `confidence`, `evidence_gaps`, `suggested_checks`; Orchestrator chỉ tạo operation READ bổ sung, có thể kiểm tra thiết bị lân cận từ GNS3 topology. Số vòng tối đa và ngưỡng confidence được đưa ra `.env`; Planner/Analyst có validation retry, timeout và giới hạn completion token cấu hình được.                                                                                                                                                                                                                                                              |
+| 29/10/2026 | Nâng evaluator lên `db-benchmark-v5`; bổ sung taxonomy `FaultType` đóng, ánh xạ alias tương đương và chuẩn hóa một số lỗi cấp thiết bị về resource node; prompt yêu cầu tập root cause tối thiểu để giảm false positive. Cleanup được retry bằng connection mới, hậu kiểm bằng READ, runner xử lý cleanup treo trước khi chạy và dừng nếu không chứng minh được lab đã phục hồi. Các luồng quan trọng được chú thích theo từng bước để tăng khả năng kiểm toán mã nguồn.                                                                                                                                                                                       |
+| 30/10/2026 | Bổ sung package diagnostic playbook và evidence coverage gate: workflow lưu playbook áp dụng, tổng hợp evidence đã quan sát, xác định evidence còn thiếu, tạo READ operation bổ sung và chỉ finalize khi đủ evidence hoặc đạt giới hạn vòng điều tra. Scenario P3 không hợp lệ được chuyển từ `FastEthernet2/0` luôn down/down sang `FastEthernet1/0` có baseline up/up. Parser Planner được mở rộng để bóc JSON từ text, Markdown code fence, content block và dict literal, đồng thời correction prompt nhắc lại schema tối thiểu.                                                                                                                           |
+| 31/10/2026 | Bổ sung causal evidence gate cho Analyst: chỉ giữ nguyên nhân có bằng chứng cấu trúc và nằm trong phạm vi thiết bị/interface của yêu cầu; nguyên nhân chưa đủ bằng chứng được phân loại nội bộ là nghi vấn. Workflow retry diễn giải nguyên nhân một lần khi đã đủ evidence nhưng chưa tìm được RCA. Thứ tự parser MPLS/OSPF được ưu tiên trước parser interface tổng quát, đồng thời bổ sung đọc địa chỉ CIDR từ output `show interfaces`.                                                                                                                                                                                                                    |
 | 01/11/2026 | Hoàn thiện matcher chuyên biệt cho MPLS và OSPF area mismatch; parser OSPF tách evidence theo interface; playbook có thể tạo candidate RCA giới hạn theo phạm vi khi Analyst bỏ sót. Luồng investigation được sửa để thực thi các READ operation mới ngay cả khi lượt thực thi đầu đã đưa Task về trạng thái terminal. Planner chấp nhận an toàn phản hồi là một operation thiếu lớp bao ngoài. Workflow dừng khi RCA đã vượt causal gate và evidence đầy đủ, tránh vòng sau làm mất kết luận đúng. Scenario P3 area mismatch được sửa statement chi phối từ `/24` sang `/30`; các cổng shutdown nhưng không được gán IP không còn bị coi là link-down hợp lệ. |
 
 ##### Nhật ký thay đổi chi tiết theo ngày logic
@@ -627,23 +1416,23 @@ Các thay đổi trên mô tả mốc phát triển gắn với từng đợt ch
 
 #### b) Kết quả tổng hợp
 
-| Chỉ số | 27/10 (v4/v5) | 28/10 (v4/v5) | 29/10 (v5) | 30/10 (v5) | 31/10 (v5) | 01/11 (v5) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Tổng scenario | 32 | 32 | 32 | 32 | 32 | 32 |
-| GOAL/RCA PASS | 11 | 14 | 14 | 20 | 23 | **29** |
-| GOAL/RCA FAIL | 19 | 16 | 17 | 11 | 8 | **3** |
-| Chưa chấm được | 2 | 2 | 1 | 1 | 1 | **0** |
-| Run có trạng thái vận hành `FAILED` | 1 | 1 | 0 | 0 | 0 | **0** |
-| Cleanup còn treo sau đợt chạy | 0 | 0 | 0 | 0 | 0 | 0 |
-| PASS trên toàn bộ 32 scenario | 34,38% | 43,75% | 43,75% | 62,50% | 71,88% | **90,63%** |
-| PASS trên các run được chấm | 36,67% (11/30) | 46,67% (14/30) | 45,16% (14/31) | 64,52% (20/31) | 74,19% (23/31) | **90,63% (29/32)** |
-| RCA F1 trung bình | 0,4444 | 0,5278 | 0,5161 | 0,6828 | 0,7419 | **0,9063** |
-| Localization F1 trung bình | 0,4444 | 0,5944 | 0,5161 | 0,6828 | 0,7419 | **0,9063** |
-| Fault Type F1 trung bình | 0,5111 | 0,6333 | 0,5806 | 0,7097 | 0,7419 | **0,9063** |
-| Evidence coverage trung bình | 1,0000 | 1,0000 | 0,5000 | 0,8871 | 1,0000 | **1,0000** |
-| Active latency trung bình | 34,89 giây | 38,53 giây | 44,50 giây | **27,44 giây** | 29,47 giây | 42,44 giây |
-| Active latency trung vị | 32,17 giây | 31,79 giây | 36,88 giây | 28,46 giây | **24,37 giây** | 35,49 giây |
-| Interaction Turns trung bình | 6,40 | 6,40 | 6,74 | 4,45 | **4,19** | 4,38 |
+| Chỉ số                              |  27/10 (v4/v5) |  28/10 (v4/v5) |     29/10 (v5) |     30/10 (v5) |     31/10 (v5) |         01/11 (v5) |
+| ----------------------------------- | -------------: | -------------: | -------------: | -------------: | -------------: | -----------------: |
+| Tổng scenario                       |             32 |             32 |             32 |             32 |             32 |                 32 |
+| GOAL/RCA PASS                       |             11 |             14 |             14 |             20 |             23 |             **29** |
+| GOAL/RCA FAIL                       |             19 |             16 |             17 |             11 |              8 |              **3** |
+| Chưa chấm được                      |              2 |              2 |              1 |              1 |              1 |              **0** |
+| Run có trạng thái vận hành `FAILED` |              1 |              1 |              0 |              0 |              0 |              **0** |
+| Cleanup còn treo sau đợt chạy       |              0 |              0 |              0 |              0 |              0 |                  0 |
+| PASS trên toàn bộ 32 scenario       |         34,38% |         43,75% |         43,75% |         62,50% |         71,88% |         **90,63%** |
+| PASS trên các run được chấm         | 36,67% (11/30) | 46,67% (14/30) | 45,16% (14/31) | 64,52% (20/31) | 74,19% (23/31) | **90,63% (29/32)** |
+| RCA F1 trung bình                   |         0,4444 |         0,5278 |         0,5161 |         0,6828 |         0,7419 |         **0,9063** |
+| Localization F1 trung bình          |         0,4444 |         0,5944 |         0,5161 |         0,6828 |         0,7419 |         **0,9063** |
+| Fault Type F1 trung bình            |         0,5111 |         0,6333 |         0,5806 |         0,7097 |         0,7419 |         **0,9063** |
+| Evidence coverage trung bình        |         1,0000 |         1,0000 |         0,5000 |         0,8871 |         1,0000 |         **1,0000** |
+| Active latency trung bình           |     34,89 giây |     38,53 giây |     44,50 giây | **27,44 giây** |     29,47 giây |         42,44 giây |
+| Active latency trung vị             |     32,17 giây |     31,79 giây |     36,88 giây |     28,46 giây | **24,37 giây** |         35,49 giây |
+| Interaction Turns trung bình        |           6,40 |           6,40 |           6,74 |           4,45 |       **4,19** |               4,38 |
 
 Từ ngày 27 sang 28, số PASS tăng ba trường hợp và tỷ lệ PASS trên mẫu được chấm tăng 10,00 điểm phần trăm. RCA F1 trung bình tăng từ 0,4444 lên 0,5278. Kết quả này phù hợp với mục tiêu của vòng điều tra bổ sung, nhưng chưa đủ để quy toàn bộ mức tăng cho thay đổi code vì mỗi scenario chỉ chạy một lần và đầu ra LLM có tính ngẫu nhiên.
 
@@ -683,23 +1472,23 @@ Benchmark hiện có cơ chế injection/cleanup giúp tạo và hoàn nguyên m
 
 Về **cơ chế kiểm soát**, hệ thống có RBAC, xác thực phiên, mã hóa credential, giới hạn định danh thiết bị trong Planner, Approval Gate cho WRITE, kiểm tra hash câu lệnh, thời hạn approval, các bản ghi Activity/Device Action/Audit. Unit tests kiểm tra nhiều quy tắc và trạng thái. Tuy nhiên, đây là kiểm tra chức năng và quy tắc cục bộ; báo cáo chưa có thí nghiệm đối kháng định lượng để tính tỷ lệ vi phạm, số cấu hình nguy hiểm bị chặn hay độ an toàn khi thao tác đồng thời nhiều thiết bị.
 
-Về **thời gian**, ảnh v4 cho thấy `22,40 s` với bốn tool calls; sáu cohort đầy đủ có active latency trung bình lần lượt là 34,89 giây, 38,53 giây, 44,50 giây, 27,44 giây, 29,47 giây và 42,44 giây. Cohort 31/10 vẫn có latency trung vị thấp nhất, 24,37 giây, và Interaction Turns trung bình thấp nhất, 4,19; latency trung bình thấp nhất thuộc ngày 30/10 với 27,44 giây. Ngày 01/11 đạt độ chính xác cao nhất nhưng latency trung vị tăng lên 35,49 giây và Interaction Turns trung bình là 4,38, phản ánh chi phí của việc thực thi evidence investigation thực tế. Thời gian này loại bỏ chờ Approval nếu có và không bao gồm tiêm lỗi/cleanup. Báo cáo không diễn giải các giá trị trên là thời gian suy luận LLM thuần túy. Khi đo nhiều mẫu cần đồng thời báo cáo thời gian model, tool/network, orchestration và human-wait nếu muốn phân tích sâu thành phần chi phí; trong phiên bản hiện tại số đo chính thức là *AI workflow lifetime*.
+Về **thời gian**, ảnh v4 cho thấy `22,40 s` với bốn tool calls; sáu cohort đầy đủ có active latency trung bình lần lượt là 34,89 giây, 38,53 giây, 44,50 giây, 27,44 giây, 29,47 giây và 42,44 giây. Cohort 31/10 vẫn có latency trung vị thấp nhất, 24,37 giây, và Interaction Turns trung bình thấp nhất, 4,19; latency trung bình thấp nhất thuộc ngày 30/10 với 27,44 giây. Ngày 01/11 đạt độ chính xác cao nhất nhưng latency trung vị tăng lên 35,49 giây và Interaction Turns trung bình là 4,38, phản ánh chi phí của việc thực thi evidence investigation thực tế. Thời gian này loại bỏ chờ Approval nếu có và không bao gồm tiêm lỗi/cleanup. Báo cáo không diễn giải các giá trị trên là thời gian suy luận LLM thuần túy. Khi đo nhiều mẫu cần đồng thời báo cáo thời gian model, tool/network, orchestration và human-wait nếu muốn phân tích sâu thành phần chi phí; trong phiên bản hiện tại số đo chính thức là _AI workflow lifetime_.
 
 ## 4.8. Phân tích các trường hợp thất bại và kiểm tra biên
 
 Bộ test được thiết kế để chứng minh bộ chấm không tự động thưởng cho các sai lệch sau:
 
-| Tình huống | Kết quả mong đợi |
-| --- | --- |
-| Agent đúng vị trí, sai loại lỗi | Localization có thể đạt cao, nhưng RCA F1 = 0 cho một cặp và GOAL FAIL |
-| Agent đúng loại lỗi, sai device/interface | Fault Type có thể đúng, Localization/RCA sai |
-| Agent dự đoán thêm nguyên nhân ngoài Ground Truth | Precision giảm, RCA/GOAL không PASS dù Recall có thể đạt 100% |
-| Agent bỏ sót một nguyên nhân | Recall và F1 giảm; RCA/GOAL FAIL |
-| Agent nhắc đúng các từ khóa trong văn bản nhưng không có submission | RCA/GOAL FAIL, không suy diễn nguyên nhân từ câu chữ |
-| Agent đưa RCA đúng nhưng `is_anomaly=false` | RCA PASS có thể xảy ra, GOAL FAIL |
-| Approval chưa kết thúc hoặc mốc thời gian không hợp lệ | Không tự tính latency bằng 0; thiếu số đo nếu evidence không đủ |
-| Lỗi khởi tạo môi trường trước khi Agent chạy | `setup_failed`, không ghi thành một thất bại GOAL của Agent |
-| Run cleanup nhưng trước đó GOAL FAIL | Giữ phân loại failed; cleanup không sửa kết quả đánh giá |
+| Tình huống                                                          | Kết quả mong đợi                                                       |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Agent đúng vị trí, sai loại lỗi                                     | Localization có thể đạt cao, nhưng RCA F1 = 0 cho một cặp và GOAL FAIL |
+| Agent đúng loại lỗi, sai device/interface                           | Fault Type có thể đúng, Localization/RCA sai                           |
+| Agent dự đoán thêm nguyên nhân ngoài Ground Truth                   | Precision giảm, RCA/GOAL không PASS dù Recall có thể đạt 100%          |
+| Agent bỏ sót một nguyên nhân                                        | Recall và F1 giảm; RCA/GOAL FAIL                                       |
+| Agent nhắc đúng các từ khóa trong văn bản nhưng không có submission | RCA/GOAL FAIL, không suy diễn nguyên nhân từ câu chữ                   |
+| Agent đưa RCA đúng nhưng `is_anomaly=false`                         | RCA PASS có thể xảy ra, GOAL FAIL                                      |
+| Approval chưa kết thúc hoặc mốc thời gian không hợp lệ              | Không tự tính latency bằng 0; thiếu số đo nếu evidence không đủ        |
+| Lỗi khởi tạo môi trường trước khi Agent chạy                        | `setup_failed`, không ghi thành một thất bại GOAL của Agent            |
+| Run cleanup nhưng trước đó GOAL FAIL                                | Giữ phân loại failed; cleanup không sửa kết quả đánh giá               |
 
 Các nhánh kiểm tra giúp hạn chế **sai số do cách chấm**, nhưng vẫn có nguy cơ sai trong Ground Truth scenario, kết luận được model đưa ra không nhất quán, hoặc khác biệt giữa nhãn cố định và hành vi mạng thực tế. Dữ liệu label ở seed phải được người thiết kế scenario kiểm tra độc lập trước khi dùng để đưa ra kết luận nghiên cứu.
 
@@ -709,24 +1498,24 @@ Kết quả triển khai đã chứng minh hệ thống có thể vận hành m�
 
 Sáu cohort 27/10–01/11 chứng minh pipeline có thể tạo và lưu ma trận 32 scenario theo ngày logic. Cohort 01/11, sau khi bổ sung matcher MPLS/OSPF, candidate recovery và sửa vòng investigation, đạt 29/32 PASS, tương ứng 90,63%; RCA F1 trung bình đạt 0,9063, toàn bộ run được chấm và cleanup. Đây là kết quả chính xác nhất trong chuỗi quan sát, tăng 56,25 điểm phần trăm PASS trên toàn cohort so với baseline 27/10. Tuy vậy, hai scenario wrong IP và một scenario missing OSPF network vẫn FAIL; latency trung vị tăng lên 35,49 giây. Hạn chế nổi bật là mỗi scenario chỉ có một quan sát trong từng cohort, tất cả cùng một topology và chưa có phép lặp theo nhiều model. Dữ liệu v1–v3 chấm từ khóa, v4 chấm cặp cấu trúc và v5 có chuẩn hóa taxonomy không hoàn toàn tương đương về rubric; vì vậy TSR toàn lịch sử chỉ dùng để quan sát vận hành và mọi phân tích nghiên cứu phải phân tầng theo `evaluator_version`.
 
-So với NIKA [14, 15], đề tài tiếp thu cách **biểu diễn nhãn sự cố và công thức chấm** nhưng giữ nguyên GNS3 và pipeline Multi-Agent riêng. Không có thực nghiệm chứng minh hiệu năng/độ chính xác tốt hơn NIKA. Kết quả hiện tại là tính khả thi của việc tích hợp phương pháp chấm có cấu trúc vào hệ thống quản trị mạng bằng Multi-Agent.
+So với NIKA [3], [19], đề tài tiếp thu cách **biểu diễn nhãn sự cố và công thức chấm** nhưng giữ nguyên GNS3 và pipeline Multi-Agent riêng. Không có thực nghiệm chứng minh hiệu năng/độ chính xác tốt hơn NIKA. Kết quả hiện tại là tính khả thi của việc tích hợp phương pháp chấm có cấu trúc vào hệ thống quản trị mạng bằng Multi-Agent.
 
 ## 4.10. Khả năng tái lập và nguồn bằng chứng
 
 Để đối chiếu thực nghiệm, cần lưu và truy vấn theo chuỗi: Scenario/version → Benchmark Run → source Message/Conversation → Task → Task Activity Event (bao gồm `diagnosis_submission`) → Evaluation → từng Task Evaluation Metric. Bộ mã liên quan:
 
-| Nội dung | Vị trí kiểm chứng |
-| --- | --- |
-| Định nghĩa kịch bản, action, Ground Truth | `src/app/domains/benchmark/schemas/`, `docker/postgres/seed/` |
-| Thực thi tiêm lỗi và cleanup | `src/app/domains/benchmark/services/benchmark_run.py` |
-| Submission của Analyst | `src/app/agents/orchestrator/analysis.py` |
-| Đọc evidence và số đo | `src/app/domains/benchmark/repositories/benchmark_observation.py` |
-| Bộ chấm theo NIKA | `src/app/domains/benchmark/utils/structured_rca.py` |
-| GOAL/RCA và các metric | `src/app/domains/benchmark/utils/evaluation.py` |
-| TSR và phân loại Run | `src/app/domains/benchmark/utils/summary.py` |
-| Latency và Approval | `src/app/domains/benchmark/utils/active_runtime.py` |
-| Mô tả kỹ thuật có công thức | `docs/benchmark-metrics.md` |
-| Bài test | `tests/domains/test_nika_style_rca.py` và các bộ test liên quan |
+| Nội dung                                  | Vị trí kiểm chứng                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| Định nghĩa kịch bản, action, Ground Truth | `src/app/domains/benchmark/schemas/`, `docker/postgres/seed/`     |
+| Thực thi tiêm lỗi và cleanup              | `src/app/domains/benchmark/services/benchmark_run.py`             |
+| Submission của Analyst                    | `src/app/agents/orchestrator/analysis.py`                         |
+| Đọc evidence và số đo                     | `src/app/domains/benchmark/repositories/benchmark_observation.py` |
+| Bộ chấm theo NIKA                         | `src/app/domains/benchmark/utils/structured_rca.py`               |
+| GOAL/RCA và các metric                    | `src/app/domains/benchmark/utils/evaluation.py`                   |
+| TSR và phân loại Run                      | `src/app/domains/benchmark/utils/summary.py`                      |
+| Latency và Approval                       | `src/app/domains/benchmark/utils/active_runtime.py`               |
+| Mô tả kỹ thuật có công thức               | `docs/benchmark-metrics.md`                                       |
+| Bài test                                  | `tests/domains/test_nika_style_rca.py` và các bộ test liên quan   |
 
 Các lệnh đã được nhóm sử dụng để kiểm thử trên môi trường phát triển:
 
@@ -775,19 +1564,19 @@ Những kết quả này xác nhận logic phần mềm trong phạm vi bộ tes
 
 ### 5.1.3. Đối chiếu yêu cầu trong đề cương giữa kỳ
 
-| Mục tiêu nghiên cứu | Đánh giá mức hoàn thành |
-| --- | --- |
-| Khảo sát ứng dụng LLM/Multi-Agent/Network Automation | Đã xây dựng nền tảng lý thuyết và tổng quan công trình liên quan |
-| Kiến trúc Orchestrator, Planner, Network, Analyst | Đã có mã nguồn và luồng thực thi theo module |
-| Tương tác thiết bị và lab GNS3 | Đã hỗ trợ qua NetworkTool; chưa đồng bộ graph topology |
-| Cơ chế Human-in-the-loop | Đã có Approval Gate, quyết định, timeout và kiểm tra nội dung duyệt |
-| Kịch bản có Ground Truth | Đã có Benchmark Scenario/Run, injection/verification/cleanup |
-| Đánh giá Task Success Rate | Có API tổng hợp và giao diện hiển thị với số mẫu |
-| Detection, Localization, RCA | Có bộ chấm v4 tham khảo NIKA 0.2 |
-| Latency và Interaction Turns | Có số đo lưu vào Evaluation và hiển thị trên UI |
-| Remediation Success Rate | Chưa có scorer kiểm tra kết quả sửa lỗi bởi Agent; NOT_APPLICABLE |
-| Safety score | Chưa có scorer độc lập; NOT_APPLICABLE |
-| Thực nghiệm quy mô lớn hoặc so sánh nhiều mô hình | Chưa có bảng kết quả lặp nhiều lần được xác nhận |
+| Mục tiêu nghiên cứu                                  | Đánh giá mức hoàn thành                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| Khảo sát ứng dụng LLM/Multi-Agent/Network Automation | Đã xây dựng nền tảng lý thuyết và tổng quan công trình liên quan    |
+| Kiến trúc Orchestrator, Planner, Network, Analyst    | Đã có mã nguồn và luồng thực thi theo module                        |
+| Tương tác thiết bị và lab GNS3                       | Đã hỗ trợ qua NetworkTool; chưa đồng bộ graph topology              |
+| Cơ chế Human-in-the-loop                             | Đã có Approval Gate, quyết định, timeout và kiểm tra nội dung duyệt |
+| Kịch bản có Ground Truth                             | Đã có Benchmark Scenario/Run, injection/verification/cleanup        |
+| Đánh giá Task Success Rate                           | Có API tổng hợp và giao diện hiển thị với số mẫu                    |
+| Detection, Localization, RCA                         | Có bộ chấm v4 tham khảo NIKA 0.2                                    |
+| Latency và Interaction Turns                         | Có số đo lưu vào Evaluation và hiển thị trên UI                     |
+| Remediation Success Rate                             | Chưa có scorer kiểm tra kết quả sửa lỗi bởi Agent; NOT_APPLICABLE   |
+| Safety score                                         | Chưa có scorer độc lập; NOT_APPLICABLE                              |
+| Thực nghiệm quy mô lớn hoặc so sánh nhiều mô hình    | Chưa có bảng kết quả lặp nhiều lần được xác nhận                    |
 
 ## 5.2. Hạn chế của đề tài
 
@@ -823,82 +1612,90 @@ Nhóm hiện có bằng chứng kiểm thử phần mềm đạt và một lần
 
 # TÀI LIỆU THAM KHẢO
 
-[1] A. Clemm, L. Ciavaglia, L. Z. Granville, J. Tantsura, “Intent-Based Networking — Concepts and Definitions,” RFC 9315, 2022. https://www.rfc-editor.org/rfc/rfc9315.html
+[1] J. Hong, N. V. Tu, and J. W.-K. Hong, “A Comprehensive Survey on LLM-Based Network Management and Operations,” International Journal of Network Management, vol. 35, 2025.
 
-[2] Q. Wu, M. Boucadair, D. Lopez, C. Xie, L. Geng, “A Framework for Automating Service and Network Management with YANG,” RFC 8969, 2021. https://www.rfc-editor.org/rfc/rfc8969.html
+[2] O. G. Lira, O. M. Caicedo, and N. L. S. da Fonseca, “Large Language Models for Zero Touch Network Configuration Management,” arXiv:2408.13298, 2024.
 
-[3] R. Enns, M. Bjorklund, J. Schoenwaelder, A. Bierman, “Network Configuration Protocol (NETCONF),” RFC 6241, 2011. https://www.rfc-editor.org/rfc/rfc6241.html
+[3] Z. Wang, A. Cornacchia, A. Sacco, F. Galante, M. Canini, and D. Jiang, “A Network Arena for Benchmarking AI Agents on Network Troubleshooting,” arXiv:2512.16381, 2025.
 
-[4] S. Yao et al., “ReAct: Synergizing Reasoning and Acting in Language Models,” ICLR, 2023. https://arxiv.org/abs/2210.03629
+[4] Y. Zhou et al., “NETARENA: Dynamic Benchmarks for AI Agents in Network Automation,” International Conference on Learning Representations (ICLR), 2026.
 
-[5] Q. Wu et al., “AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation,” 2023. https://arxiv.org/abs/2308.08155
+[5] C. Liu, X. Xie, X. Chen, and Y. Cui, “NetConfArena: An Executable Benchmark for LLM Agents in Closed-Loop Network Configuration,” arXiv:2608.23179, 2026.
 
-[6] C. Wang, M. Scazzariello, A. Farshin, D. Kostić, M. Chiesa, “Making Network Configuration Human Friendly,” 2023. https://arxiv.org/abs/2309.06342
+[6] Y. Luo et al., “OpsAgent: An Evolving Multi-agent System for Incident Management in Microservices,” arXiv:2510.24145, 2026.
 
-[7] O. G. Lira, O. M. Caicedo, N. L. S. da Fonseca, “Large Language Models for Zero Touch Network Configuration Management,” 2024. https://arxiv.org/abs/2408.13298
+[7] L. Zhang et al., “A Survey of AIOps in the Era of Large Language Models,” arXiv:2507.12472, 2025.
 
-[8] Y. Wei et al., “Leveraging LLM Agents for Translating Network Configurations,” 2025. https://arxiv.org/abs/2501.08760
+[8] M. Bajpai, “Automating Troubleshooting Network Issues with AIOps and Machine Learning,” Journal of Artificial Intelligence & Cloud Computing, vol. 3, no. 1, 2024.
 
-[9] H. Song et al., “Network Telemetry Framework,” RFC 9232, 2022. https://www.rfc-editor.org/rfc/rfc9232.html
+[9] W. X. Zhao et al., “A Survey of Large Language Models,” Frontiers of Computer Science, vol. 20, no. 12, Art. no. 2012627, 2026. https://doi.org/10.1007/s11704-026-60308-3
 
-[10] H. Zhou et al., “Large Language Models (LLMs) for Telecom Root Cause Analysis (RCA): A Structured Reasoning Framework for Evidence-Grounded Diagnosis,” 2026. https://arxiv.org/abs/2609.02805
+[10] A. Vaswani et al., “Attention Is All You Need,” Advances in Neural Information Processing Systems, vol. 30, pp. 5998–6008, 2017. https://papers.neurips.cc/paper/7181-attention-is-all-you-need
 
-[11] Netmiko Project, “Netmiko API Documentation.” https://ktbyers.github.io/netmiko/docs/netmiko/
+[11] Z. Ji et al., “Survey of Hallucination in Natural Language Generation,” ACM Computing Surveys, vol. 55, no. 12, Art. no. 248, pp. 1–38, 2023. https://doi.org/10.1145/3571730
 
-[12] Nornir Project, “Nornir 3.6.0 Documentation — Plugins and Runners.” https://nornir.readthedocs.io/en/v3.6.0/plugins/
+[12] M. Wooldridge and N. R. Jennings, “Intelligent Agents: Theory and Practice,” The Knowledge Engineering Review, vol. 10, no. 2, pp. 115–152, 1995. https://doi.org/10.1017/S0269888900008122
 
-[13] GNS3 Project, “GNS3 Architecture Documentation.” https://docs.gns3.com/docs/using-gns3/design/architecture
+[13] Z. Xi et al., “The Rise and Potential of Large Language Model Based Agents: A Survey,” Science China Information Sciences, vol. 68, Art. no. 121101, 2025. https://doi.org/10.1007/s11432-024-4222-0
 
-[14] Z. Wang, A. Cornacchia, A. Sacco, F. Galante, M. Canini và D. Jiang, “A Network Arena for Benchmarking AI Agents on Network Troubleshooting” (NIKA), arXiv:2512.16381, 2025. https://arxiv.org/abs/2512.16381
+[14] Q. Wu et al., “AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation,” Proceedings of the Conference on Language Modeling (COLM), 2024. https://arxiv.org/abs/2308.08155
 
-[15] SANDS Lab, “NIKA 0.2: Scoring Implementation, RootCause Model and Scoring Tests.” https://github.com/sands-lab/nika/blob/main/src/nika/evaluator/scoring.py ; https://github.com/sands-lab/nika/blob/main/src/nika/problems/rca/models.py ; https://github.com/sands-lab/nika/blob/main/tests/nika/evaluator/test_scoring.py
+[15] E. Coronado et al., “Zero Touch Management: A Survey of Network Automation Solutions for 5G and 6G Networks,” IEEE Communications Surveys & Tutorials, vol. 24, no. 4, pp. 2535–2578, 2022. https://doi.org/10.1109/COMST.2022.3212586
 
-[16] Y. Zhou và cộng sự, “NETARENA: Dynamic Benchmarks for AI Agents in Network Automation,” ICLR, 2026. (Thông tin bibliographic theo đề cương giữa kỳ.)
+[16] G. Malewicz et al., “Pregel: A System for Large-Scale Graph Processing,” Proceedings of the 2010 ACM SIGMOD International Conference on Management of Data, pp. 135–146, 2010. https://doi.org/10.1145/1807167.1807184
 
-[17] C. Liu, X. Xie, X. Chen và Y. Cui, “NetConfArena: An Executable Benchmark for LLM Agents in Closed-Loop Network Configuration,” arXiv:2608.23179, 2026. https://arxiv.org/abs/2608.23179
+[17] S. K. S. Sidhu and A. Sharma, “The Evolution of Network Management: From Manual Configurations to Intelligent Automation,” International Journal of Network Management, vol. 36, no. 1, Art. no. e70031, 2026. https://doi.org/10.1002/nem.70031
 
-[18] Y. Luo và cộng sự, “OpsAgent: An Evolving Multi-agent System for Incident Management in Microservices,” arXiv:2510.24145. https://arxiv.org/abs/2510.24145
+[18] M. M. Abdellatif, O. Desouki, and M. AbdelRaheem, “Performance Analysis of Network Automation Techniques for Dense IP Networks,” Scientific Reports, vol. 16, Art. no. 9532, 2026. https://doi.org/10.1038/s41598-026-40975-9
+
+[19] SANDS Lab, “NIKA 0.2: Scoring Implementation, RootCause Model and Scoring Tests.” https://github.com/sands-lab/nika/blob/main/src/nika/evaluator/scoring.py ; https://github.com/sands-lab/nika/blob/main/src/nika/problems/rca/models.py ; https://github.com/sands-lab/nika/blob/main/tests/nika/evaluator/test_scoring.py
+
+[20] Netmiko Project, “Netmiko API Documentation.” https://ktbyers.github.io/netmiko/docs/netmiko/
+
+[21] Nornir Project, “Nornir 3.6.0 Documentation — Plugins and Runners.” https://nornir.readthedocs.io/en/v3.6.0/plugins/
+
+[22] GNS3 Project, “GNS3 Architecture Documentation.” https://docs.gns3.com/docs/using-gns3/design/architecture
 
 ---
 
 # PHỤ LỤC A. BẢNG ĐỐI CHIẾU MÃ NGUỒN ĐÃ TRIỂN KHAI
 
-| Thành phần | File/đường dẫn | Vai trò xác minh |
-| --- | --- | --- |
-| LangGraph | `src/app/agents/workflow.py` | Message graph và approval graph |
-| Planner Agent | `src/app/agents/planner/` | Sinh và validate execution plan |
-| Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/` | Điều phối Task/Operation/Approval |
-| Network Agent | `src/app/agents/network/`, `src/app/tools/network/` | Kết nối và thực thi qua Netmiko/Nornir |
-| Analyst Agent | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải kết quả, ghi diagnosis_submission |
-| Identity/RBAC | `src/app/domains/identity/` | User, session, token, roles/permissions |
-| Inventory | `src/app/domains/inventory/` | Brand, category, device, credential/provider |
-| Conversation | `src/app/domains/conversation/` | Message, conversation, title |
-| Execution | `src/app/domains/execution/` | Task, dependency, approval, activity, action log |
-| Audit | `src/app/domains/audit/` | Audit Log và bộ lọc |
-| Benchmark | `src/app/domains/benchmark/` | Scenario/Run, injection, verification, cleanup |
-| RCA scorer | `src/app/domains/benchmark/utils/structured_rca.py` | Tính precision, recall, F1 theo NIKA 0.2 |
-| Evaluation | `src/app/domains/evaluation/` | Metric, result/evidence và API lịch sử |
-| TSR/Latency | `src/app/domains/benchmark/utils/summary.py`, `active_runtime.py` | Tổng hợp run và thời gian workflow |
-| Migration | `migrations/versions/`, `scripts/migrate.py` | Kiểm soát schema theo version |
-| Frontend | Repository `network-multi-agent-system-frontend/src/features/` | UI Chat, Tasks, Devices, Benchmark, Evaluation |
+| Thành phần             | File/đường dẫn                                                       | Vai trò xác minh                                 |
+| ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
+| LangGraph              | `src/app/agents/workflow.py`                                         | Message graph và approval graph                  |
+| Planner Agent          | `src/app/agents/planner/`                                            | Sinh và validate execution plan                  |
+| Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/`     | Điều phối Task/Operation/Approval                |
+| Network Agent          | `src/app/agents/network/`, `src/app/tools/network/`                  | Kết nối và thực thi qua Netmiko/Nornir           |
+| Analyst Agent          | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải kết quả, ghi diagnosis_submission      |
+| Identity/RBAC          | `src/app/domains/identity/`                                          | User, session, token, roles/permissions          |
+| Inventory              | `src/app/domains/inventory/`                                         | Brand, category, device, credential/provider     |
+| Conversation           | `src/app/domains/conversation/`                                      | Message, conversation, title                     |
+| Execution              | `src/app/domains/execution/`                                         | Task, dependency, approval, activity, action log |
+| Audit                  | `src/app/domains/audit/`                                             | Audit Log và bộ lọc                              |
+| Benchmark              | `src/app/domains/benchmark/`                                         | Scenario/Run, injection, verification, cleanup   |
+| RCA scorer             | `src/app/domains/benchmark/utils/structured_rca.py`                  | Tính precision, recall, F1 theo NIKA 0.2         |
+| Evaluation             | `src/app/domains/evaluation/`                                        | Metric, result/evidence và API lịch sử           |
+| TSR/Latency            | `src/app/domains/benchmark/utils/summary.py`, `active_runtime.py`    | Tổng hợp run và thời gian workflow               |
+| Migration              | `migrations/versions/`, `scripts/migrate.py`                         | Kiểm soát schema theo version                    |
+| Frontend               | Repository `network-multi-agent-system-frontend/src/features/`       | UI Chat, Tasks, Devices, Benchmark, Evaluation   |
 
 # PHỤ LỤC B. API VÀ QUY TRÌNH TRUY VẾT
 
 Các endpoint tiêu biểu dùng prefix `/api/v1`:
 
-| Mục đích | Đường dẫn |
-| --- | --- |
-| Bắt đầu Conversation | `POST /conversations/messages` |
-| Xem message trong hội thoại | `GET /conversations/{conversation_id}/messages` |
-| Chi tiết kế hoạch và log Task | `GET /tasks/{task_id}/records` |
-| Timeline Task | `GET /tasks/{task_id}/activity-events` |
-| Scenario management | `GET/POST /benchmarks/scenarios` |
-| Bắt đầu Benchmark Run | `POST /benchmarks/runs` |
-| Thống kê TSR toàn bộ lịch sử | `GET /benchmarks/runs/summary` |
-| Cleanup một run | `POST /benchmarks/runs/{run_id}/cleanup` |
-| Xem Evaluation | `GET /evaluations` |
-| Xem metric từng Task | `GET /evaluations/tasks/{task_id}` |
-| Tra cứu hệ thống Audit Log | `GET /audit-logs/` |
+| Mục đích                      | Đường dẫn                                       |
+| ----------------------------- | ----------------------------------------------- |
+| Bắt đầu Conversation          | `POST /conversations/messages`                  |
+| Xem message trong hội thoại   | `GET /conversations/{conversation_id}/messages` |
+| Chi tiết kế hoạch và log Task | `GET /tasks/{task_id}/records`                  |
+| Timeline Task                 | `GET /tasks/{task_id}/activity-events`          |
+| Scenario management           | `GET/POST /benchmarks/scenarios`                |
+| Bắt đầu Benchmark Run         | `POST /benchmarks/runs`                         |
+| Thống kê TSR toàn bộ lịch sử  | `GET /benchmarks/runs/summary`                  |
+| Cleanup một run               | `POST /benchmarks/runs/{run_id}/cleanup`        |
+| Xem Evaluation                | `GET /evaluations`                              |
+| Xem metric từng Task          | `GET /evaluations/tasks/{task_id}`              |
+| Tra cứu hệ thống Audit Log    | `GET /audit-logs/`                              |
 
 Quan hệ quan trọng khi đọc Evidence:
 
@@ -926,4 +1723,4 @@ Trình tự này cho phép đối chiếu dự đoán với nhãn kịch bản v
 
 ---
 
-*Ngày đối chiếu đề cương, mã nguồn và bằng chứng nhóm cung cấp: 03/11/2026.*
+_Ngày đối chiếu đề cương, mã nguồn và bằng chứng nhóm cung cấp: 03/11/2026._
