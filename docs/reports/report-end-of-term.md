@@ -652,7 +652,7 @@ flowchart TB
         end
 
         subgraph AI["Lớp AI và điều phối"]
-            ORCHESTRATION["LangGraph & Orchestrator"]
+            ORCHESTRATION["LangGraph<br/>Planning · Configuration · Execution · Analysis Orchestrator"]
             AGENTS["Planner · Configuration · Network · Analyst Agent"]
         end
 
@@ -730,7 +730,7 @@ Kiến trúc hệ thống gồm các thành phần chức năng được tổ ch
 
 Domain Service chịu trách nhiệm thực hiện quy tắc nghiệp vụ và phối hợp các Repository trong phạm vi domain. Đây là lớp trung gian giữa API, Multi-Agent Core, lớp tích hợp và cơ sở dữ liệu; frontend và Agent không truy cập Repository trực tiếp.
 
-**Lõi Multi-Agent (Multi-Agent Core).** Thành phần này sử dụng LangGraph và các Orchestrator để phối hợp bốn Agent chuyên trách. Planner Agent phân tích yêu cầu và tạo kế hoạch có cấu trúc ở mức nghiệp vụ; Configuration Agent chuyển yêu cầu của Operation WRITE thành CLI phù hợp với thiết bị; Network Agent thực thi Operation đã được kiểm soát; Analyst Agent phân tích kết quả và tạo kết luận chẩn đoán. Orchestrator liên kết hoạt động của các Agent với Domain Service, kiểm tra dependency, Approval Gate, trạng thái thực thi và điều kiện thu thập bằng chứng. LangGraph quản lý thứ tự và nhánh xử lý của workflow, nhưng không thay thế các Domain Service trong việc quản lý dữ liệu nghiệp vụ dài hạn.
+**Lõi Multi-Agent (Multi-Agent Core).** Thành phần này sử dụng LangGraph và bốn Orchestrator chuyên trách để phối hợp bốn Agent. Planning Orchestrator điều phối việc tạo và lưu kế hoạch; Configuration Orchestrator điều phối quá trình sinh và kiểm tra CLI cho Operation WRITE; Execution Orchestrator kiểm tra dependency, Approval Gate và thực thi; Analysis Orchestrator tổng hợp evidence và quản lý kết luận phân tích. Ở tầng Agent, Planner Agent tạo kế hoạch nghiệp vụ, Configuration Agent chuyển yêu cầu WRITE thành CLI phù hợp, Network Agent thực thi Operation đã được kiểm soát và Analyst Agent tạo kết luận chẩn đoán. LangGraph quản lý thứ tự và nhánh xử lý của workflow, nhưng không thay thế Domain Service trong việc quản lý dữ liệu nghiệp vụ dài hạn.
 
 **Lớp tích hợp (Integration Layer).** Lớp này cô lập hệ thống khỏi chi tiết của những công nghệ và dịch vụ bên ngoài:
 
@@ -748,7 +748,7 @@ Mối quan hệ giữa các thành phần được thiết kế theo nguyên t�
 
 Frontend và backend trao đổi dữ liệu bằng HTTP/REST. Sau khi đăng nhập, frontend gửi thông tin xác thực trong các yêu cầu đến API. Router sử dụng Identity Service để kiểm tra tính hợp lệ của access token, trạng thái session, trạng thái tài khoản và permission tương ứng với chức năng được yêu cầu. Chỉ khi các điều kiện này được thỏa mãn, yêu cầu mới được chuyển đến Domain Service. Giao diện cập nhật tiến trình Task bằng cách truy vấn dữ liệu từ API; phiên bản hiện tại không sử dụng WebSocket hoặc Message Queue.
 
-Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message của người dùng trước khi API kích hoạt LangGraph Workflow. Planner Agent nhận nội dung yêu cầu cùng danh sách thiết bị được phép sử dụng, sau đó gọi NVIDIA AI Endpoint qua HTTPS/API. Structured output trả về được kiểm tra bằng schema trước khi Planning Orchestrator chuyển kế hoạch thành các bản ghi Task, Operation, Operation Dependency và Operation Device. Cách thực hiện này bảo đảm kế hoạch chỉ được đưa vào thực thi sau khi có cấu trúc hợp lệ và đã được liên kết với dữ liệu nghiệp vụ.
+Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message trước khi API kích hoạt LangGraph Workflow. Planning Orchestrator chuyển yêu cầu, inventory công khai và topology context cho Planner Agent. Structured output của Planner được kiểm tra bằng schema. Nếu kế hoạch có Operation WRITE, Planning Orchestrator chuyển kế hoạch sang Configuration Orchestrator; thành phần này gọi Configuration Agent, chuẩn hóa CLI, đối chiếu interface với inventory GNS3 và ghi activity. Kế hoạch hoàn chỉnh sau đó được Planning Orchestrator kiểm tra device ID và chuyển thành các bản ghi Task, Operation, Operation Dependency và Operation Device.
 
 Trong quá trình thực thi, Execution Orchestrator đọc lại Task, Operation, dependency, mapping thiết bị và Approval từ Execution Service. Với Operation READ, Network Agent có thể gọi NetworkTool để thu thập trạng thái. Với Operation WRITE, workflow chỉ tiếp tục khi Approval Gate xác nhận nội dung đã được phê duyệt và vẫn khớp với command snapshot. NetworkTool lấy thông tin kết nối thông qua Inventory Service và Device Connection Provider, sau đó gửi lệnh đến thiết bị bằng SSH hoặc Telnet. Output của thiết bị được chuẩn hóa, lưu thành Execution và Device Action Log, rồi chuyển cho Analyst Agent làm bằng chứng phân tích.
 
@@ -770,7 +770,8 @@ Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Op
 | Configuration Agent    | Kế hoạch, yêu cầu cấu hình, thiết bị và interface hợp lệ       | Chuyển yêu cầu của từng Operation WRITE thành CLI và chuẩn hóa lệnh                 | Kế hoạch có commands WRITE; không kết nối hoặc thực thi trên thiết bị |
 | Network Agent          | Operation và danh sách command cho mapping                    | Kiểm tra input và gọi NetworkTool qua adapter                                     | NetworkExecutionResult; không dùng LLM, không tự chọn mạng đích |
 | Analyst Agent          | Command outputs, hostname, trạng thái thực thi                | Tóm tắt phát hiện, giả thuyết, khuyến nghị; tạo kết luận RCA dạng JSON            | AnalysisResult; không kết nối hay sửa thiết bị                  |
-| Planning Orchestrator  | Message/Conversation                                          | Gọi Planner, kiểm tra device ID, lưu kế hoạch                                     | Task/plan đã xác thực                                           |
+| Planning Orchestrator  | Message, Conversation, inventory và topology                  | Gọi Planner, chuyển WRITE plan sang Configuration Orchestrator, kiểm tra device ID và lưu kế hoạch | Task/plan đã xác thực |
+| Configuration Orchestrator | ExecutionPlanCreate, inventory và interface GNS3          | Xác định WRITE operation, gọi Configuration Agent, kiểm tra command/interface và ghi activity | Kế hoạch có CLI WRITE đã xác thực |
 | Execution Orchestrator | Task và graph operation                                       | Kiểm tra dependency, Approval Gate, thực thi và cập nhật trạng thái               | Execution/result/action logs                                    |
 | Analysis Orchestrator  | Kết quả thực thi                                              | Lưu kết luận có cấu trúc vào timeline và tạo FINAL_RESPONSE                       | Message cuối cùng cùng dấu vết phân tích                        |
 
@@ -793,35 +794,89 @@ Với yêu cầu cấu hình, Planner mô tả mục tiêu, tham số và ràng 
 
 Với yêu cầu chẩn đoán, Planner ưu tiên tạo các Operation READ nhằm thu thập evidence theo diagnostic playbook. Khi cần quan sát thiết bị lân cận, Agent sử dụng topology neighbor và ánh xạ interface đã được cung cấp, không tự suy đoán quan hệ mạng. Những Operation do vòng điều tra bổ sung tạo ra cũng bị giới hạn ở lệnh READ-only để tránh thay đổi cấu hình trong quá trình thu thập bằng chứng.
 
-Kết quả từ LLM phải là một JSON object phù hợp với `ExecutionPlanCreate`. Planner kiểm tra dữ liệu bằng Pydantic. Nếu phản hồi sai JSON, Operation READ thiếu command, Operation WRITE thiếu yêu cầu cấu hình hoặc vi phạm schema, Agent gửi lại lỗi validation để mô hình sửa trong giới hạn retry và timeout. Planning Orchestrator tiếp tục kiểm tra device ID, thứ tự và dependency trước khi chuyển các Operation WRITE cho Configuration Agent.
+Kết quả từ LLM phải là một JSON object phù hợp với `ExecutionPlanCreate`. Planner kiểm tra dữ liệu bằng Pydantic. Nếu phản hồi sai JSON, Operation READ thiếu command, Operation WRITE thiếu yêu cầu cấu hình hoặc vi phạm schema, Agent gửi lại lỗi validation để mô hình sửa trong giới hạn retry và timeout. Planning Orchestrator tiếp tục kiểm tra device ID, thứ tự và dependency, sau đó chuyển kế hoạch có Operation WRITE cho Configuration Orchestrator xử lý.
 
 Planner Agent không lưu trực tiếp dữ liệu nghiệp vụ, không giải mã credential, không sinh CLI WRITE, không mở kết nối SSH/Telnet, không phê duyệt cấu hình và không thực thi command. Việc tách lập kế hoạch khỏi sinh cấu hình giúp thu hẹp trách nhiệm của Planner và cho phép kiểm tra riêng từng đầu ra.
 
 ### 3.5.2. Configuration Agent
 
-Configuration Agent nhận kế hoạch đã được Planner xác thực, danh sách thiết bị và interface hợp lệ. Agent chỉ xử lý Operation WRITE: đọc `configuration_requirements`, loại thiết bị và sinh danh sách CLI phù hợp với `device_type`. Kết quả phải ánh xạ chính xác tới từng `operation_order`; không được bổ sung, bỏ sót hoặc thay đổi thứ tự Operation.
+Configuration Agent là tác tử chuyên trách **chuyển yêu cầu cấu hình ở mức nghiệp vụ thành câu lệnh CLI**. Agent được tách khỏi Planner Agent để việc phân rã mục tiêu và việc sinh cú pháp cấu hình có thể được kiểm tra độc lập. Đầu vào của Agent gồm `ExecutionPlanCreate` đã được Planner tạo, inventory công khai của thiết bị và danh sách interface hợp lệ theo từng `device_id`. Inventory chỉ chứa định danh, hostname, `device_type` và interface cần thiết; username, password, secret hoặc dữ liệu giải mã credential không được đưa vào prompt.
 
-Các lệnh sinh ra được chuẩn hóa để loại `configure terminal`, `end`, `write memory` và các lệnh quản lý phiên do NetworkTool đảm nhiệm. Planning Orchestrator kiểm tra lại tên interface theo inventory trước khi lưu kế hoạch. Configuration Agent không nhận credential, không kết nối thiết bị, không phê duyệt và không thực thi cấu hình. Đầu ra của Agent vẫn phải qua schema validation, Approval Gate và command snapshot.
+Agent chỉ xử lý những Operation có ít nhất một ánh xạ thiết bị mang `access_mode=WRITE`. Các Operation READ được giữ nguyên và không được gửi đến mô hình. Đối với mỗi Operation WRITE, Agent nhận `operation_order`, `operation_intent`, `configuration_requirements`, loại thiết bị và các interface được phép sử dụng. Từ ngữ cảnh này, Agent tạo danh sách command phù hợp với hệ điều hành hoặc driver của thiết bị, nhưng không được thay đổi loại Task, thêm hoặc xóa Operation, sửa dependency, đổi thiết bị hay thay đổi thứ tự kế hoạch.
+
+Quy trình sinh cấu hình của Configuration Agent gồm các bước sau:
+
+1. Duyệt kế hoạch và xác định tập `operation_order` của các Operation WRITE.
+2. Tạo inventory tối thiểu gồm `id`, `hostname`, `device_type` và danh sách interface hợp lệ của các thiết bị liên quan.
+3. Chỉ đưa các Operation WRITE cùng hợp đồng JSON đầu ra vào prompt dành cho Configuration Agent.
+4. Gọi LLM trong giới hạn `timeout_seconds` và nhận structured output dạng `GeneratedConfigurationSet`.
+5. Bóc JSON object từ phản hồi, xác thực bằng Pydantic và yêu cầu mô hình tạo lại khi dữ liệu sai cấu trúc trong giới hạn `max_validation_retries`.
+6. Ghép command vào đúng Operation WRITE theo `operation_order`, loại `configuration_requirements` đã được biên dịch và trả về một bản kế hoạch mới.
+
+Structured output phải chứa đúng một `GeneratedConfiguration` cho mỗi Operation WRITE. Hệ thống từ chối kết quả có `operation_order` trùng lặp, thiếu cấu hình cho một Operation hoặc chứa cấu hình ngoài tập Operation dự kiến. Mỗi phần tử phải có ít nhất một command. Cơ chế đối chiếu này ngăn mô hình ghép nhầm cấu hình vào Operation khác hoặc âm thầm bỏ sót một thay đổi đã được Planner yêu cầu.
+
+Trước khi được đưa vào kế hoạch, command được chuẩn hóa bằng `normalize_config_commands`. Các lệnh quản lý phiên như `configure terminal`, `end`, `write memory` được loại bỏ vì việc vào chế độ cấu hình, lưu cấu hình và đóng phiên thuộc trách nhiệm của NetworkTool. Sau khi Agent trả kết quả, Configuration Orchestrator tiếp tục đối chiếu các interface xuất hiện trong CLI với inventory GNS3. Kế hoạch tham chiếu interface vật lý không tồn tại bị từ chối trước khi được lưu. Orchestrator đồng thời ghi các activity `CONFIGURATION_STARTED` và `CONFIGURATION_COMPLETED` để giao diện thể hiện đúng trình tự xử lý.
+
+Kết quả cuối của giai đoạn này vẫn là `ExecutionPlanCreate`, trong đó Operation READ không thay đổi và Operation WRITE đã có trường `commands`. Kết quả này chưa được phép thực thi ngay. Planning Orchestrator phải lưu kế hoạch thành các bản ghi nghiệp vụ; Execution Orchestrator kiểm tra dependency; Approval Gate tạo và kiểm tra command snapshot trước khi Network Agent được gọi.
+
+Configuration Agent không kết nối GNS3 hoặc thiết bị mạng, không đọc credential, không quan sát output thực tế, không phê duyệt thay đổi và không tự khắc phục lỗi sau thực thi. Nếu mô hình không trả JSON hợp lệ sau số lần thử cho phép hoặc vượt quá timeout, giai đoạn lập kế hoạch kết thúc với lỗi có cấu trúc thay vì chuyển một cấu hình không xác định xuống thiết bị.
 
 ### 3.5.3. Network Agent
 
-Network Agent là bộ thực thi không sử dụng LLM để ra quyết định và không tự tạo câu lệnh cấu hình. Thành phần này nhận Operation, command và ánh xạ thiết bị đã được Planner và Configuration Agent tạo, được Planning/Execution Orchestrator kiểm tra, sau đó gọi `NetworkTool`. Lệnh READ dùng để quan sát trạng thái; lệnh WRITE chỉ được thực thi khi các điều kiện phê duyệt đã thỏa mãn. Kết quả được chuẩn hóa thành `NetworkExecutionResult`.
+Network Agent là tác tử chuyên trách **thực thi câu lệnh trên thiết bị mạng**. Khác với Planner Agent, Configuration Agent và Analyst Agent, thành phần này không sử dụng LLM để suy luận, không tự lựa chọn thiết bị, không xây dựng kế hoạch và không sinh thêm câu lệnh. Đầu vào của Agent phải là Operation cùng `TaskOperationDevice` đã được các Orchestrator kiểm soát và lưu trong cơ sở dữ liệu. Cách thiết kế này làm cho hành vi thực thi có tính xác định: Agent chỉ gửi đúng những command đã có trong Operation đến đúng `device_id` và theo đúng `access_mode` được chỉ định.
+
+Trước khi kết nối thiết bị, Network Agent kiểm tra `operation_id` trong ánh xạ thiết bị có trùng với Operation đang xử lý hay không. Agent tiếp tục trích xuất command từ `operation_parameters`; hệ thống hỗ trợ cả một lệnh trong trường `command` và nhiều lệnh trong trường `commands`, đồng thời loại bỏ chuỗi rỗng. Operation không chứa command hợp lệ bị từ chối trước khi gọi công cụ mạng. Những kiểm tra này ngăn việc dùng nhầm ánh xạ thiết bị hoặc chuyển một kế hoạch chưa hoàn chỉnh xuống tầng thực thi.
+
+Quy trình thực thi của Network Agent gồm các bước chính sau:
+
+1. Nhận Operation và ánh xạ `TaskOperationDevice` từ Execution Orchestrator.
+2. Kiểm tra quan hệ giữa Operation và thiết bị, sau đó chuẩn hóa danh sách command đầu vào.
+3. Gọi `NetworkTool.execute(device_id, access_mode, commands)` trong một thread riêng để thao tác mạng đồng bộ không chặn event loop của backend.
+4. Nhận danh sách `CommandResult` từ NetworkTool và đóng gói thành `NetworkExecutionResult` có trạng thái `SUCCESS`.
+5. Khi xảy ra lỗi kết nối, timeout, lỗi công cụ hoặc thiết bị từ chối câu lệnh, chuyển exception thành kết quả `FAILED` có `error_message` thay vì làm gián đoạn toàn bộ workflow.
+
+`NetworkTool` là giao diện trừu tượng giúp Network Agent không phụ thuộc trực tiếp vào Netmiko hoặc Nornir. Với backend Netmiko, công cụ lấy thông tin kết nối và credential thông qua `NetworkService`, mở một phiên riêng cho mỗi lần thực thi và luôn đóng phiên trong khối `finally`. Nhờ đó, credential không đi qua prompt của LLM và một phiên lỗi không bị tái sử dụng cho lần thực thi sau.
+
+Hai chế độ truy cập được xử lý khác nhau. Với `READ`, NetworkTool lần lượt sử dụng `send_command` cho từng câu lệnh và giữ lại output riêng của từng command để làm evidence cho Analyst Agent. Với `WRITE`, công cụ chuẩn hóa danh sách cấu hình rồi sử dụng `send_config_set` để đưa thiết bị vào chế độ cấu hình. Hệ thống kiểm tra output để phát hiện các thông báo CLI như `% Invalid input`, `% Incomplete command`, `% Ambiguous command`, `% Unknown command` hoặc `% Error`. Cấu hình chỉ được lưu bằng `save_config` khi toàn bộ quá trình không phát hiện lỗi. Tuy nhiên, Network Agent không tự quyết định một Operation WRITE có được chạy hay không; Execution Orchestrator và Approval Gate phải xác nhận trạng thái phê duyệt và command snapshot trước khi gọi Agent.
+
+Kết quả của mỗi lần gọi được chuẩn hóa thành `NetworkExecutionResult`, gồm `operation_id`, `operation_device_id`, `device_id`, `access_mode`, trạng thái, danh sách `CommandResult` và thông báo lỗi nếu có. Bao quanh Network Agent, `MappingExecutor` chịu trách nhiệm cập nhật trạng thái mapping, tạo `TaskExecution`, đo `duration_ms`, lưu output, ghi `DeviceActionLog` theo từng command và phát activity `COMMAND_EXECUTED`. Vì vậy, Network Agent chỉ đảm nhiệm ranh giới thực thi kỹ thuật, còn vòng đời nghiệp vụ, audit và khả năng truy vết vẫn thuộc Execution Orchestrator cùng Execution Service.
+
+Phạm vi trách nhiệm trên bảo đảm Network Agent không vượt quyền: Agent không truy cập Ground Truth của benchmark, không phân tích nguyên nhân sự cố, không thay đổi kế hoạch, không bỏ qua dependency và không tự phê duyệt cấu hình. Output của Agent được chuyển cho Analysis Orchestrator và Analyst Agent làm dữ liệu đầu vào cho bước phân tích tiếp theo.
 
 ### 3.5.4. Analyst Agent
 
-Analyst Agent phân tích kết quả thực thi và tạo `AnalysisResult` gồm tóm tắt, phát hiện, nguyên nhân, khuyến nghị và dữ liệu phục vụ đánh giá chẩn đoán. Với nhiệm vụ xử lý sự cố, Agent có thể nêu trạng thái bất thường, root cause, độ tin cậy, khoảng trống bằng chứng và kiểm tra bổ sung. Causal Evidence Gate đối chiếu kết luận với bằng chứng trước khi xác nhận.
+Analyst Agent là tác tử chuyên trách **diễn giải kết quả thực thi và hình thành kết luận chẩn đoán có cấu trúc**. Agent không kết nối thiết bị và không tự chạy command; đầu vào của nó được Analysis Orchestrator xây dựng từ các `NetworkExecutionResult` đã lưu. Mỗi phần tử đầu vào gồm tên thiết bị dễ đọc, chế độ truy cập, trạng thái thực thi, command, output, lỗi kỹ thuật và `structured_evidence` được parser của backend trích xuất. Khi có thể truy cập GNS3, Orchestrator còn bổ sung thông tin topology lân cận; đối với tác vụ chẩn đoán, trạng thái Evidence Coverage của playbook cũng được đưa vào ngữ cảnh phân tích.
 
-Với phiên bản đánh giá mới, Analyst trả thêm `is_anomaly` và `root_causes` gồm `device`, `interface` (có thể null) và `fault_type`. Dữ liệu đó do Agent tạo dựa trên output quan sát, **không phải do evaluator trích ngược từ Ground Truth hoặc tìm từ khóa trong văn bản**. Nếu Agent không thể tạo JSON hợp lệ, Analysis Orchestrator sử dụng phản hồi dự phòng để bảo toàn trải nghiệm hội thoại nhưng bộ chấm không coi phản hồi dự phòng là kết luận RCA hợp lệ.
+Analyst Agent sử dụng LLM để tổng hợp dữ liệu thành `AnalysisResult`. Kết quả gồm `summary`, `findings`, `likely_causes`, `recommendations`, `requires_more_data`, `confidence`, `evidence_gaps`, `suggested_checks`, `is_anomaly` và `root_causes`. Trong đó, `root_causes` sử dụng cấu trúc `PredictedRootCause` để biểu diễn thiết bị, interface có thể rỗng và loại sự cố; `confidence` nằm trong khoảng từ 0 đến 1. Các danh sách và độ dài chuỗi được giới hạn nhằm giảm nguy cơ phản hồi dài, lặp lại hoặc bị cắt giữa chừng.
+
+Quy trình phân tích của Analyst Agent gồm các bước sau:
+
+1. Nhận danh sách output thực thi đã được Analysis Orchestrator chuẩn hóa và gắn hostname.
+2. Tạo prompt gồm execution outputs và JSON Schema của `AnalysisResult`; trường `suspected_causes` không được cho LLM tự thiết lập vì đây là kết quả hậu kiểm của backend.
+3. Gọi LLM trong giới hạn `timeout_seconds` áp dụng cho toàn bộ chu kỳ phân tích và retry.
+4. Bóc JSON object từ `content`; chỉ sử dụng `reasoning_content` khi nội dung chính thực sự rỗng.
+5. Xác thực các trường bắt buộc và toàn bộ payload bằng Pydantic. Khi phản hồi không hợp lệ, gửi lại lỗi cùng giới hạn độ dài để mô hình tạo một JSON mới trong giới hạn `max_validation_retries`.
+6. Trả `AnalysisResult` cho Analysis Orchestrator để tiếp tục kiểm tra evidence và quyết định điều tra bổ sung hoặc kết thúc workflow.
+
+Cơ chế parser ưu tiên JSON nghiêm ngặt, đồng thời hỗ trợ sửa một số lỗi hình thức giới hạn thường gặp ở mô hình, chẳng hạn key thuộc schema bị thiếu dấu ngoặc kép hoặc dấu phẩy thừa trước dấu đóng. Việc sửa chỉ tác động đến cấu trúc JSON đã biết, không thay đổi nội dung command hoặc tự tạo thêm kết luận. Payload bắt buộc phải khai báo rõ `is_anomaly`, `root_causes`, `confidence`, `evidence_gaps` và `suggested_checks`; nếu thiếu các trường này, kết quả bị xem là không hợp lệ và được yêu cầu tạo lại.
+
+Các kiểm tra bổ sung trong `suggested_checks` phải là READ-only. Schema chỉ chấp nhận command bắt đầu bằng `show`, `ping` hoặc `traceroute`, mỗi đề xuất phải chỉ rõ thiết bị và lý do, đồng thời số lượng command được giới hạn. Analysis Orchestrator ánh xạ hostname với inventory, loại lệnh đã thực thi và ưu tiên các command còn thiếu từ diagnostic playbook trước khi tạo Operation điều tra mới. Vì vậy, đề xuất của LLM không được chuyển thẳng thành thao tác cấu hình và không thể mở rộng quyền sang WRITE.
+
+Kết luận của Analyst Agent chưa mặc nhiên được coi là nguyên nhân gốc đã xác nhận. Backend parse output thiết bị thành `DiagnosticEvidence`, tính mức độ bao phủ so với `required_evidence` của playbook và sử dụng Causal Evidence Gate để đối chiếu từng candidate với thiết bị, interface và phạm vi topology. Khi evidence đã đầy đủ nhưng Agent chưa tạo `root_causes`, hệ thống cho phép một lần diễn giải lại có kiểm soát. Khi evidence còn thiếu, workflow có thể tạo vòng điều tra READ-only bổ sung; khi đạt `AGENT_MAX_INVESTIGATION_ROUNDS`, hệ thống dừng an toàn và ghi lại lý do cùng evidence còn thiếu.
+
+Nếu LLM timeout hoặc không tạo được `AnalysisResult` hợp lệ sau các lần retry, Analysis Orchestrator tạo phản hồi dự phòng từ trạng thái và số command đã thực thi để cuộc hội thoại không bị treo. Phản hồi này chỉ thông báo rằng dữ liệu chưa thể được chuẩn hóa, đặt `requires_more_data=true` và không tạo `root_causes`; do đó evaluator không xem đây là một kết luận RCA hợp lệ.
+
+Sau khi hoàn tất Evidence Gate, Analysis Orchestrator định dạng kết quả thành phản hồi tiếng Việt dễ đọc, lưu Message loại `FINAL_RESPONSE` và ghi activity tương ứng. Analyst Agent không truy cập Ground Truth của benchmark, không dùng nhãn kỳ vọng để tạo dự đoán, không sửa Task hoặc kế hoạch, không phê duyệt và không thực thi lệnh. Sự phân tách này giúp kết quả benchmark phản ánh năng lực phân tích từ bằng chứng quan sát thay vì rò rỉ đáp án từ bộ đánh giá.
 
 ### 3.5.5. Orchestrator và cơ chế điều phối
 
-Hệ thống sử dụng kiến trúc đa tác tử có điều phối tập trung. Planning Orchestrator gọi Planner, kiểm tra device ID, gọi Configuration Agent cho Operation WRITE, xác minh command/interface và lưu kế hoạch. Execution Orchestrator xác định thứ tự thực thi, kiểm tra dependency, xử lý Approval Gate và gọi Network Agent. Analysis Orchestrator tổng hợp dữ liệu, gọi Analyst Agent, kiểm tra bằng chứng và chuẩn bị kết quả để workflow lựa chọn bước tiếp theo.
+Hệ thống sử dụng kiến trúc đa tác tử có điều phối tập trung với bốn thành phần điều phối chuyên trách. Planning Orchestrator gọi Planner Agent, kiểm tra định danh thiết bị, thứ tự và dependency, đồng thời lưu kế hoạch nghiệp vụ. Configuration Orchestrator nhận kế hoạch có Operation WRITE, gọi Configuration Agent, chuẩn hóa command, xác minh interface và trả lại kế hoạch đã bổ sung CLI. Execution Orchestrator xác định thứ tự thực thi, kiểm tra dependency, xử lý Approval Gate và gọi Network Agent. Analysis Orchestrator tổng hợp dữ liệu, gọi Analyst Agent, kiểm tra bằng chứng và chuẩn bị kết quả để workflow lựa chọn bước tiếp theo.
 
 Kế hoạch gồm Task, TaskOperation, OperationDependency và TaskOperationDevice. Dependency hỗ trợ `ON_SUCCESS` và `ON_COMPLETION`; Planner chỉ được tham chiếu Operation đứng trước để tránh chu trình. Trạng thái được đọc lại từ cơ sở dữ liệu trước khi thực thi, giúp tránh chạy lại những thao tác đã hoàn tất.
 
 ### 3.5.6. Quy trình thực thi Multi-Agent trên LangGraph
 
-LangGraph sử dụng graph chính `check_gns3 → plan → execute → analyze → (investigate → analyze)* → finalize → END` và graph tiếp tục sau approval bắt đầu tại `execute`. Workflow đầu tiên được kích hoạt từ một USER_REQUEST. Trong node `plan`, Planner tạo kế hoạch nghiệp vụ và Configuration Agent bổ sung CLI cho Operation WRITE trước khi Task cùng sơ đồ Operation được lưu. Execution node duyệt kế hoạch và gọi Network Agent. Analysis node đánh giá độ đầy đủ của bằng chứng; finalize chỉ tạo phản hồi cuối sau khi đã kết luận hoặc đạt số vòng bổ sung `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi vẫn chờ phê duyệt, workflow phát thông báo APPROVAL_REQUEST.
+LangGraph sử dụng graph chính `check_gns3 → plan → execute → analyze → (investigate → analyze)* → finalize → END` và graph tiếp tục sau approval bắt đầu tại `execute`. Workflow đầu tiên được kích hoạt từ một USER_REQUEST. Trong node `plan`, Planning Orchestrator gọi Planner Agent để tạo kế hoạch nghiệp vụ; nếu có Operation WRITE, thành phần này chuyển kế hoạch cho Configuration Orchestrator gọi Configuration Agent và kiểm tra CLI trước khi Task cùng sơ đồ Operation được lưu. Configuration Orchestrator là thành phần nội bộ của giai đoạn lập kế hoạch, không phải một node LangGraph độc lập. Execution node duyệt kế hoạch và gọi Network Agent. Analysis node đánh giá độ đầy đủ của bằng chứng; finalize chỉ tạo phản hồi cuối sau khi đã kết luận hoặc đạt số vòng bổ sung `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi vẫn chờ phê duyệt, workflow phát thông báo APPROVAL_REQUEST.
 
 Các giới hạn vận hành được ngoại hóa qua biến môi trường: retry và timeout của Planner/Analyst, số vòng điều tra, ngưỡng confidence và giới hạn token Analyst. Cách này cho phép hiệu chỉnh thực nghiệm mà không thay đổi mã nguồn; các giới hạn bảo đảm hợp đồng như command READ-only và kích thước schema vẫn được cố định trong code.
 
@@ -830,8 +885,14 @@ Một approval có thể làm quy trình tạm dừng trong khoảng thời gian
 ```mermaid
 flowchart TD
     START([Yêu cầu người dùng]) --> CHECK[check_gns3]
-    CHECK --> PLAN[plan / Planner + Configuration Agent]
-    PLAN --> EXEC[execute / Network Agent]
+    subgraph PLAN_NODE["plan node"]
+        direction LR
+        PLAN_ORCH[Planning Orchestrator] --> PLANNER[Planner Agent]
+        PLANNER --> CONFIG_ORCH[Configuration Orchestrator]
+        CONFIG_ORCH --> CONFIG_AGENT[Configuration Agent]
+    end
+    CHECK --> PLAN_ORCH
+    CONFIG_AGENT --> EXEC[execute / Execution Orchestrator + Network Agent]
     EXEC -->|Chờ WRITE approval| WAIT[Approval Gate]
     WAIT -->|Approved| EXEC
     WAIT -->|Rejected hoặc Expired| FINAL[finalize]
@@ -852,7 +913,7 @@ Người dùng đăng nhập và gửi yêu cầu qua giao diện hội thoại.
 
 ### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
 
-Planner nhận yêu cầu cùng inventory công khai và tạo kế hoạch có cấu trúc. Planning Orchestrator xác minh thiết bị, thứ tự và quan hệ phụ thuộc trước khi lưu. Execution Orchestrator chỉ chạy các mapping đủ điều kiện. Operation READ được thực hiện trực tiếp; Operation WRITE chuyển sang trạng thái chờ phê duyệt. Sau thực thi, kết quả được lưu và cung cấp cho Analyst.
+Planner Agent nhận yêu cầu cùng inventory công khai và tạo kế hoạch có cấu trúc. Planning Orchestrator xác minh thiết bị, thứ tự và quan hệ phụ thuộc. Khi kế hoạch chứa Operation WRITE, Planning Orchestrator chuyển kế hoạch cho Configuration Orchestrator. Thành phần này gọi Configuration Agent để sinh CLI từ `configuration_requirements`, chuẩn hóa các lệnh quản lý phiên, đối chiếu interface với inventory GNS3 và ghi activity tương ứng. Kế hoạch chỉ được lưu sau khi vượt qua các bước kiểm tra trên. Execution Orchestrator sau đó chỉ chạy các mapping đủ điều kiện: Operation READ được thực hiện trực tiếp, còn Operation WRITE chuyển sang trạng thái chờ phê duyệt. Sau thực thi, kết quả được lưu và cung cấp cho Analyst Agent.
 
 ### 3.6.3. Quy trình chẩn đoán sự cố và phân tích nguyên nhân gốc
 
