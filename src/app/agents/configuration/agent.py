@@ -15,7 +15,6 @@ from app.tools.network.commands import normalize_config_commands
 
 
 class ConfigurationAgent:
-    """Sinh command WRITE nhưng không kết nối hoặc thay đổi thiết bị."""
 
     name = "configuration-agent"
 
@@ -26,9 +25,11 @@ class ConfigurationAgent:
         max_validation_retries: int = 2,
         timeout_seconds: float = 90.0,
     ) -> None:
+        """Khởi tạo Configuration Agent với model chat, số lần retry và timeout."""
         self._model = chat_model
         self.max_validation_retries = max_validation_retries
         self.timeout_seconds = timeout_seconds
+
 
     async def generate(
         self,
@@ -62,6 +63,7 @@ class ConfigurationAgent:
             for order, operation in enumerate(plan.operations, 1)
             if order in write_orders
         ]
+
         # Bước 3: Tạo prompt chỉ chứa các Operation WRITE và schema đầu ra.
         messages = [
             SystemMessage(content=CONFIGURATION_SYSTEM_PROMPT),
@@ -133,4 +135,6 @@ class ConfigurationAgent:
             operations.append(
                 operation.model_copy(update={"operation_parameters": parameters})
             )
+
+        # Bước 4: Trả về kế hoạch mới với các Operation WRITE đã được bổ sung command.
         return plan.model_copy(update={"operations": operations})

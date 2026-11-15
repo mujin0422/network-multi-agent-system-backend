@@ -13,7 +13,9 @@ from app.agents.analyst.schemas import AnalysisResult
 
 
 class AnalystAgent:
+
     name = "analyst-agent"
+
 
     def __init__(
         self,
@@ -21,14 +23,14 @@ class AnalystAgent:
         max_validation_retries: int = 2,
         timeout_seconds: float = 120.0,
     ) -> None:
-        # Dùng JSON thường vì NVIDIA NIM có model không hỗ trợ guided_json.
+        """Khởi tạo Analyst Agent với model chat, số lần retry và timeout."""
         self._analyst = chat_model
         self.max_validation_retries = max_validation_retries
         self.timeout_seconds = timeout_seconds
 
+
     async def analyze(self, execution_outputs: list[dict[str, Any]]) -> AnalysisResult:
         """Phân tích output trong thời hạn cấu hình cho toàn bộ các lần retry."""
-
         try:
             # Bước 1: Chạy toàn bộ luồng phân tích trong giới hạn timeout.
             return await asyncio.wait_for(
@@ -39,6 +41,7 @@ class AnalystAgent:
             raise TimeoutError(
                 f"Analyst Agent không phản hồi trong {self.timeout_seconds:g} giây"
             ) from exc
+
 
     async def _analyze_with_retries(
         self,
@@ -95,6 +98,7 @@ class AnalystAgent:
 
     @staticmethod
     def _parse_result(result: Any) -> AnalysisResult:
+        """Bóc JSON object từ phản hồi của Analyst Agent và xác thực bằng AnalysisResult."""
         try:
             # Bước 1: Ưu tiên content chính, chỉ dùng reasoning khi content rỗng.
             content = getattr(result, "content", result)
@@ -107,6 +111,7 @@ class AnalystAgent:
                 return AnalystAgent._validate_submission(content)
             if not isinstance(content, str):
                 raise ValueError("Analyst Agent không trả JSON dạng text")
+
             # Bước 2: Bóc JSON object từ phản hồi dạng text.
             raw_json = AnalystAgent._extract_json_object(content)
             try:
@@ -129,10 +134,8 @@ class AnalystAgent:
 
     @staticmethod
     def _validate_submission(payload: Any) -> AnalysisResult:
-        """Require explicit Agent-provided RCA fields, never silently default [].
+        """Xác thực payload của Analyst Agent bằng AnalysisResult."""
 
-        The Pydantic defaults remain for older non-LLM callers and safe fallbacks.
-        """
         # Bước 1: Bảo đảm submission là một JSON object.
         if not isinstance(payload, dict):
             raise ValueError("Analyst submission must be a JSON object")

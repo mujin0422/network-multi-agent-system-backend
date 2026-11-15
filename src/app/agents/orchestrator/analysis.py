@@ -64,6 +64,7 @@ class AnalysisOrchestrator:
         self._device_service = device_service
         self._gns3_provider = gns3_provider
 
+
     async def analyze(
         self,
         task: TaskDetail,
@@ -106,8 +107,7 @@ class AnalysisOrchestrator:
             fallback_error = str(exc)
             analysis = self._build_fallback_analysis(analysis_inputs)
 
-        # Bước 5: Khi đã đủ loại evidence nhưng Analyst không tạo prediction,
-        # yêu cầu diễn giải lại đúng một lần thay vì finalize với false negative.
+        # Bước 5: Khi đã đủ loại evidence nhưng Analyst không tạo prediction, yêu cầu diễn giải lại đúng một lần thay vì finalize với false negative.
         if (
             fallback_error is None
             and evidence_coverage is not None
@@ -249,6 +249,7 @@ class AnalysisOrchestrator:
         )
         return analysis
 
+
     @staticmethod
     def _playbook_causal_candidates(
         playbook_keys: list[str],
@@ -291,6 +292,7 @@ class AnalysisOrchestrator:
                         )
         return candidates
 
+
     @staticmethod
     def _causal_investigation_checks(
         causal_gate: CausalGateResult,
@@ -331,6 +333,7 @@ class AnalysisOrchestrator:
             )
         return checks
 
+
     async def analyze_and_respond(
         self,
         task: TaskDetail,
@@ -343,6 +346,7 @@ class AnalysisOrchestrator:
         if analysis is None:
             return self._save_waiting_response(current_task)
         return self.finalize_response(current_task, analysis)
+
 
     def finalize_response(
         self,
@@ -373,6 +377,7 @@ class AnalysisOrchestrator:
         )
         return message
 
+
     def record_evidence_gate(
         self,
         task_id: str,
@@ -392,6 +397,7 @@ class AnalysisOrchestrator:
                 "stop_reason": stop_reason,
             },
         )
+
 
     def build_investigation_plan(
         self,
@@ -459,6 +465,7 @@ class AnalysisOrchestrator:
         if not operations:
             return None
         return ExecutionPlanCreate(task_type=TaskType.DIAGNOSIS, operations=operations)
+
 
     def evaluate_evidence_coverage(
         self,
@@ -544,6 +551,7 @@ class AnalysisOrchestrator:
                     planned.setdefault(hostname, []).append(command)
         return planned
 
+
     def _build_analysis_inputs(
         self,
         execution_results: list[NetworkExecutionResult],
@@ -589,6 +597,7 @@ class AnalysisOrchestrator:
                 pass
         return inputs
 
+
     @staticmethod
     def _parse_evidence(
         execution_results: list[NetworkExecutionResult],
@@ -613,6 +622,7 @@ class AnalysisOrchestrator:
                     )
                 )
         return evidence
+
 
     @staticmethod
     def _build_fallback_analysis(analysis_inputs: list[dict]) -> AnalysisResult:
@@ -649,6 +659,7 @@ class AnalysisOrchestrator:
             requires_more_data=True,
         )
 
+
     def _save_waiting_response(self, task: TaskDetail) -> Message:
         """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
 
@@ -661,6 +672,7 @@ class AnalysisOrchestrator:
                 message="Kế hoạch đã được tạo. Một hoặc nhiều thao tác cấu hình đang chờ bạn phê duyệt.",
             ),
         )
+
 
     @staticmethod
     def _format_analysis(analysis: AnalysisResult) -> str:
