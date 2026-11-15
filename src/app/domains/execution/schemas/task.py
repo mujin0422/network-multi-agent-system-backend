@@ -9,6 +9,7 @@ from app.domains.execution.schemas.operation import Operation
 
 
 class TaskStatus(StrEnum):
+    """Trạng thái end-to-end của Task."""
     PENDING = "PENDING"
     PLANNING = "PLANNING"
     RUNNING = "RUNNING"
@@ -19,6 +20,7 @@ class TaskStatus(StrEnum):
 
 
 class TaskType(StrEnum):
+    """Loại mục tiêu của Task."""
     UNCLASSIFIED = "UNCLASSIFIED"
     INFORMATION_RETRIEVAL = "INFORMATION_RETRIEVAL"
     DIAGNOSIS = "DIAGNOSIS"
@@ -47,10 +49,7 @@ class Task(BaseModel):
     user_id: str = Field(description="ID user sở hữu Task.")
     input_message: str = Field(description="Nội dung message nguồn không thay đổi.")
     task_status: TaskStatus = Field(description="Trạng thái end-to-end của Task.")
-    task_type: TaskType = Field(
-        default=TaskType.UNCLASSIFIED,
-        description="Loại mục tiêu của Task.",
-    )
+    task_type: TaskType = Field(default=TaskType.UNCLASSIFIED, description="Loại mục tiêu của Task.")
     started_at: datetime | None = Field(default=None, description="Thời điểm bắt đầu.")
     completed_at: datetime | None = Field(default=None, description="Thời điểm kết thúc.")
     created_at: datetime = Field(description="Thời điểm tạo Task theo UTC.")

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class DependencyType(StrEnum):
+    """Loại dependency giữa hai operation trong cùng Task."""
     ON_SUCCESS = "ON_SUCCESS"
     ON_COMPLETION = "ON_COMPLETION"
 
@@ -16,10 +17,6 @@ class OperationDependency(BaseModel):
 
     id: str = Field(description="Khóa chính của dependency.")
     operation_id: str = Field(description="Operation chỉ được chạy sau dependency.")
-    depends_on_operation_id: str = Field(
-        description="Operation tiên quyết trong cùng Task.",
-    )
-    dependency_type: DependencyType = Field(
-        description="Điều kiện ON_SUCCESS hoặc ON_COMPLETION.",
-    )
+    depends_on_operation_id: str = Field(description="Operation tiên quyết trong cùng Task.")
+    dependency_type: DependencyType = Field(description="Điều kiện ON_SUCCESS hoặc ON_COMPLETION.",)
     created_at: datetime = Field(description="Thời điểm tạo dependency theo UTC.")

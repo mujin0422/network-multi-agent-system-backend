@@ -9,12 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class AuditActorType(StrEnum):
+    """Loại actor tạo sự kiện audit."""
     USER = "USER"
     SYSTEM = "SYSTEM"
     AGENT = "AGENT"
 
 
 class AuditEventStatus(StrEnum):
+    """Kết quả của hành động audit."""
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     DENIED = "DENIED"

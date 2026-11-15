@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class ActivityActorType(StrEnum):
+    """Thành phần tạo event trong timeline xử lý của Task."""
     ORCHESTRATOR = "ORCHESTRATOR"
     PLANNER = "PLANNER"
     CONFIGURATION = "CONFIGURATION"
@@ -17,6 +18,7 @@ class ActivityActorType(StrEnum):
 
 
 class ActivityEventType(StrEnum):
+    """Loại event nghiệp vụ trong timeline xử lý của Task."""
     MESSAGE_RECEIVED = "MESSAGE_RECEIVED"
     TASK_CREATED = "TASK_CREATED"
     PLAN_GENERATED = "PLAN_GENERATED"
@@ -39,6 +41,7 @@ class ActivityEventType(StrEnum):
 
 
 class ActivityEventStatus(StrEnum):
+    """Trạng thái event nghiệp vụ trong timeline xử lý của Task."""
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     WAITING_APPROVAL = "WAITING_APPROVAL"
@@ -52,22 +55,13 @@ class TaskActivityEvent(BaseModel):
 
     id: str = Field(description="Khóa chính của activity event.")
     task_id: str = Field(description="ID Task sở hữu timeline event.")
-    operation_id: str | None = Field(
-        default=None, description="ID Operation liên quan."
-    )
-    execution_id: str | None = Field(
-        default=None, description="ID Execution liên quan."
-    )
+    operation_id: str | None = Field(default=None, description="ID Operation liên quan.")
+    execution_id: str | None = Field(default=None, description="ID Execution liên quan.")
     actor_type: ActivityActorType = Field(description="Thành phần tạo event.")
     event_type: ActivityEventType = Field(description="Loại event nghiệp vụ.")
     event_status: ActivityEventStatus = Field(description="Trạng thái event.")
     sequence_number: int = Field(gt=0, description="Thứ tự event trong Task.")
-    event_data: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Dữ liệu có cấu trúc phục vụ Chat UI.",
-    )
+    event_data: dict[str, Any] = Field(default_factory=dict, description="Dữ liệu có cấu trúc phục vụ Chat UI.",)
     started_at: datetime | None = Field(default=None, description="Thời điểm bắt đầu.")
-    completed_at: datetime | None = Field(
-        default=None, description="Thời điểm kết thúc."
-    )
+    completed_at: datetime | None = Field(default=None, description="Thời điểm kết thúc.")
     created_at: datetime = Field(description="Thời điểm tạo event.")

@@ -24,12 +24,12 @@ class RolePermission(BaseModel):
 class PermissionCatalog(BaseModel):
     """Toàn bộ dữ liệu cần để dựng ma trận phân quyền."""
 
-    functions: list[ManagementFunction]
-    actions: list[Action]
-    permissions: list[Permission]
+    functions: list[ManagementFunction] = Field(default_factory=list, description="Danh sách các management function.")
+    actions: list[Action] = Field(default_factory=list, description="Danh sách các action.")
+    permissions: list[Permission] = Field(default_factory=list, description="Danh sách các permission.")
 
 
 class RolePermissionsUpdate(BaseModel):
     """Tập permission thay thế toàn bộ quyền hiện tại của một role."""
 
-    permission_ids: list[str] = Field(default_factory=list)
+    permission_ids: list[str] = Field(default_factory=list, description="Danh sách permission ID mới của role; sẽ thay thế toàn bộ quyền hiện tại.")

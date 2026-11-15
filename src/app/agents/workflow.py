@@ -90,6 +90,7 @@ class NetworkAutomationWorkflow:
         builder.add_edge("finalize", END)
         return builder.compile()
 
+
     def _build_approval_graph(self):
         """Tạo graph tiếp tục thực thi sau khi cấu hình được phê duyệt."""
 
@@ -109,16 +110,15 @@ class NetworkAutomationWorkflow:
         builder.add_edge("finalize", END)
         return builder.compile()
 
-    async def _check_gns3(
-        self,
-        _state: NetworkWorkflowState,
-    ) -> dict:
+
+    async def _check_gns3(self, _state: NetworkWorkflowState) -> dict:
         """Kiểm tra nhanh khả năng truy cập GNS3 trước khi lập kế hoạch."""
 
         # Bước 1: Kiểm tra GNS3 Controller trước khi tạo Task và gọi thiết bị.
         # Đây chỉ là health probe; lệnh thiết bị vẫn do NetworkAgent thực hiện.
         self._gns3_provider.check_server_available()
         return {}
+
 
     async def _plan(self, state: NetworkWorkflowState) -> dict:
         """Đọc Conversation và Message từ state để tạo Task có kế hoạch."""
@@ -137,6 +137,7 @@ class NetworkAutomationWorkflow:
             ],
         }
 
+
     async def _execute(self, state: NetworkWorkflowState) -> dict:
         """Thực thi Task trong state và trả kết quả mạng cho node kế tiếp."""
 
@@ -146,6 +147,7 @@ class NetworkAutomationWorkflow:
             raise ValueError("Workflow thực thi cần Task")
         results = await self._execution.execute_task(task)
         return {"execution_results": results}
+
 
     async def _analyze(self, state: NetworkWorkflowState) -> dict:
         """Phân tích kết quả thực thi và tạo phản hồi cuối cho hội thoại."""
@@ -180,6 +182,7 @@ class NetworkAutomationWorkflow:
             "evidence_coverage": coverage,
             "playbook_keys": playbook_keys,
         }
+
 
     async def _route_after_analysis(self, state: NetworkWorkflowState) -> str:
         """Quyết định kết luận hay mở rộng điều tra dựa trên evidence hiện có."""
@@ -222,6 +225,7 @@ class NetworkAutomationWorkflow:
             return "investigate"
         return "finalize"
 
+
     async def _investigate(self, state: NetworkWorkflowState) -> dict:
         """Thực thi check READ-only do Analyst đề nghị và cộng dồn evidence."""
 
@@ -254,6 +258,7 @@ class NetworkAutomationWorkflow:
             "evidence_stop_reason": "INVESTIGATION_EXECUTED",
         }
 
+
     async def _finalize(self, state: NetworkWorkflowState) -> dict:
         """Tạo phản hồi cuối duy nhất sau khi đủ evidence hoặc đạt giới hạn vòng."""
 
@@ -281,11 +286,8 @@ class NetworkAutomationWorkflow:
         response = self._analysis.finalize_response(task, state.get("analysis"))
         return {"response": response}
 
-    async def run_message(
-        self,
-        conversation: Conversation,
-        message: Message,
-    ) -> NetworkWorkflowState:
+
+    async def run_message(self, conversation: Conversation, message: Message) -> NetworkWorkflowState:
         """Chạy graph đầy đủ cho một message do người dùng gửi."""
 
         return await self._message_graph.ainvoke(
@@ -298,10 +300,8 @@ class NetworkAutomationWorkflow:
             }
         )
 
-    async def resume_after_approval(
-        self,
-        operation_device_id: str,
-    ) -> NetworkWorkflowState:
+
+    async def resume_after_approval(self, operation_device_id: str) -> NetworkWorkflowState:
         """Tiếp tục từ node thực thi bằng Task đã được lưu trong PostgreSQL."""
 
         task = self._execution.load_task_for_operation_device(operation_device_id)
@@ -318,7 +318,7 @@ class NetworkAutomationWorkflow:
             }
         )
 
+
     def graph_mermaid(self) -> str:
         """Xuất sơ đồ Mermaid ổn định để làm tài liệu và chẩn đoán."""
-
         return self._message_graph.get_graph().draw_mermaid()

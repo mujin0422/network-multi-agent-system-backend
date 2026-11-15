@@ -7,7 +7,12 @@ from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from app.agents.analyst import AnalystAgent
 from app.agents.configuration import ConfigurationAgent
 from app.agents.network import NetworkAgent
-from app.agents.orchestrator import AnalysisOrchestrator, ExecutionOrchestrator, PlanningOrchestrator
+from app.agents.orchestrator import (
+    AnalysisOrchestrator,
+    ConfigurationOrchestrator,
+    ExecutionOrchestrator,
+    PlanningOrchestrator,
+)
 from app.agents.planner import PlannerAgent
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.core.config import get_settings
@@ -152,15 +157,13 @@ def _build_network_agent() -> NetworkAgent:
 
 
 async def get_network_agent() -> NetworkAgent:
-    """FastAPI dependency cung cấp NetworkAgent đã được cache."""
-
+    """FastAPI dependency cung cấp Network Agent đã được cache, chỉ thực thi command mà không phân tích dữ liệu."""
     return _build_network_agent()
 
 
 @lru_cache
 def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
-    """Compose and compile the single LangGraph-owned AI workflow."""
-
+    """Khởi tạo workflow đầy đủ cho Network Automation, bao gồm các Orchestrator và Agent đã được cache."""
     settings = get_settings()
     execution_service = build_execution_service(settings.database_url)
     conversation_service = ConversationService(
@@ -168,12 +171,16 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
         MessageRepository(settings.database_url),
     )
     device_service = DeviceService(DeviceRepository(settings.database_url))
+    configuration = ConfigurationOrchestrator(
+        _build_configuration_agent(),
+        execution_service,
+    )
     planning = PlanningOrchestrator(
         _build_planner_agent(),
         execution_service,
         device_service,
         _build_gns3_provider(),
-        _build_configuration_agent(),
+        configuration,
     )
     execution = ExecutionOrchestrator(execution_service, _build_network_agent())
     analysis = AnalysisOrchestrator(
@@ -194,6 +201,5 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
 
 
 async def get_network_automation_workflow() -> NetworkAutomationWorkflow:
-    """FastAPI dependency exposing the compiled LangGraph workflow."""
-
+    """FastAPI dependency cung cấp workflow đầy đủ cho Network Automation, đã được cache."""
     return _build_network_automation_workflow()

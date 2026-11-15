@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime
 
+from app.agents.orchestrator.configuration import ConfigurationOrchestrator
 from app.agents.planner import PlannerAgent
-from app.agents.configuration import ConfigurationAgent
 from app.domains.conversation.schemas import Conversation, Message, MessageSender
 from app.domains.execution.schemas import (
     ActivityActorType,
@@ -27,7 +27,7 @@ class PlanningOrchestrator:
         execution_service: ExecutionService,
         device_service: DeviceService,
         gns3_provider: GNS3Provider | None = None,
-        configuration_agent: ConfigurationAgent | None = None,
+        configuration_orchestrator: ConfigurationOrchestrator | None = None,
     ) -> None:
         """Khởi tạo các agent và domain service phục vụ giai đoạn lập kế hoạch."""
 
@@ -37,7 +37,7 @@ class PlanningOrchestrator:
         self._execution_service = execution_service
         self._device_service = device_service
         self._gns3_provider = gns3_provider
-        self._configuration_agent = configuration_agent
+        self._configuration_orchestrator = configuration_orchestrator
 
     async def plan_user_message(
         self,
@@ -121,38 +121,22 @@ class PlanningOrchestrator:
             interfaces_by_device_id = {
                 device.id: node_interfaces.get(device.hostname, []) for device in devices
             }
-            write_operation_count = sum(
-                1
-                for operation in plan.operations
-                if any(device.access_mode.value == "WRITE" for device in operation.devices)
-            )
-            if self._configuration_agent is not None and write_operation_count:
+            if self._configuration_orchestrator is not None:
                 failure_actor = ActivityActorType.CONFIGURATION
                 failure_stage = "CONFIGURATION"
-                configuration_started_at = datetime.now(UTC)
-                self._execution_service.record_activity(
+                plan = await self._configuration_orchestrator.configure_plan(
                     task.id,
-                    ActivityActorType.CONFIGURATION,
-                    ActivityEventType.CONFIGURATION_STARTED,
-                    ActivityEventStatus.RUNNING,
-                    event_data={"operation_count": write_operation_count},
-                    started_at=configuration_started_at,
-                )
-                plan = await self._configuration_agent.generate(
                     plan,
                     devices,
                     interfaces_by_device_id,
                 )
-                self._execution_service.record_activity(
-                    task.id,
-                    ActivityActorType.CONFIGURATION,
-                    ActivityEventType.CONFIGURATION_COMPLETED,
-                    event_data={"operation_count": write_operation_count},
-                    started_at=configuration_started_at,
-                )
                 failure_actor = ActivityActorType.PLANNER
                 failure_stage = "PLAN_VALIDATION"
-            PlannerAgent._validate_interface_commands(plan, interfaces_by_device_id)
+            else:
+                PlannerAgent._validate_interface_commands(
+                    plan,
+                    interfaces_by_device_id,
+                )
         except Exception as exc:
             self._execution_service.update_task(
                 task.model_copy(

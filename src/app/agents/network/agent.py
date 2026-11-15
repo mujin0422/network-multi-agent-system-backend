@@ -19,8 +19,8 @@ class NetworkAgent:
     @property
     def tool_name(self) -> str:
         """Tên backend được ghi vào task_executions."""
-
         return type(self._tool).__name__
+
 
     async def execute(
         self,

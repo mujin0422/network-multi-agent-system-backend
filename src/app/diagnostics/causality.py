@@ -12,54 +12,50 @@ from app.domains.evaluation.schemas import FaultType, PredictedRootCause
 
 
 class CausalClaimStatus(StrEnum):
+    """Trạng thái xác nhận root cause do Analyst đề xuất."""
     CONFIRMED = "CONFIRMED"
     SUSPECTED = "SUSPECTED"
 
 
 class CausalEvidenceReference(BaseModel):
     """Tham chiếu tối thiểu tới evidence thực tế dùng để xét một kết luận."""
-
-    execution_id: str
-    evidence_type: EvidenceType
-    resource_id: str
-    device_name: str
-    command: str
-    supporting_lines: list[str] = Field(default_factory=list)
+    execution_id: str = Field(description="ID của execution đã tạo ra evidence.")
+    evidence_type: EvidenceType = Field(description="Loại bằng chứng chẩn đoán.")
+    resource_id: str = Field(description="ID của resource mà evidence này quan sát.")
+    device_name: str = Field(description="Tên thiết bị mà evidence này quan sát.")
+    command: str = Field(description="Command đã được thực thi để thu thập evidence.")
+    supporting_lines: list[str] = Field(default_factory=list, description="Các dòng output hỗ trợ cho evidence, tối đa 4 dòng.")
 
 
 class CausalReadCheck(BaseModel):
     """READ check do matcher đề nghị khi thiếu evidence theo topology."""
-
-    device: str
-    commands: list[str] = Field(min_length=1, max_length=4)
-    reason: str
+    device: str = Field(min_length=1, max_length=100, description="Tên thiết bị hoặc địa chỉ IP của thiết bị cần kiểm tra.")
+    commands: list[str] = Field(min_length=1, max_length=4, description="Danh sách các command cần thực thi.")
+    reason: str = Field(description="Lý do đề xuất kiểm tra.")
 
 
 class CausalClaimDecision(BaseModel):
     """Kết quả xác nhận một root cause do Analyst đề xuất."""
-
-    cause: PredictedRootCause
-    status: CausalClaimStatus
-    reason: str
-    evidence: list[CausalEvidenceReference] = Field(default_factory=list)
-    missing_evidence: list[EvidenceType] = Field(default_factory=list)
-    recommended_checks: list[CausalReadCheck] = Field(default_factory=list)
+    cause: PredictedRootCause = Field(description="Root cause được đề xuất bởi Analyst Agent.")
+    status: CausalClaimStatus = Field(description="Trạng thái xác nhận root cause.")
+    reason: str = Field(description="Lý do xác nhận hoặc nghi ngờ root cause.")
+    evidence: list[CausalEvidenceReference] = Field(default_factory=list, description="Danh sách các bằng chứng đã quan sát dùng để xác nhận root cause.")
+    missing_evidence: list[EvidenceType] = Field(default_factory=list, description="Danh sách các loại bằng chứng cần thiết nhưng chưa quan sát được.")
+    recommended_checks: list[CausalReadCheck] = Field(default_factory=list, description="Danh sách các phép kiểm tra READ được đề xuất để thu thập thêm bằng chứng.")
 
 
 class CausalGateResult(BaseModel):
     """Tập root cause được xác nhận và các giả thuyết chưa đủ bằng chứng."""
-
-    confirmed: list[PredictedRootCause] = Field(default_factory=list)
-    suspected: list[PredictedRootCause] = Field(default_factory=list)
-    decisions: list[CausalClaimDecision] = Field(default_factory=list)
+    confirmed: list[PredictedRootCause] = Field(default_factory=list, description="Danh sách các root cause đã được xác nhận.")
+    suspected: list[PredictedRootCause] = Field(default_factory=list, description="Danh sách các root cause đang bị nghi ngờ.")
+    decisions: list[CausalClaimDecision] = Field(default_factory=list, description="Danh sách các quyết định xác nhận root cause.")
 
 
 class CausalScope(BaseModel):
     """Phạm vi thiết bị/interface được nêu trong yêu cầu và topology liên quan."""
-
-    primary_devices: set[str] = Field(default_factory=set)
-    primary_interfaces: set[str] = Field(default_factory=set)
-    topology_neighbors: dict[str, list[dict[str, str]]] = Field(default_factory=dict)
+    primary_devices: set[str] = Field(default_factory=set, description="Danh sách các thiết bị được nêu trong yêu cầu.")
+    primary_interfaces: set[str] = Field(default_factory=set, description="Danh sách các interface được nêu trong yêu cầu.")
+    topology_neighbors: dict[str, list[dict[str, str]]] = Field(default_factory=dict, description="Danh sách các thiết bị lân cận trong topology.")
 
 
 def build_causal_scope(
@@ -138,6 +134,7 @@ def _evaluate_claim(
     evidence: list[DiagnosticEvidence],
     scope: CausalScope | None,
 ) -> CausalClaimDecision:
+    """Xác nhận root cause dựa trên evidence đã quan sát và quy tắc causal."""
     scope_rejection = _scope_rejection(cause, scope)
     if scope_rejection is not None:
         return CausalClaimDecision(
@@ -334,6 +331,7 @@ def _scope_rejection(
     cause: PredictedRootCause,
     scope: CausalScope | None,
 ) -> str | None:
+    """Xác nhận root cause có nằm trong phạm vi thiết bị/interface được nêu trong yêu cầu hay không."""
     if scope is None:
         return None
     device = normalize_resource_part(cause.device)
@@ -356,6 +354,7 @@ def _decision(
     missing_evidence: list[EvidenceType] | None = None,
     recommended_checks: list[CausalReadCheck] | None = None,
 ) -> CausalClaimDecision:
+    """Tạo quyết định xác nhận root cause dựa trên evidence đã quan sát và quy tắc causal."""
     if matched:
         return CausalClaimDecision(
             cause=cause,
@@ -401,6 +400,7 @@ def _mpls_interface_disabled(
 
 
 def _reference(item: DiagnosticEvidence) -> CausalEvidenceReference:
+    """Rút gọn evidence thành tham chiếu tối thiểu để xác nhận root cause."""
     return CausalEvidenceReference(
         execution_id=item.source.execution_id,
         evidence_type=item.evidence_type,
@@ -412,6 +412,7 @@ def _reference(item: DiagnosticEvidence) -> CausalEvidenceReference:
 
 
 def _matches_interface(item: DiagnosticEvidence, interface: str | None) -> bool:
+    """Xác nhận evidence thuộc đúng interface mục tiêu."""
     if interface is None:
         return True
     expected = _normalize_interface(interface)
@@ -424,6 +425,7 @@ def _matches_interface(item: DiagnosticEvidence, interface: str | None) -> bool:
 
 
 def _normalize_interface(value: str) -> str:
+    """Chuẩn hóa tên interface thành dạng rút gọn, ví dụ 'Gi0/1'."""
     normalized = normalize_resource_part(value)
     aliases = {
         "fa": "fastethernet",
@@ -683,7 +685,6 @@ def _evaluate_node_ospf_area_statements(
 
 def _ospf_statement_areas(item: DiagnosticEvidence) -> set[str]:
     """Lấy area từ các network statement đã được parser chuẩn hóa."""
-
     statements = item.attributes.get("network_statements", [])
     if not isinstance(statements, list):
         return set()
@@ -699,6 +700,7 @@ def _topology_peer(
     cause: PredictedRootCause,
     scope: CausalScope | None,
 ) -> tuple[str, str] | None:
+    """Xác nhận peer interface trong topology của interface mục tiêu."""
     if scope is None or cause.interface is None:
         return None
     neighbors = next(
@@ -727,6 +729,7 @@ def _mismatched_ip_configuration(
     cause: PredictedRootCause,
     scope: CausalScope | None,
 ) -> list[DiagnosticEvidence]:
+    """Xác nhận hai đầu topology peer có IP/subnet mask không tạo cùng mạng."""
     parsed: list[tuple[DiagnosticEvidence, ipaddress.IPv4Interface]] = []
     for item in evidence:
         address = item.attributes.get("ip_address")
@@ -764,6 +767,7 @@ def _is_cause_peer_pair(
     cause: PredictedRootCause,
     scope: CausalScope | None,
 ) -> bool:
+    """Xác nhận evidence hai đầu là topology peer của nhau theo scope."""
     local, peer = pair
     if normalize_resource_part(local.source.device_name) != normalize_resource_part(
         cause.device

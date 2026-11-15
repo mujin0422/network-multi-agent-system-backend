@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class OperationDeviceStatus(StrEnum):
+    """Trạng thái thực thi của một thiết bị trong operation."""
     PENDING = "PENDING"
     WAITING_APPROVAL = "WAITING_APPROVAL"
     RUNNING = "RUNNING"
@@ -17,12 +18,14 @@ class OperationDeviceStatus(StrEnum):
 
 
 class DeviceRole(StrEnum):
+    """Vai trò của thiết bị trong một operation."""
     SOURCE = "SOURCE"
     TARGET = "TARGET"
     CONTEXT = "CONTEXT"
 
 
 class AccessMode(StrEnum):
+    """Quyền truy cập thiết bị trong một operation."""
     READ = "READ"
     WRITE = "WRITE"
 

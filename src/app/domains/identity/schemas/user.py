@@ -32,20 +32,10 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     role_id: str = Field(min_length=1, description="ID vai trò được gán cho user.")
-    email: str = Field(
-        max_length=255,
-        pattern=r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$",
-        description="Email đăng nhập duy nhất.",
-    )
-    password: str = Field(
-        min_length=8,
-        max_length=1024,
-        repr=False,
-        json_schema_extra={"writeOnly": True},
-        description="Mật khẩu thô; chỉ dùng để tạo password hash.",
-    )
-    full_name: str = Field(min_length=1, max_length=255)
-    user_status: UserStatus = UserStatus.ACTIVE
+    email: str = Field(max_length=255, pattern=r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$", description="Email đăng nhập duy nhất.")
+    password: str = Field(min_length=8, max_length=1024, repr=False, json_schema_extra={"writeOnly": True}, description="Mật khẩu thô; chỉ dùng để tạo password hash.",)
+    full_name: str = Field(min_length=1, max_length=255, description="Tên hiển thị của user.")
+    user_status: UserStatus = Field(default=UserStatus.ACTIVE, description="Trạng thái tài khoản.")
 
     @field_validator("email", mode="before")
     @classmethod
@@ -65,6 +55,7 @@ class UserUpdate(BaseModel):
         default=None,
         max_length=255,
         pattern=r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$",
+        description="Email đăng nhập duy nhất.",
     )
     password: str | None = Field(
         default=None,
@@ -72,9 +63,10 @@ class UserUpdate(BaseModel):
         max_length=1024,
         repr=False,
         json_schema_extra={"writeOnly": True},
+        description="Mật khẩu thô; chỉ dùng để tạo password hash.",
     )
-    full_name: str | None = Field(default=None, min_length=1, max_length=255)
-    user_status: UserStatus | None = None
+    full_name: str | None = Field(default=None, min_length=1, max_length=255, description="Tên hiển thị của user.")
+    user_status: UserStatus | None = Field(default=None, description="Trạng thái tài khoản.")
 
     @field_validator("email", mode="before")
     @classmethod
@@ -97,21 +89,11 @@ class User(BaseModel):
     full_name: str = Field(max_length=255, description="Tên hiển thị của user.")
     user_status: UserStatus = Field(description="Trạng thái tài khoản.")
     created_at: datetime = Field(description="Thời điểm tạo tài khoản theo UTC.")
-    last_updated_at: datetime | None = Field(
-        default=None,
-        description="Thời điểm cập nhật tài khoản gần nhất.",
-    )
-    last_login_at: datetime | None = Field(
-        default=None,
-        description="Thời điểm đăng nhập thành công gần nhất.",
-    )
+    last_updated_at: datetime | None = Field(default=None, description="Thời điểm cập nhật tài khoản gần nhất.")
+    last_login_at: datetime | None = Field(default=None, description="Thời điểm đăng nhập thành công gần nhất.")
 
 
 class UserRecord(User):
     """Bản ghi nội bộ đầy đủ; password hash không được serialize ra response."""
 
-    password_hash: str = Field(
-        exclude=True,
-        repr=False,
-        description="Bcrypt password hash chỉ dùng trong authentication.",
-    )
+    password_hash: str = Field(exclude=True, repr=False, description="Bcrypt password hash chỉ dùng trong authentication.")
