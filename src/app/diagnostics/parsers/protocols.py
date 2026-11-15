@@ -15,6 +15,7 @@ def _evidence(
     lines: list[str],
     resource: str | None = None,
 ) -> DiagnosticEvidence:
+    """Tạo một instance của DiagnosticEvidence."""
     return DiagnosticEvidence(
         evidence_type=kind,
         resource_id=resource or node_resource(source.device_name),
@@ -28,6 +29,7 @@ def _evidence(
 def parse_ospf(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
+    """Phân tích output của command OSPF và tạo các DiagnosticEvidence tương ứng."""
     lines = clean_lines(output)
     if "ospf interface" in command.casefold():
         return _parse_ospf_interfaces(command, lines, output, source)
@@ -176,6 +178,7 @@ def _parse_ospf_interfaces(
 def parse_mpls(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
+    """Phân tích output của command MPLS/LDP và tạo các DiagnosticEvidence tương ứng."""
     lines = clean_lines(output)
     if "ldp neighbor" in command.casefold():
         peers = [
@@ -231,6 +234,7 @@ def parse_mpls(
 def parse_bgp(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
+    """Phân tích output của command BGP và tạo các DiagnosticEvidence tương ứng."""
     lines = clean_lines(output)
     if "running-config" in command.casefold():
         neighbors = [line for line in lines if line.casefold().startswith("neighbor ")]
@@ -261,6 +265,7 @@ def parse_bgp(
 def parse_route(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
+    """Phân tích output của command route và tạo các DiagnosticEvidence tương ứng."""
     lines = clean_lines(output)
     routes = [
         line
@@ -298,6 +303,7 @@ def parse_route(
 def parse_acl(
     command: str, output: str, source: EvidenceSource
 ) -> list[DiagnosticEvidence]:
+    """Phân tích output của command ACL và tạo các DiagnosticEvidence tương ứng."""
     lines = clean_lines(output)
     entries = [
         line for line in lines if re.search(r"\b(?:permit|deny)\b", line, re.IGNORECASE)

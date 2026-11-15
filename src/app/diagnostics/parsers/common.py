@@ -14,8 +14,10 @@ def normalize_resource_part(value: str) -> str:
 
 
 def interface_resource(device_name: str, interface: str) -> str:
+    """Tạo resource ID cho interface."""
     return f"interface/{normalize_resource_part(device_name)}/{normalize_resource_part(interface)}"
 
 
 def node_resource(device_name: str) -> str:
+    """Tạo resource ID cho node."""
     return f"node/{normalize_resource_part(device_name)}"
