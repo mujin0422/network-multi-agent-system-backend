@@ -8,17 +8,20 @@ from pydantic import BaseModel, Field
 
 
 class DeviceActionStatus(StrEnum):
+    """Trạng thái thực thi của một command gửi xuống thiết bị."""
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     UNKNOWN = "UNKNOWN"
 
 
 class DeviceActionType(StrEnum):
+    """Loại action gửi xuống thiết bị."""
     READ = "READ"
     WRITE = "WRITE"
 
 
 class DeviceActionPhase(StrEnum):
+    """Giai đoạn chi tiết của action gửi xuống thiết bị."""
     READ = "READ"
     PRE_CHECK = "PRE_CHECK"
     APPLY = "APPLY"
@@ -36,18 +39,12 @@ class DeviceActionLog(BaseModel):
     operation_device_id: str = Field(description="ID mapping operation-device.")
     execution_id: str = Field(description="ID execution đã gửi command.")
     device_id: str = Field(description="ID thiết bị nhận command.")
-    rollback_of_action_id: UUID | None = Field(
-        default=None,
-        description="Action gốc được rollback; null nếu không phải rollback.",
-    )
+    rollback_of_action_id: UUID | None = Field(default=None, description="Action gốc được rollback; null nếu không phải rollback.")
     action_type: DeviceActionType = Field(description="Loại audit READ hoặc WRITE.")
     action_phase: DeviceActionPhase = Field(description="Giai đoạn chi tiết của action.")
     sequence_number: int = Field(gt=0, description="Thứ tự command trong execution.")
     command: str = Field(min_length=1, description="Command thực tế gửi xuống device.")
     result: str | None = Field(default=None, description="Kết quả trả về từ thiết bị.")
     action_log_status: DeviceActionStatus = Field(description="Kết quả command.")
-    error_message: str | None = Field(
-        default=None,
-        description="Chi tiết lỗi; bắt buộc khi FAILED.",
-    )
+    error_message: str | None = Field(default=None, description="Chi tiết lỗi; bắt buộc khi FAILED.")
     executed_at: datetime = Field(description="Thời điểm gửi command theo UTC.")

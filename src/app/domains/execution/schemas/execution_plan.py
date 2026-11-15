@@ -10,11 +10,12 @@ from app.domains.execution.schemas.task import TaskType
 
 
 class PlannedDevice(BaseModel):
+    """Thiết bị mạng được Planner Agent dự kiến sử dụng trong một operation."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    device_id: str = Field(min_length=1)
-    device_role: DeviceRole
-    access_mode: AccessMode
+    device_id: str = Field(min_length=1, description="ID của thiết bị mạng.")
+    device_role: DeviceRole = Field(description="Vai trò của thiết bị trong operation.")
+    access_mode: AccessMode = Field(description="Quyền truy cập thiết bị trong operation.")
 
     @model_validator(mode="after")
     def validate_role_access(self) -> "PlannedDevice":
@@ -25,17 +26,20 @@ class PlannedDevice(BaseModel):
 
 
 class PlannedDependency(BaseModel):
-    depends_on_order: int = Field(ge=1)
-    dependency_type: DependencyType = DependencyType.ON_SUCCESS
+    """Dependency giữa hai operation trong cùng Task."""
+
+    depends_on_order: int = Field(ge=1, description="Thứ tự operation tiên quyết trong cùng Task.")
+    dependency_type: DependencyType = Field(description="Loại dependency giữa hai operation trong cùng Task.", default=DependencyType.ON_SUCCESS)
 
 
 class PlannedOperation(BaseModel):
+    """Operation dự kiến được Planner Agent tạo ra trong execution plan."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    operation_intent: str = Field(min_length=1, max_length=100)
-    operation_parameters: dict[str, Any] = Field(default_factory=dict)
-    devices: list[PlannedDevice] = Field(default_factory=list)
-    dependencies: list[PlannedDependency] = Field(default_factory=list)
+    operation_intent: str = Field(min_length=1, max_length=100, description="Mục đích của operation.")
+    operation_parameters: dict[str, Any] = Field(default_factory=dict, description="Tham số JSON object của operation.")
+    devices: list[PlannedDevice] = Field(default_factory=list, description="Danh sách thiết bị mạng được sử dụng trong operation.")
+    dependencies: list[PlannedDependency] = Field(default_factory=list, description="Danh sách dependency của operation.")
 
     @model_validator(mode="after")
     def validate_device_commands(self) -> "PlannedOperation":
@@ -62,8 +66,9 @@ class PlannedOperation(BaseModel):
 
 
 class ExecutionPlanCreate(BaseModel):
-    task_type: TaskType
-    operations: list[PlannedOperation] = Field(min_length=1)
+    """Payload tạo execution plan từ Planner Agent."""
+    task_type: TaskType = Field(default=TaskType.UNCLASSIFIED, description="Loại mục tiêu của Task.")
+    operations: list[PlannedOperation] = Field(min_length=1, description="Danh sách operation được sắp theo display_order.")
 
     @model_validator(mode="after")
     def validate_dependency_graph(self) -> "ExecutionPlanCreate":

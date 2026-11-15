@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OperationStatus(StrEnum):
+    """Trạng thái thực thi của một operation."""
     PENDING = "PENDING"
     WAITING_APPROVAL = "WAITING_APPROVAL"
     RUNNING = "RUNNING"
@@ -23,16 +24,9 @@ class OperationCreate(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    operation_intent: str = Field(
-        min_length=1,
-        max_length=100,
-        description="Intent logic do Planner tạo.",
-    )
+    operation_intent: str = Field(min_length=1, max_length=100, description="Intent logic do Planner tạo.",)
     display_order: int = Field(ge=1, description="Thứ tự operation trong Task.")
-    operation_parameters: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Tham số JSON object của operation.",
-    )
+    operation_parameters: dict[str, Any] = Field(default_factory=dict, description="Tham số JSON object của operation.")
 
 
 class Operation(BaseModel):

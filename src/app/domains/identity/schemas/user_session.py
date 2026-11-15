@@ -11,14 +11,7 @@ class UserSessionRecord(BaseModel):
 
     id: UUID = Field(description="UUID của phiên đăng nhập.")
     user_id: str = Field(description="ID user sở hữu phiên.")
-    refresh_token_hash: str = Field(
-        exclude=True,
-        repr=False,
-        description="Hash refresh token; không trả ra public API.",
-    )
+    refresh_token_hash: str = Field(exclude=True, repr=False, description="Hash refresh token; không trả ra public API.")
     expires_at: datetime = Field(description="Thời điểm phiên hết hạn theo UTC.")
     created_at: datetime = Field(description="Thời điểm tạo phiên theo UTC.")
-    revoked_at: datetime | None = Field(
-        default=None,
-        description="Thời điểm thu hồi phiên; null nếu phiên còn hiệu lực.",
-    )
+    revoked_at: datetime | None = Field(default=None, description="Thời điểm thu hồi phiên; null nếu phiên còn hiệu lực.")

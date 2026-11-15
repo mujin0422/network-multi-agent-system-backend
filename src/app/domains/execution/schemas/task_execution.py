@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class ExecutionStatus(StrEnum):
+    """Trạng thái thực thi của một bước trong Task."""
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"

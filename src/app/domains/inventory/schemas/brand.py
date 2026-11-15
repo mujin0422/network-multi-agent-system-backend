@@ -9,15 +9,11 @@ class BrandPayload(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=100, description="Tên hãng duy nhất.")
-    supported_drivers: list[str] = Field(
-        default_factory=list,
-        description="Danh sách Netmiko device_type hợp lệ, không trùng nhau.",
-    )
+    supported_drivers: list[str] = Field(default_factory=list, description="Danh sách Netmiko device_type hợp lệ, không trùng nhau.",)
     @field_validator("supported_drivers")
     @classmethod
     def validate_supported_drivers(cls, drivers: list[str]) -> list[str]:
         """Loại khoảng trắng và từ chối driver rỗng hoặc trùng nhau."""
-
         normalized = [driver.strip() for driver in drivers]
         if any(not driver for driver in normalized):
             raise ValueError("Driver không được để trống")
@@ -35,22 +31,13 @@ class BrandUpdate(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    name: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-        description="Tên hãng mới.",
-    )
-    supported_drivers: list[str] | None = Field(
-        default=None,
-        description="Danh sách Netmiko device_type mới.",
-    )
+    name: str | None = Field(default=None, min_length=1, max_length=100, description="Tên hãng mới.")
+    supported_drivers: list[str] | None = Field(default=None, description="Danh sách Netmiko device_type mới.")
 
     @field_validator("supported_drivers")
     @classmethod
     def validate_supported_drivers(cls, drivers: list[str] | None) -> list[str] | None:
         """Áp dụng cùng quy tắc driver như payload tạo mới."""
-
         if drivers is None:
             return None
         return BrandPayload.validate_supported_drivers(drivers)
@@ -61,7 +48,4 @@ class Brand(BaseModel):
 
     id: str = Field(description="Khóa chính của hãng thiết bị.")
     name: str = Field(max_length=100, description="Tên hãng duy nhất.")
-    supported_drivers: list[str] = Field(
-        default_factory=list,
-        description="Danh sách Netmiko device_type hợp lệ, không trùng nhau.",
-    )
+    supported_drivers: list[str] = Field(default_factory=list, description="Danh sách Netmiko device_type hợp lệ, không trùng nhau.")
