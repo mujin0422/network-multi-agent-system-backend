@@ -1,6 +1,8 @@
 """PostgreSQL repository của Conversation domain."""
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import and_, or_, select
 
 from app.core.database import create_session_factory
 from app.domains.conversation.models import ConversationModel, MessageModel
@@ -59,3 +61,41 @@ class ConversationRepository:
                 Conversation.model_validate(item, from_attributes=True)
                 for item in models
             ]
+
+    def get_page(
+        self,
+        *,
+        user_id: str | None,
+        limit: int,
+        before_updated_at: datetime | None = None,
+        before_id: str | None = None,
+    ) -> tuple[list[Conversation], bool]:
+        """Lấy một trang conversation mới nhất bằng keyset pagination."""
+
+        statement = select(ConversationModel)
+        if user_id is not None:
+            statement = statement.where(ConversationModel.user_id == user_id)
+        if before_updated_at is not None and before_id is not None:
+            statement = statement.where(
+                or_(
+                    ConversationModel.last_updated_at < before_updated_at,
+                    and_(
+                        ConversationModel.last_updated_at == before_updated_at,
+                        ConversationModel.id < before_id,
+                    ),
+                )
+            )
+        statement = statement.order_by(
+            ConversationModel.last_updated_at.desc(),
+            ConversationModel.id.desc(),
+        ).limit(limit + 1)
+        with self._sessions() as session:
+            models = list(session.scalars(statement).all())
+        has_more = len(models) > limit
+        return (
+            [
+                Conversation.model_validate(item, from_attributes=True)
+                for item in models[:limit]
+            ],
+            has_more,
+        )
