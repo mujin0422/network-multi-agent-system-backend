@@ -79,6 +79,19 @@ class ApprovalRepositoryStub:
     def get_all_task_activity_events_by_task_id(self, task_id: str):
         return [self.event] if task_id == self.task.id else []
 
+    def get_all_task_activity_events_after_sequence(
+        self,
+        task_id: str,
+        sequence_number: int,
+        limit: int,
+    ):
+        values = (
+            [self.event]
+            if task_id == self.task.id and self.event.sequence_number > sequence_number
+            else []
+        )
+        return values[:limit]
+
     def get_all_operation_approvals_by_operation_id(self, operation_id: str):
         return [self.approval] if operation_id == self.operation.id else []
 
@@ -124,6 +137,21 @@ def test_lists_activity_and_safe_approval_response() -> None:
     assert response.reason == "Thay đổi cấu hình thiết bị"
     assert response.requested_at == repository.approval.requested_at
     assert "request_hash" not in response.model_dump()
+
+
+def test_task_stream_events_support_sequence_replay() -> None:
+    repository = ApprovalRepositoryStub()
+    service = build_execution_service_stub(repository)
+
+    replay = service.list_task_stream_events("task-test", after_sequence=0)
+    exhausted = service.list_task_stream_events("task-test", after_sequence=1)
+
+    assert len(replay) == 1
+    assert replay[0].event_id == "1"
+    assert replay[0].task_id == "task-test"
+    assert replay[0].event_type == ActivityEventType.PLAN_GENERATED
+    assert replay[0].data["id"] == "actv-test"
+    assert exhausted == []
 
 
 class TaskRecordsRepositoryStub(ApprovalRepositoryStub):

@@ -1,8 +1,12 @@
 """HTTP routes của AI Execution Management domain."""
 
-from typing import Annotated
+import asyncio
+import logging
+from time import monotonic
+from typing import Annotated, AsyncIterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, status
+from fastapi.responses import StreamingResponse
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
@@ -23,6 +27,7 @@ from app.domains.execution.schemas import (
     TaskCreate,
     TaskDetail,
     TaskRecords,
+    TaskStreamEvent,
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.execution.routers.dependencies import get_execution_service
@@ -32,6 +37,117 @@ router = APIRouter()
 operations_router = APIRouter()
 approvals_router = APIRouter()
 device_action_logs_router = APIRouter()
+logger = logging.getLogger(__name__)
+
+SSE_POLL_INTERVAL_SECONDS = 0.75
+SSE_HEARTBEAT_SECONDS = 15.0
+SSE_TERMINAL_IDLE_SECONDS = 30.0
+
+
+def _encode_sse_event(event: TaskStreamEvent) -> str:
+    """Mã hóa event theo wire format SSE."""
+
+    return (
+        f"id: {event.event_id}\n"
+        "event: task_activity\n"
+        f"data: {event.model_dump_json()}\n\n"
+    )
+
+
+async def _stream_task_events(
+    request: Request,
+    service: ExecutionService,
+    source_message_id: str,
+    after_sequence: int,
+    user_id: str,
+) -> AsyncIterator[str]:
+    """Replay activity đã lưu, chờ event mới và đóng sau final response."""
+
+    cursor = max(0, after_sequence)
+    task_id: str | None = None
+    connected_at = monotonic()
+    last_sent_at = connected_at
+    terminal_since: float | None = None
+    sent_count = 0
+    disconnect_reason = "CLIENT_DISCONNECTED"
+    logger.info(
+        "SSE_CONNECTED | source_message_id=%s user_id=%s after_sequence=%s",
+        source_message_id,
+        user_id,
+        cursor,
+    )
+    try:
+        yield "retry: 2000\n\n"
+        while not await request.is_disconnected():
+            if task_id is None:
+                task = await asyncio.to_thread(
+                    service.get_task_by_source_message_id,
+                    source_message_id,
+                )
+                if task is not None:
+                    task_id = task.id
+                    logger.info(
+                        "SSE_TASK_BOUND | source_message_id=%s task_id=%s user_id=%s",
+                        source_message_id,
+                        task_id,
+                        user_id,
+                    )
+
+            events: list[TaskStreamEvent] = []
+            if task_id is not None:
+                events = await asyncio.to_thread(
+                    service.list_task_stream_events,
+                    task_id,
+                    cursor,
+                    100,
+                )
+            for event in events:
+                yield _encode_sse_event(event)
+                cursor = event.sequence_number
+                sent_count += 1
+                last_sent_at = monotonic()
+                if event.event_type.value == "FINAL_RESPONSE_CREATED":
+                    disconnect_reason = "FINAL_RESPONSE_CREATED"
+                    return
+                if event.event_type.value == "TASK_FAILED":
+                    activity_data = event.data.get("event_data", {})
+                    failure_stage = (
+                        activity_data.get("stage")
+                        if isinstance(activity_data, dict)
+                        else None
+                    )
+                    if failure_stage in {
+                        "PLANNING",
+                        "CONFIGURATION",
+                        "PLAN_PERSISTENCE",
+                    }:
+                        disconnect_reason = f"TASK_FAILED_{failure_stage}"
+                        return
+                    terminal_since = terminal_since or monotonic()
+
+            now = monotonic()
+            if (
+                terminal_since is not None
+                and now - terminal_since >= SSE_TERMINAL_IDLE_SECONDS
+            ):
+                disconnect_reason = "TERMINAL_IDLE_TIMEOUT"
+                return
+            if now - last_sent_at >= SSE_HEARTBEAT_SECONDS:
+                yield f": heartbeat {int(now)}\n\n"
+                last_sent_at = now
+            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
+    finally:
+        logger.info(
+            "SSE_DISCONNECTED | source_message_id=%s task_id=%s user_id=%s "
+            "last_sequence=%s event_count=%s duration_ms=%s reason=%s",
+            source_message_id,
+            task_id,
+            user_id,
+            cursor,
+            sent_count,
+            int((monotonic() - connected_at) * 1000),
+            disconnect_reason,
+        )
 
 
 @device_action_logs_router.get("/", response_model=list[DeviceActionLog])
@@ -87,6 +203,34 @@ async def list_tasks(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[Task]:
     return service.list_tasks()
+
+
+@router.get("/by-source-message/{message_id}/events/stream")
+async def stream_task_events_by_source_message(
+    message_id: str,
+    request: Request,
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    after_sequence: Annotated[int, Query(ge=0)] = 0,
+) -> StreamingResponse:
+    """Stream timeline theo source message, hỗ trợ replay sau reconnect."""
+
+    cursor = after_sequence
+    if last_event_id is not None:
+        try:
+            cursor = max(cursor, int(last_event_id))
+        except ValueError:
+            cursor = after_sequence
+    return StreamingResponse(
+        _stream_task_events(request, service, message_id, cursor, user.id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{task_id}", response_model=TaskDetail)

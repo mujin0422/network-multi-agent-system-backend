@@ -41,6 +41,7 @@ from app.domains.execution.schemas import (
     TaskCreate,
     TaskDetail,
     TaskRecords,
+    TaskStreamEvent,
     TaskStatus,
     TaskOperationDevice,
     TaskExecution,
@@ -192,6 +193,36 @@ class ExecutionService:
 
         self._require_task(task_id)
         return self._activities.get_all_by_task_id(task_id)
+
+    def get_task_by_source_message_id(self, message_id: str) -> Task | None:
+        """Lấy Task theo USER message; trả None khi workflow chưa tạo."""
+
+        return self._tasks.get_by_source_message_id(message_id)
+
+    def list_task_stream_events(
+        self,
+        task_id: str,
+        after_sequence: int,
+        limit: int = 100,
+    ) -> list[TaskStreamEvent]:
+        """Lấy activity tăng dần và chuyển sang contract SSE công khai."""
+
+        self._require_task(task_id)
+        return [
+            TaskStreamEvent(
+                event_id=str(event.sequence_number),
+                event_type=event.event_type,
+                task_id=event.task_id,
+                sequence_number=event.sequence_number,
+                occurred_at=event.created_at,
+                data=event.model_dump(mode="json"),
+            )
+            for event in self._activities.get_all_after_sequence(
+                task_id,
+                after_sequence,
+                limit,
+            )
+        ]
 
     def record_activity(
         self,

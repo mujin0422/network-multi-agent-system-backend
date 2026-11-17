@@ -67,6 +67,10 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
         get_all_by_task_id=method(
             "get_all_task_activity_events_by_task_id", lambda _id: []
         ),
+        get_all_after_sequence=method(
+            "get_all_task_activity_events_after_sequence",
+            lambda _task_id, _sequence, _limit: [],
+        ),
         save_task_activity_event=method("save_task_activity_event"),
     )
     approvals = SimpleNamespace(
