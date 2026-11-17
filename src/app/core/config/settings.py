@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     nvidia_api_key: str = ""
     nvidia_model: str = ""
     conversation_title_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    agent_conversation_context_messages: int = Field(default=5, ge=0, le=20)
     planner_validation_retries: int = Field(default=2, ge=0, le=5)
     planner_timeout_seconds: float = Field(default=90.0, gt=0, le=600)
     analyst_validation_retries: int = Field(default=2, ge=0, le=5)

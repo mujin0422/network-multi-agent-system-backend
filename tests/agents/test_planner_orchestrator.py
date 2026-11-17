@@ -8,7 +8,12 @@ import pytest
 
 from app.agents.orchestrator import PlanningOrchestrator
 from app.agents.planner import PlannerAgent
-from app.domains.conversation.schemas import Conversation, Message, MessageSender
+from app.domains.conversation.schemas import (
+    Conversation,
+    Message,
+    MessageSender,
+    MessageType,
+)
 from app.domains.execution.schemas import (
     AccessMode,
     DependencyType,
@@ -190,12 +195,12 @@ def test_orchestrator_creates_task_operations_dependencies_and_devices() -> None
         created_at=now,
     )
 
-    task = asyncio.run(orchestrator.plan_user_message(conversation, message))
+    draft = asyncio.run(orchestrator.prepare_user_message(conversation, message))
+    task = orchestrator.persist_plan(draft)
 
     assert task.task_type == TaskType.COMPOSITE
-    assert [item.display_order for item in task.operations] == [1, 2]
-    assert len(execution_repository.dependencies) == 1
-    assert execution_repository.dependencies[0].operation_id == task.operations[1].id
+    assert [item.display_order for item in task.operations] == [1]
+    assert len(execution_repository.dependencies) == 0
     assert len(execution_repository.operation_devices) == 1
     assert execution_repository.operation_devices[0].device_id == device.id
 
@@ -224,6 +229,172 @@ def test_planner_rejects_read_only_plan_for_explicit_configuration_request() -> 
     with pytest.raises(ValueError, match="không có Operation WRITE"):
         PlannerAgent._validate_requested_access(
             "Xem P1 và thực hiện cấu hình cho P4 tham gia MPLS",
+            plan,
+        )
+
+
+def test_planner_rejects_write_for_explicit_read_only_request() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "CONFIGURATION",
+            "operations": [
+                {
+                    "operation_intent": "REMEDIATE_BGP",
+                    "operation_parameters": {
+                        "configuration_requirements": {
+                            "goal": "Bật lại BGP neighbor"
+                        }
+                    },
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "TARGET",
+                            "access_mode": "WRITE",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="chỉ đọc/thu thập dữ liệu"):
+        PlannerAgent._validate_requested_access(
+            "Chẩn đoán BGP. Chỉ thu thập dữ liệu, không khắc phục.",
+            plan,
+        )
+
+
+def test_planner_accepts_read_plan_when_remediation_is_negated() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "DIAGNOSIS",
+            "operations": [
+                {
+                    "operation_intent": "GET_BGP_STATE",
+                    "operation_parameters": {"command": "show ip bgp summary"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    PlannerAgent._validate_requested_access(
+        "Chỉ thu thập dữ liệu, không khắc phục.",
+        plan,
+    )
+
+
+def test_planner_accepts_read_plan_for_configuration_proposal() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "INFORMATION_RETRIEVAL",
+            "operations": [
+                {
+                    "operation_intent": "GET_MPLS_CONFIG",
+                    "operation_parameters": {"command": "show running-config"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    PlannerAgent._validate_requested_access(
+        "Lấy cấu hình P1 và P2, sau đó đề xuất cấu hình cho P4 tham gia MPLS.",
+        plan,
+    )
+
+
+def test_proposal_intent_is_not_overridden_by_non_action_word_thuc_hien() -> None:
+    message = (
+        "Khi cấu hình P4 có cần cấu hình các cổng tương ứng của P1 và P2 "
+        "để có thể thực hiện MPLS đến P4 không? Nếu cần thì hãy đề xuất thêm cấu hình."
+    )
+
+    assert PlannerAgent.is_configuration_proposal(message) is True
+
+
+def test_proposal_becomes_write_when_execution_is_explicit() -> None:
+    assert (
+        PlannerAgent.is_configuration_proposal(
+            "Đề xuất rồi thực hiện cấu hình MPLS trên P4."
+        )
+        is False
+    )
+
+
+def test_previous_configuration_proposals_become_write_when_execution_is_requested() -> None:
+    assert (
+        PlannerAgent.is_configuration_proposal(
+            "Thực hiện các cấu hình đề xuất."
+        )
+        is False
+    )
+
+
+def test_planner_accepts_read_plan_when_user_only_views_configuration() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "INFORMATION_RETRIEVAL",
+            "operations": [
+                {
+                    "operation_intent": "GET_RUNNING_CONFIG",
+                    "operation_parameters": {"command": "show running-config"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    PlannerAgent._validate_requested_access("Xem cấu hình P1.", plan)
+
+
+def test_planner_rejects_write_plan_for_configuration_proposal_only() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "CONFIGURATION",
+            "operations": [
+                {
+                    "operation_intent": "CONFIGURE_MPLS",
+                    "operation_parameters": {
+                        "configuration_requirements": {"goal": "Enable MPLS"}
+                    },
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "TARGET",
+                            "access_mode": "WRITE",
+                        }
+                    ],
+                    "dependencies": [],
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="chỉ đề xuất cấu hình"):
+        PlannerAgent._validate_requested_access(
+            "Đề xuất cấu hình MPLS cho P4.",
             plan,
         )
 
@@ -379,7 +550,7 @@ def test_planner_wraps_single_operation_for_matched_diagnostic_playbook() -> Non
     assert plan.operations[0].operation_intent == "GET_OSPF_EVIDENCE"
 
 
-def test_planner_does_not_guess_task_type_for_unscoped_single_operation() -> None:
+def test_planner_wraps_unscoped_single_operation_as_unclassified() -> None:
     content = {
         "operation_intent": "GET_ROUTE",
         "operation_parameters": {"command": "show ip route"},
@@ -393,8 +564,91 @@ def test_planner_does_not_guess_task_type_for_unscoped_single_operation() -> Non
         "dependencies": [],
     }
 
-    with pytest.raises(ValueError, match="ExecutionPlanCreate"):
-        PlannerAgent._parse_plan(content)
+    plan = PlannerAgent._parse_plan(content)
+
+    assert plan.task_type == TaskType.UNCLASSIFIED
+    assert len(plan.operations) == 1
+    assert plan.operations[0].operation_intent == "GET_ROUTE"
+
+
+def test_planner_removes_analysis_only_operation() -> None:
+    """Bước ANALYZE thuộc Analyst Agent, không được lưu vào execution DAG."""
+
+    plan = PlannerAgent._parse_plan(
+        {
+            "task_type": "COMPOSITE",
+            "operations": [
+                {
+                    "operation_intent": "GET_OSPF_NEIGHBORS",
+                    "operation_parameters": {"command": "show ip ospf neighbor"},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "SOURCE",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [],
+                },
+                {
+                    "operation_intent": "ANALYZE_OSPF_RESULTS",
+                    "operation_parameters": {},
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "CONTEXT",
+                            "access_mode": "READ",
+                        }
+                    ],
+                    "dependencies": [
+                        {
+                            "depends_on_order": 1,
+                            "dependency_type": "ON_SUCCESS",
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+    assert len(plan.operations) == 1
+    assert plan.operations[0].operation_intent == "GET_OSPF_NEIGHBORS"
+
+
+def test_planner_reconnects_dependencies_after_removing_analysis_operation() -> None:
+    """Operation sau ANALYZE vẫn phụ thuộc đúng bước thực thi đứng trước."""
+
+    plan = PlannerAgent._parse_plan(
+        {
+            "task_type": "COMPOSITE",
+            "operations": [
+                {
+                    "operation_intent": "GET_CONFIG",
+                    "operation_parameters": {"command": "show running-config"},
+                    "devices": [{"device_id": "devc-1", "device_role": "SOURCE", "access_mode": "READ"}],
+                    "dependencies": [],
+                },
+                {
+                    "operation_intent": "ANALYZE_CONFIG",
+                    "operation_parameters": {},
+                    "devices": [],
+                    "dependencies": [{"depends_on_order": 1, "dependency_type": "ON_SUCCESS"}],
+                },
+                {
+                    "operation_intent": "VERIFY_CONFIG",
+                    "operation_parameters": {"command": "show ip interface brief"},
+                    "devices": [{"device_id": "devc-1", "device_role": "TARGET", "access_mode": "READ"}],
+                    "dependencies": [{"depends_on_order": 2, "dependency_type": "ON_SUCCESS"}],
+                },
+            ],
+        }
+    )
+
+    assert [operation.operation_intent for operation in plan.operations] == [
+        "GET_CONFIG",
+        "VERIFY_CONFIG",
+    ]
+    assert plan.operations[1].dependencies[0].depends_on_order == 1
 
 
 def test_planner_correction_prompt_repeats_required_json_shape() -> None:
@@ -406,6 +660,37 @@ def test_planner_correction_prompt_repeats_required_json_shape() -> None:
     assert "CẤU TRÚC TỐI THIỂU BẮT BUỘC" in prompt
     assert '"operation_parameters":{"command":"show ..."}' in prompt
     assert "không dùng hostname thay cho device_id" in prompt
+
+
+def test_planner_correction_prompt_requires_write_for_configuration_request() -> None:
+    prompt = PlannerAgent._build_correction_prompt(
+        '{"task_type":"DIAGNOSIS","operations":[]}',
+        ValueError(
+            "Người dùng yêu cầu thực hiện thay đổi nhưng kế hoạch "
+            "không có Operation WRITE."
+        ),
+    )
+
+    assert "READ VÀ BỔ SUNG WRITE" in prompt
+    assert '"access_mode":"WRITE"' in prompt
+    assert '"configuration_requirements"' in prompt
+    assert '"derive_from_previous_operations":true' in prompt
+    assert '"depends_on_order":1' in prompt
+
+
+def test_planner_correction_prompt_removes_write_for_configuration_proposal() -> None:
+    prompt = PlannerAgent._build_correction_prompt(
+        '{"task_type":"CONFIGURATION","operations":[]}',
+        ValueError(
+            "Người dùng yêu cầu chỉ đọc/thu thập dữ liệu hoặc chỉ đề xuất cấu hình "
+            "nhưng kế hoạch có Operation WRITE."
+        ),
+    )
+
+    assert "BẮT BUỘC CHỈ ĐƯỢC CÓ READ" in prompt
+    assert '"access_mode":"READ"' in prompt
+    assert "Loại bỏ toàn bộ Operation WRITE" in prompt
+    assert "không tạo yêu cầu phê duyệt" in prompt
 
 
 def test_planner_includes_matched_diagnostic_playbook() -> None:
@@ -433,6 +718,60 @@ def test_planner_includes_matched_diagnostic_playbook() -> None:
     assert "MATCHED DIAGNOSTIC PLAYBOOKS" in prompt
     assert '"key": "ospf_area_mismatch"' in prompt
     assert "show ip ospf neighbor" in prompt
+
+
+def test_planner_includes_recent_conversation_context_before_current_request() -> None:
+    now = datetime.now(UTC)
+    device = Device(
+        id="devc-1",
+        credential_id=None,
+        brand_id="brnd-1",
+        category_id="catg-1",
+        hostname="P1",
+        host="192.0.2.1",
+        port=22,
+        device_type="cisco_ios",
+        location=None,
+        created_by="user-1",
+        last_updated_by="user-1",
+        created_at=now,
+        last_updated_at=now,
+    )
+    history = [
+        Message(
+            id="mesg-1",
+            conversation_id="cons-1",
+            sender_by=MessageSender.USER,
+            message_type=MessageType.USER_REQUEST,
+            message="Kiểm tra bảng định tuyến của P1.",
+            created_at=now,
+        ),
+        Message(
+            id="mesg-2",
+            conversation_id="cons-1",
+            reply_to_message_id="mesg-1",
+            sender_by=MessageSender.AGENT,
+            message_type=MessageType.FINAL_RESPONSE,
+            message="P1 chưa có default route.",
+            created_at=now,
+        ),
+    ]
+    model = CapturingChatModel()
+
+    asyncio.run(
+        PlannerAgent(model).plan(
+            "Hãy kiểm tra lại thiết bị đó.",
+            [device],
+            conversation_history=history,
+        )
+    )
+
+    prompt = str(model.messages[-1].content)
+    assert "RECENT CONVERSATION CONTEXT" in prompt
+    assert "Kiểm tra bảng định tuyến của P1." in prompt
+    assert "P1 chưa có default route." in prompt
+    assert '"sender": "USER"' in prompt
+    assert "USER REQUEST:\nHãy kiểm tra lại thiết bị đó." in prompt
 
 
 def test_planner_normalizes_write_commands_before_approval() -> None:
