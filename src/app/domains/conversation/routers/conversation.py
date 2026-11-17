@@ -11,11 +11,13 @@ from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.conversation.schemas import (
     Conversation,
     ConversationDetail,
+    ConversationPage,
     ConversationStart,
     ConversationStarted,
     ConversationTitleUpdate,
     Message,
     MessageCreate,
+    MessagePage,
     MessageSender,
     MessageType,
 )
@@ -158,7 +160,7 @@ async def start_conversation(
 # READ (Conversation) — Lấy danh sách conversation, có thể lọc theo mã người dùng.
 @router.get(
     "/",
-    response_model=list[Conversation],
+    response_model=ConversationPage,
     summary="Lấy danh sách conversation",
 )
 async def list_conversations(
@@ -168,10 +170,12 @@ async def list_conversations(
         str | None,
         Query(description="Chỉ lấy conversation thuộc user này."),
     ] = None,
-) -> list[Conversation]:
-    """Trả toàn bộ conversation hoặc lọc theo user_id nếu được cung cấp."""
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query()] = None,
+) -> ConversationPage:
+    """Trả một trang conversation mới nhất bằng cursor pagination."""
 
-    return service.list(user_id)
+    return service.list_page(user_id=user_id, limit=limit, cursor=cursor)
 
 
 # READ (Conversation) — Lấy chi tiết conversation theo mã.
@@ -207,17 +211,23 @@ async def rename_conversation(
 # READ (Message) — Lấy danh sách message theo mã conversation.
 @router.get(
     "/{conversation_id}/messages",
-    response_model=list[Message],
+    response_model=MessagePage,
     summary="Lấy danh sách message theo conversation",
 )
 async def list_messages(
     conversation_id: str,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
-) -> list[Message]:
-    """Trả message thuộc conversation hoặc HTTP 404 nếu conversation không có."""
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    cursor: Annotated[str | None, Query()] = None,
+) -> MessagePage:
+    """Trả một trang message gần nhất hoặc các message cũ theo cursor."""
 
-    return service.list_messages(conversation_id)
+    return service.list_message_page(
+        conversation_id,
+        limit=limit,
+        cursor=cursor,
+    )
 
 
 # CREATE (Message) — Thêm message vào conversation.

@@ -13,16 +13,20 @@ from app.domains.conversation.repositories import (
 from app.domains.conversation.schemas import (
     Conversation,
     ConversationDetail,
+    ConversationPage,
     ConversationStart,
     ConversationStarted,
     ConversationTitleUpdate,
     Message,
     MessageCreate,
+    MessagePage,
     MessageSender,
     MessageType,
 )
 from app.domains.conversation.utils import (
     DEFAULT_CONVERSATION_TITLE,
+    decode_cursor,
+    encode_cursor,
     normalize_conversation_title,
 )
 
@@ -116,6 +120,33 @@ class ConversationService:
 
         return self._conversation_repository.get_all(user_id)
 
+    def list_page(
+        self,
+        *,
+        user_id: str | None,
+        limit: int,
+        cursor: str | None,
+    ) -> ConversationPage:
+        """Lấy một trang conversation theo cursor của bản ghi cuối trang trước."""
+
+        before_updated_at, before_id = decode_cursor(cursor)
+        items, has_more = self._conversation_repository.get_page(
+            user_id=user_id,
+            limit=limit,
+            before_updated_at=before_updated_at,
+            before_id=before_id,
+        )
+        last = items[-1] if items else None
+        return ConversationPage(
+            items=items,
+            has_more=has_more,
+            next_cursor=(
+                encode_cursor(last.last_updated_at, last.id)
+                if has_more and last is not None
+                else None
+            ),
+        )
+
     # READ (Conversation) — Lấy chi tiết conversation theo mã, bao gồm danh sách message.
     def get(self, conversation_id: str) -> ConversationDetail:
         """Truy vấn dữ liệu theo phạm vi của phương thức get."""
@@ -136,6 +167,50 @@ class ConversationService:
         """Truy vấn danh sách dữ liệu theo phạm vi của phương thức list_messages."""
         self._require_conversation(conversation_id)
         return self._message_repository.get_all_by_conversation_id(conversation_id)
+
+    def list_message_page(
+        self,
+        conversation_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> MessagePage:
+        """Lấy một trang lịch sử message cũ dần theo cursor."""
+
+        self._require_conversation(conversation_id)
+        before_created_at, before_id = decode_cursor(cursor)
+        items, has_more = self._message_repository.get_page_by_conversation_id(
+            conversation_id,
+            limit=limit,
+            before_created_at=before_created_at,
+            before_id=before_id,
+        )
+        oldest = items[0] if items else None
+        return MessagePage(
+            items=items,
+            has_more=has_more,
+            next_cursor=(
+                encode_cursor(oldest.created_at, oldest.id)
+                if has_more and oldest is not None
+                else None
+            ),
+        )
+
+    def get_recent_messages_before(
+        self,
+        message: Message,
+        *,
+        limit: int,
+    ) -> list[Message]:
+        """Lấy lịch sử gần nhất trước message nguồn để tạo ngữ cảnh AI."""
+
+        self._require_conversation(message.conversation_id)
+        return self._message_repository.get_recent_before(
+            message.conversation_id,
+            before_created_at=message.created_at,
+            before_id=message.id,
+            limit=limit,
+        )
 
     # CREATE (Message) — Lưu message mới vào conversation đã tồn tại.
     def create_message(self, conversation_id: str, payload: MessageCreate) -> Message:

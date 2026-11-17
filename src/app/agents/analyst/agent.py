@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
-from app.agents.analyst.schemas import AnalysisResult
+from app.agents.analyst.schemas import AnalysisResult, ConfigurationProposalSet
 
 
 class AnalystAgent:
@@ -54,6 +54,9 @@ class AnalystAgent:
         # suspected_causes là kết quả của backend Causal Evidence Gate, không
         # cho LLM tự đưa nguyên nhân vào nhánh không được evaluator chấm.
         response_schema.get("properties", {}).pop("suspected_causes", None)
+        # CLI preview dùng một lần gọi schema nhỏ riêng để lỗi JSON phân tích RCA
+        # không làm mất phần cấu hình người dùng đã yêu cầu.
+        response_schema.get("properties", {}).pop("configuration_proposals", None)
         prompt = (
             "EXECUTION OUTPUTS:\n"
             f"{json.dumps(execution_outputs, ensure_ascii=False)}\n\n"
@@ -87,7 +90,7 @@ class AnalystAgent:
                             "Dùng đủ các key summary, findings, likely_causes, "
                             "recommendations, requires_more_data, confidence, "
                             "evidence_gaps, suggested_checks, is_anomaly, "
-                            "root_causes và luôn đặt mọi "
+                            "root_causes, configuration_proposals và luôn đặt mọi "
                             "key trong dấu ngoặc kép. Escape dấu ngoặc kép bên trong "
                             "chuỗi và không đặt dấu phẩy sau phần tử cuối.\n"
                             f"Phần đầu nội dung sai để đối chiếu: {invalid_content[:600]}"
@@ -95,6 +98,63 @@ class AnalystAgent:
                     )
                 )
         raise RuntimeError("Analyst Agent không thể tạo kết quả phân tích")
+
+    async def propose_configurations(
+        self,
+        user_request: str,
+        execution_outputs: list[dict[str, Any]],
+    ) -> ConfigurationProposalSet:
+        """Sinh CLI preview theo thiết bị mà không thực thi hoặc tạo approval."""
+
+        schema = ConfigurationProposalSet.model_json_schema()
+        messages = [
+            SystemMessage(
+                content=(
+                    "Bạn tạo cấu hình mạng CHỈ ĐỂ ĐỀ XUẤT, tuyệt đối không tuyên bố "
+                    "đã thực thi. Dựa trên USER REQUEST và output READ thực tế. "
+                    "Giữ nguyên hostname, interface, IP và CLI. Không đoán tham số "
+                    "quan trọng khi dữ liệu chưa đủ; khi đó trả configurations=[]. "
+                    "Mỗi thiết bị có device, commands theo đúng thứ tự và rationale."
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"USER REQUEST:\n{user_request}\n\n"
+                    "READ EXECUTION OUTPUTS:\n"
+                    f"{json.dumps(execution_outputs, ensure_ascii=False)}\n\n"
+                    "RESPONSE JSON SCHEMA:\n"
+                    f"{json.dumps(schema, ensure_ascii=False)}\n\n"
+                    "Chỉ trả JSON object hợp lệ, không dùng Markdown."
+                )
+            ),
+        ]
+        async with asyncio.timeout(self.timeout_seconds):
+            for retry_number in range(self.max_validation_retries + 1):
+                result = await self._analyst.ainvoke(messages)
+                try:
+                    content = getattr(result, "content", result)
+                    if not content:
+                        content = getattr(result, "additional_kwargs", {}).get(
+                            "reasoning_content", ""
+                        )
+                    if isinstance(content, dict):
+                        return ConfigurationProposalSet.model_validate(content)
+                    raw_json = self._extract_json_object(str(content))
+                    return ConfigurationProposalSet.model_validate_json(raw_json)
+                except (ValidationError, ValueError) as exc:
+                    if retry_number == self.max_validation_retries:
+                        raise ValueError(
+                            "Analyst Agent không thể tạo CLI đề xuất có cấu trúc"
+                        ) from exc
+                    messages.append(
+                        HumanMessage(
+                            content=(
+                                f"JSON CLI đề xuất chưa hợp lệ: {exc}. "
+                                "Hãy trả lại một JSON object ngắn, đầy đủ đúng schema."
+                            )
+                        )
+                    )
+        raise RuntimeError("Analyst Agent không thể tạo CLI đề xuất")
 
     @staticmethod
     def _parse_result(result: Any) -> AnalysisResult:
@@ -123,7 +183,7 @@ class AnalystAgent:
                 # Chỉ sửa các key thuộc schema để không thay đổi nội dung lệnh.
                 # Bước 4: Chỉ sửa key thuộc schema và dấu phẩy cuối.
                 repaired_json = re.sub(
-                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|confidence|evidence_gaps|suggested_checks|commands|reason|is_anomaly|root_causes|suspected_causes|device|interface|fault_type)(\s*:)',
+                    r'([{,]\s*)(summary|findings|likely_causes|recommendations|requires_more_data|confidence|evidence_gaps|suggested_checks|commands|reason|is_anomaly|root_causes|suspected_causes|configuration_proposals|rationale|device|interface|fault_type)(\s*:)',
                     r'\1"\2"\3',
                     raw_json,
                 )

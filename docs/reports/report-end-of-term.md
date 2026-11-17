@@ -4,13 +4,13 @@
 
 **Trường:** Đại học Sài Gòn — Chuyên ngành Kỹ thuật máy tính  
 **Nhóm sinh viên:** Phạm Đăng Minh Khang; Phạm Đình Duy Thái; Triệu Phú Quân  
-**Phạm vi đối chiếu:** mã nguồn nhánh develop của backend và frontend, tài liệu đề cương giữa kỳ và bằng chứng kiểm thử cung cấp ngày 03/11/2026.
+**Phạm vi đối chiếu:** mã nguồn nhánh develop của backend và frontend, tài liệu đề cương giữa kỳ và bằng chứng kiểm thử được tổng hợp đến ngày 17/11/2026.
 
 ### TÓM TẮT ĐỀ TÀI
 
 Đề tài “Nghiên cứu và xây dựng hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng” nhằm nghiên cứu và ứng dụng mô hình ngôn ngữ lớn (Large Language Model) kết hợp kiến trúc đa tác nhân (Multi-Agent System) trong tự động hóa quản trị mạng.
 
-Hệ thống được thiết kế với ba tác nhân chính: Planner Agent đảm nhiệm lập kế hoạch, Network Agent thực thi các tác vụ trên thiết bị mạng và Analyst Agent phân tích kết quả, hỗ trợ xác định nguyên nhân sự cố. Quá trình phối hợp được điều phối thông qua LangGraph, kết hợp Netmiko và Nornir để tương tác với thiết bị trong môi trường giả lập GNS3. Đồng thời, cơ chế phê duyệt Human-in-the-loop được tích hợp nhằm kiểm soát các thao tác thay đổi cấu hình.
+Hệ thống được thiết kế với bốn tác nhân chuyên trách: Planner Agent phân tích yêu cầu và lập kế hoạch nghiệp vụ; Configuration Agent chuyển yêu cầu thay đổi thành câu lệnh CLI; Network Agent thực thi các tác vụ đã được kiểm soát trên thiết bị mạng; Analyst Agent phân tích bằng chứng và hỗ trợ xác định nguyên nhân sự cố. Quá trình phối hợp được điều phối thông qua LangGraph, kết hợp Netmiko và Nornir để tương tác với thiết bị trong môi trường giả lập GNS3. Đồng thời, cơ chế phê duyệt Human-in-the-loop được tích hợp nhằm kiểm soát các thao tác thay đổi cấu hình.
 
 Đề tài xây dựng bộ kịch bản thực nghiệm để đánh giá tỷ lệ hoàn thành nhiệm vụ, khả năng xác định nguyên nhân gốc và thời gian thực thi. Kết quả nghiên cứu góp phần làm rõ khả năng ứng dụng kiến trúc Multi-Agent trong hỗ trợ quản trị mạng, đồng thời tạo cơ sở cho việc tiếp tục hoàn thiện hệ thống.
 
@@ -46,7 +46,7 @@ Bên cạnh đó, đề tài nghiên cứu các phương pháp kiểm tra và ki
 
 Khảo sát và phân tích các nghiên cứu liên quan đến ứng dụng Large Language Models, AI Agent, Multi-Agent System, Network Configuration Automation và Network Troubleshooting nhằm xác định hướng tiếp cận phù hợp.
 
-Thiết kế kiến trúc Multi-Agent bao gồm các thành phần đẩm nhiệm các chức năng chuyên biệt gồm tiếp nhận và điều phối yêu cầu, thu thập thông tin mạng, chẩn đoán sự cố, cấu hình và khắc phục, kiểm chứng kết quả.
+Thiết kế kiến trúc Multi-Agent bao gồm các thành phần đảm nhiệm các chức năng chuyên biệt gồm tiếp nhận và điều phối yêu cầu, thu thập thông tin mạng, chẩn đoán sự cố, cấu hình và khắc phục, kiểm chứng kết quả.
 
 Xây dựng cơ chế tương tác với các thiết bị mạng trong môi trường ảo hóa GNS3 thông qua giao diện dòng lệnh và các công cụ tự động hóa.
 
@@ -54,7 +54,7 @@ Xây dựng cơ chế tương tác với các thiết bị mạng trong môi tr�
 
 Xây dựng tập kịch bản thực nghiệm có trạng thái ban đầu, yêu cầu nhiệm vụ, nguyên nhân sự cố, trạng thái cấu hình mục tiêu và các điều kiện kiểm chứng được xác định trước, nhằm phục vụ quá trình đánh giá hiệu quả của hệ thống.
 
-Đánh giá các cấu hình thực nghiệm dựa trên các tiêu chí như Task Success Rate, Root Cause Accuracy, Remediation Success Rate, Safety, Latency và Interaction Turns; từ đó phân tích ưu điểm, hạn chế và sự đánh đổi giữa các phương pháp.
+Đánh giá thực nghiệm bằng các chỉ số đã triển khai gồm Task Success Rate, Detection Score, các chỉ số Precision/Recall/F1 cho Localization, Fault Type và RCA, Active Workflow Latency và Interaction Turns; đồng thời xác định Remediation Success Rate và Safety là các tiêu chí cần hoàn thiện bộ chấm trong giai đoạn tiếp theo.
 
 ## Đối tượng và phạm vi nghiên cứu
 
@@ -70,7 +70,7 @@ Khách thể nghiên cứu là các quy trình quản trị và vận hành hệ
 
 Về không gian: Đề tài được triển khai và thử nghiệm trong môi trường mô phỏng mạng, sử dụng các thiết bị ảo hóa. Việc thực nghiệm không được thực hiện trực tiếp trên hệ thống mạng production nhằm đảm bảo tính kiểm soát và khả năng tái lập các kịch bản.
 
-Về nội dung: đề tài giới hạn ở các sự cố mạng phổ biến tại tầng Data Link và Network trong mô hình OSI. Trong đó, các tác vụ cấu hình dự kiến bao gồm cấu hình địa chỉ IP, thay đổi trạng thái interface, cấu hình định tuyến tĩnh và một số cấu hình định tuyến động cơ bản. Các kịch bản xử lý sự cố dự kiến bao gồm interface bị shutdown, sai địa chỉ IP hoặc subnet mask, thiếu hoặc sai route, lỗi cấu hình giao thức định tuyến và một số trường hợp mất kết nối do cấu hình không phù hợp.
+Về nội dung: đề tài giới hạn ở các sự cố mạng phổ biến tại tầng Data Link và Network trong mô hình OSI. Các tác vụ được triển khai gồm cấu hình địa chỉ IP, thay đổi trạng thái interface, cấu hình định tuyến và một số chức năng giao thức mạng trong môi trường thực nghiệm. Bộ kịch bản bao gồm interface bị shutdown, sai địa chỉ IP hoặc subnet mask, thiếu hoặc sai thông tin OSPF, OSPF area mismatch, MPLS bị vô hiệu hóa trên interface, eBGP neighbor bị shutdown, ACL chặn kết nối và một số trường hợp mất kết nối do cấu hình không phù hợp.
 
 Về công nghệ AI: Đề tài sử dụng mô hình LLM đã được phát triển sẵn để xây dựng các AI Agent. Trọng tâm là thiết kế kiến trúc hệ thống, cơ chế phối hợp và khả năng sử dụng các công cụ tương tác với thiết bị mạng, không nghiên cứu huấn luyện một LLM mới.
 
@@ -367,7 +367,7 @@ $$
 
 Trong đó, $N_{\mathrm{success}}$ là số lượt thực nghiệm hoàn thành nhiệm vụ thành công và $N_{\mathrm{total}}$ là tổng số lượt thực nghiệm hợp lệ được đưa vào đánh giá.
 
-**Độ chính xác trong chẩn đoán sự cố (Diagnostic Accuracy).** Dựa trên cách phân chia nhiệm vụ trong nghiên cứu NIKA [3], khả năng chẩn đoán được đánh giá theo ba cấp độ:
+**Độ chính xác trong chẩn đoán sự cố (Diagnostic Accuracy).** Dựa trên cách phân chia nhiệm vụ trong nghiên cứu NIKA [3], khả năng chẩn đoán về mặt lý thuyết được xem xét theo ba cấp độphát hiện sự cố (Detection), xác định vị trí lỗi (Localization) và xác định nguyên nhân gốc (Root Cause Identification):
 
 - **Detection Accuracy:** phản ánh tỷ lệ trường hợp hệ thống xác định chính xác trạng thái có hoặc không có sự cố.
 - **Localization Accuracy:** phản ánh tỷ lệ trường hợp hệ thống xác định đúng thiết bị hoặc thành phần gây lỗi theo tiêu chí định vị đã xác định.
@@ -379,7 +379,7 @@ $$
 Accuracy = \frac{N_{\mathrm{correct}}}{N_{\mathrm{evaluated}}} \times 100\%
 $$
 
-Trong đó, $N_{\mathrm{correct}}$ là số trường hợp được xác định chính xác và $N_{\mathrm{evaluated}}$ là tổng số trường hợp được đánh giá. Kết quả được xem là chính xác khi đáp ứng quy tắc đối chiếu với Ground Truth đã được xác định trước.
+Trong đó, $N_{\mathrm{correct}}$ là số trường hợp được xác định chính xác và $N_{\mathrm{evaluated}}$ là tổng số trường hợp được đánh giá. Kết quả được xem là chính xác khi đáp ứng quy tắc đối chiếu với Ground Truth đã được xác định trước. Trong triển khai hiện tại, kết quả có cấu trúc được chuẩn hóa thành tập cặp `(resource_id, fault_type)` và được chấm bằng Precision, Recall và F1 cho định vị, loại lỗi và RCA tổng hợp. Vì các Benchmark Scenario hiện đều chủ động tiêm lỗi, Detection được ghi nhận dưới dạng `Detection Score` khi Analyst xác định `is_anomaly=true`; giá trị này chưa phải Detection Accuracy trên một tập dữ liệu có đồng thời trường hợp mạng lỗi và mạng khỏe.
 
 **Tỷ lệ khắc phục sự cố thành công (Remediation Success Rate – RSR).** Chỉ số này phản ánh tỷ lệ trường hợp hệ thống thực hiện biện pháp khắc phục và đạt được trạng thái mạng mục tiêu sau khi kiểm chứng. Chỉ số được tính trên các trường hợp hợp lệ thuộc phạm vi đánh giá khắc phục sự cố:
 
@@ -387,7 +387,7 @@ $$
 RSR = \frac{N_{\mathrm{remediated}}}{N_{\mathrm{remediation}}} \times 100\%
 $$
 
-Trong đó, $N_{\mathrm{remediated}}$ là số trường hợp khắc phục sự cố thành công và $N_{\mathrm{remediation}}$ là tổng số trường hợp được đưa vào đánh giá khắc phục. Việc xác định thành công phải dựa trên trạng thái thực tế của thiết bị và các điều kiện kiểm chứng đã quy định.
+Trong đó, $N_{\mathrm{remediated}}$ là số trường hợp khắc phục sự cố thành công và $N_{\mathrm{remediation}}$ là tổng số trường hợp được đưa vào đánh giá khắc phục. Việc xác định thành công phải dựa trên trạng thái thực tế của thiết bị và các điều kiện kiểm chứng đã quy định. Đây là tiêu chí được đề xuất về mặt lý thuyết; phiên bản evaluator hiện tại chưa có bộ chấm độc lập cho kết quả khắc phục của Agent nên metric `REMEDIATION` được lưu ở trạng thái `NOT_APPLICABLE`.
 
 **Tính an toàn (Safety).** Tiêu chí này phản ánh khả năng hệ thống tuân thủ các chính sách và ràng buộc trong quá trình thực thi, bao gồm quyền truy cập, phạm vi thiết bị được phép thao tác, yêu cầu phê duyệt và điều kiện an toàn của cấu hình. Một phương pháp đánh giá là xác định tỷ lệ lượt thực nghiệm không phát sinh hành động vi phạm chính sách:
 
@@ -395,7 +395,7 @@ $$
 SafetyRate = \frac{N_{\mathrm{safe}}}{N_{\mathrm{safety}}} \times 100\%
 $$
 
-Trong đó, $N_{\mathrm{safe}}$ là số lượt thực nghiệm không xảy ra hành động vi phạm chính sách và $N_{\mathrm{safety}}$ là tổng số lượt thực nghiệm hợp lệ được đánh giá về an toàn. Chỉ số này được sử dụng khi hệ thống có quy tắc xác định và ghi nhận hành vi vi phạm rõ ràng.
+Trong đó, $N_{\mathrm{safe}}$ là số lượt thực nghiệm không xảy ra hành động vi phạm chính sách và $N_{\mathrm{safety}}$ là tổng số lượt thực nghiệm hợp lệ được đánh giá về an toàn. Chỉ số này chỉ được sử dụng khi hệ thống có bộ quy tắc và cơ chế ghi nhận hành vi vi phạm độc lập. Phiên bản evaluator hiện tại chưa triển khai Safety Scorer đầy đủ nên metric `SAFETY` được lưu ở trạng thái `NOT_APPLICABLE`; trạng thái này không được diễn giải thành hệ thống an toàn tuyệt đối hoặc điểm an toàn bằng 0%.
 
 **Thời gian thực thi (Latency).** Chỉ số này phản ánh khoảng thời gian hệ thống cần để xử lý một nhiệm vụ, tính từ thời điểm bắt đầu đến khi hoàn thành hoặc đạt trạng thái kết thúc được quy định:
 
@@ -403,15 +403,15 @@ $$
 Latency = t_{\mathrm{end}} - t_{\mathrm{start}}
 $$
 
-Trong đó, $t_{\mathrm{start}}$ là thời điểm bắt đầu xử lý và $t_{\mathrm{end}}$ là thời điểm kết thúc. Đối với nhiệm vụ có cơ chế phê duyệt của con người, thời gian chờ phê duyệt cần được phân biệt với thời gian xử lý của hệ thống AI nhằm bảo đảm kết quả đánh giá phản ánh đúng hiệu năng thực thi.
+Trong đó, $t_{\mathrm{start}}$ là thời điểm bắt đầu xử lý và $t_{\mathrm{end}}$ là thời điểm kết thúc. Trong triển khai hiện tại, `Active workflow latency` được tính từ thời điểm tạo Task đến khi tạo `FINAL_RESPONSE`, sau khi loại trừ thời gian chờ phê duyệt của con người. Chỉ số bao gồm thời gian của Planner, Configuration, Network, Analyst và phần điều phối, không bao gồm bước chuẩn bị GNS3 và không được xem là thời gian suy luận LLM thuần túy.
 
-**Số lượt tương tác (Interaction Turns).** Chỉ số này phản ánh số lượt tương tác được ghi nhận trong quá trình thực hiện nhiệm vụ, chẳng hạn các lượt trao đổi giữa Agent và mô hình ngôn ngữ hoặc những bước tương tác được hệ thống theo dõi. Chỉ số được xác định bằng tổng số lượt tương tác hợp lệ theo quy tắc đếm đã thiết lập:
+**Số lượt tương tác (Interaction Turns).** Trong triển khai hiện tại, chỉ số này được định nghĩa là số lượt Agent gọi công cụ mạng có bản ghi `TaskExecution` và `tool_name` hợp lệ. Chỉ số không đếm số Message, số lượt gọi LLM, số node LangGraph, thao tác tiêm lỗi hoặc cleanup của Benchmark Engine:
 
 $$
 T_{\mathrm{interaction}} = \sum_{i=1}^{n} 1 = n
 $$
 
-Trong đó, $T_{\mathrm{interaction}}$ là tổng số lượt tương tác được ghi nhận và $n$ là số lượt đáp ứng quy tắc đếm. Chỉ số này hỗ trợ phân tích mức độ phức tạp và chi phí tương tác trong quá trình xử lý nhiệm vụ.
+Trong đó, $T_{\mathrm{interaction}}$ là tổng số lượt gọi công cụ được ghi nhận và $n$ là số bản ghi đáp ứng quy tắc đếm. Chỉ số này hỗ trợ phân tích mức độ tương tác giữa Agent và công cụ mạng trong quá trình xử lý nhiệm vụ.
 
 Việc kết hợp các tiêu chí trên cho phép đánh giá hệ thống Multi-Agent trên nhiều phương diện, bao gồm khả năng hoàn thành nhiệm vụ, độ chính xác của kết quả chẩn đoán, hiệu quả khắc phục sự cố, mức độ an toàn và hiệu năng thực thi. Các tiêu chí này là cơ sở để xây dựng phương pháp thực nghiệm, tổng hợp số liệu và phân tích kết quả đánh giá hệ thống trong các chương tiếp theo.
 
@@ -443,7 +443,7 @@ Việc kết hợp các tiêu chí trên cho phép đánh giá hệ thống Mult
 
 **Nội dung thực hiện.** Sử dụng Python và LangGraph để phát triển các agent và tổ chức quy trình phối hợp giữa chúng. Tích hợp LLM để phân tích yêu cầu và hỗ trợ đưa ra quyết định. Sử dụng Netmiko, Nornir và SSH/Telnet để thu thập thông tin, thực thi các lệnh kiểm tra và cấu hình trên thiết bị mạng.
 
-Các thành phần chức năng gồm Orchestrator, Planner Agent, Network Agent, Analyst Agent và thành phần hỗ trợ tri thức mạng. Cơ chế Human-in-the-loop được tích hợp để quản trị viên xem xét và phê duyệt các thay đổi cấu hình trước khi thực thi. Backend sử dụng FastAPI và PostgreSQL; frontend sử dụng React và TypeScript để cung cấp giao diện quản trị, hội thoại, theo dõi tác vụ, phê duyệt và đánh giá benchmark.
+Các thành phần chức năng gồm Planning Orchestrator, Configuration Orchestrator, Execution Orchestrator, Analysis Orchestrator cùng Planner Agent, Configuration Agent, Network Agent và Analyst Agent. Hệ thống còn sử dụng diagnostic playbook, bộ phân tích evidence, Evidence Coverage Gate và Causal Evidence Gate để hỗ trợ quá trình chẩn đoán. Cơ chế Human-in-the-loop được tích hợp để quản trị viên xem xét và phê duyệt các thay đổi cấu hình trước khi thực thi. Backend sử dụng FastAPI và PostgreSQL; frontend sử dụng React và TypeScript để cung cấp giao diện quản trị, hội thoại, theo dõi tác vụ, phê duyệt và đánh giá benchmark.
 
 **Kết quả.** Hệ thống Multi-Agent có khả năng tương tác với môi trường mạng GNS3 và thực hiện các chức năng cấu hình, chẩn đoán và hỗ trợ khắc phục sự cố.
 
@@ -459,7 +459,7 @@ Các thành phần chức năng gồm Orchestrator, Planner Agent, Network Agent
 
 **Mục đích.** Đánh giá mức độ hoàn thành các mục tiêu nghiên cứu, xác định khả năng, hiệu quả và những hạn chế của hệ thống Multi-Agent trong các nhiệm vụ cấu hình và xử lý sự cố mạng.
 
-**Nội dung thực hiện.** Kết hợp đánh giá định lượng và phân tích định tính. Các tiêu chí định lượng gồm Task Success Rate, Detection Accuracy, Localization Accuracy, Root Cause Accuracy, Remediation Success Rate, Safety, Latency và Interaction Turns. Cách lựa chọn tiêu chí tham khảo phương pháp đánh giá AI Agent trong NIKA [3], NETARENA [4] và NetConfArena [5]. Phân tích định tính tập trung vào bằng chứng thu thập được, nguyên nhân của trường hợp thất bại, khả năng kiểm soát thao tác ghi và giới hạn của môi trường thực nghiệm.
+**Nội dung thực hiện.** Kết hợp đánh giá định lượng và phân tích định tính. Các chỉ số đã được triển khai gồm Task Success Rate, Detection Score, Localization Precision/Recall/F1, Fault Type Precision/Recall/F1, RCA Precision/Recall/F1, Active Workflow Latency và Interaction Turns. Remediation Success Rate và Safety được giữ trong mô hình đánh giá nhưng chưa có scorer độc lập nên được phân loại `NOT_APPLICABLE`. Cách lựa chọn tiêu chí tham khảo phương pháp đánh giá AI Agent trong NIKA [3], NETARENA [4] và NetConfArena [5]. Phân tích định tính tập trung vào bằng chứng thu thập được, nguyên nhân của trường hợp thất bại, khả năng kiểm soát thao tác ghi và giới hạn của môi trường thực nghiệm.
 
 **Kết quả.** Các bảng số liệu, biểu đồ và nhận xét đánh giá phản ánh khả năng hoàn thành nhiệm vụ, độ chính xác, tính an toàn, hiệu năng và hạn chế của hệ thống.
 
@@ -467,13 +467,13 @@ Các thành phần chức năng gồm Orchestrator, Planner Agent, Network Agent
 
 ### 3.2.1. Các tác nhân và phạm vi sử dụng
 
-Hệ thống được xây dựng nhằm hỗ trợ người quản trị thực hiện các nhiệm vụ quản lý tài nguyên, cấu hình, kiểm tra và xử lý sự cố trên thiết bị mạng. Các chức năng đã triển khai được tổ chức thành các nhóm: tổng quan và thống kê; hội thoại với hệ thống Multi-Agent; theo dõi Task và phê duyệt thao tác cấu hình; quản lý thiết bị, credential và danh mục thiết bị; quản lý Benchmark Scenario, Benchmark Run và Evaluation; quản lý Audit Log; quản lý người dùng, vai trò và quyền truy cập; cấu hình hệ thống.
+Hệ thống được xây dựng nhằm hỗ trợ người quản trị thực hiện các nhiệm vụ quản lý tài nguyên, cấu hình, kiểm tra và xử lý sự cố trên thiết bị mạng. Các chức năng đã triển khai được tổ chức thành các nhóm: tổng quan và thống kê; hội thoại với hệ thống Multi-Agent; theo dõi Task và phê duyệt thao tác cấu hình; quản lý thiết bị, credential và danh mục thiết bị; quản lý Benchmark Scenario, Benchmark Run và Evaluation; quản lý Audit Log; quản lý người dùng, vai trò và quyền truy cập; tùy chọn giao diện và ngôn ngữ phía người dùng.
 
 Tác nhân con người của hệ thống là **người dùng đã được xác thực**. Phạm vi thao tác của từng người dùng không được gắn cứng tại giao diện mà được xác định bằng cơ chế Role-Based Access Control (RBAC), dựa trên vai trò, chức năng quản lý và hành động được cấp. Dữ liệu seed hiện định nghĩa bốn vai trò gồm **Super Administrator**, **System Administrator**, **Network Engineer** và **Network Operator**. Trong đó, Super Administrator phục vụ quản trị toàn bộ nền tảng; các vai trò còn lại được cấp quyền theo ma trận permission và có thể được điều chỉnh tại chức năng Access Control. Vì quyền của vai trò có thể thay đổi, tên vai trò chỉ biểu thị nhóm trách nhiệm, còn quyền truy cập thực tế phải được xác định từ dữ liệu phân quyền tại thời điểm xử lý yêu cầu.
 
-Ngoài người dùng, hệ thống tương tác với ba nhóm tác nhân kỹ thuật bên ngoài. **Dịch vụ LLM** tiếp nhận prompt có kiểm soát và trả về kế hoạch hoặc kết quả phân tích. **GNS3 API** cung cấp thông tin project, node và môi trường topology phục vụ thực nghiệm. **Thiết bị mạng trong GNS3** tiếp nhận kết nối SSH/Telnet từ NetworkTool để thực thi lệnh kiểm tra hoặc cấu hình. Thông tin xác thực thiết bị được lấy từ Credential Service và chỉ được chuyển đến lớp công cụ mạng khi thực thi; credential không được cung cấp trực tiếp cho LLM.
+Ngoài người dùng, hệ thống tương tác với ba nhóm tác nhân kỹ thuật bên ngoài. **Dịch vụ LLM** tiếp nhận prompt có kiểm soát và trả về kế hoạch nghiệp vụ, CLI cấu hình hoặc kết quả phân tích có cấu trúc tùy theo Agent gọi mô hình. **GNS3 API** cung cấp thông tin project, node và môi trường topology phục vụ thực nghiệm. **Thiết bị mạng trong GNS3** tiếp nhận kết nối SSH/Telnet từ NetworkTool để thực thi lệnh kiểm tra hoặc cấu hình. Thông tin xác thực thiết bị được lấy từ Credential Service và chỉ được chuyển đến lớp công cụ mạng khi thực thi; credential không được cung cấp trực tiếp cho LLM.
 
-Planner Agent, Network Agent, Analyst Agent, Orchestrator và Benchmark Engine là các thành phần xử lý **nội bộ**, không phải người dùng độc lập của hệ thống. Planner Agent chỉ sử dụng ngữ cảnh yêu cầu và inventory cần thiết để tạo kế hoạch. Network Agent thực thi Operation thông qua NetworkTool sau khi vượt qua các điều kiện phụ thuộc và Approval Gate. Analyst Agent phân tích kết quả thực thi và bằng chứng thu thập được. Orchestrator điều phối trạng thái workflow, còn Benchmark Engine quản lý việc tiêm lỗi, xác minh, đánh giá và cleanup theo Scenario. Việc phân tách này ngăn Agent tự do truy cập cơ sở dữ liệu, credential hoặc thiết bị ngoài phạm vi đã được service kiểm soát.
+Planner Agent, Configuration Agent, Network Agent, Analyst Agent, các Orchestrator và Benchmark Engine là các thành phần xử lý **nội bộ**, không phải người dùng độc lập của hệ thống. Planner Agent sử dụng yêu cầu, inventory công khai, topology và diagnostic playbook để tạo kế hoạch nghiệp vụ. Configuration Agent chuyển `configuration_requirements` của Operation WRITE thành CLI nhưng không kết nối thiết bị. Network Agent thực thi Operation thông qua NetworkTool sau khi vượt qua các điều kiện phụ thuộc và Approval Gate. Analyst Agent phân tích kết quả thực thi và bằng chứng thu thập được. Các Orchestrator điều phối trạng thái workflow, còn Benchmark Engine quản lý việc tiêm lỗi, xác minh, đánh giá và cleanup theo Scenario. Việc phân tách này ngăn Agent tự do truy cập cơ sở dữ liệu, credential hoặc thiết bị ngoài phạm vi đã được service kiểm soát.
 
 Phạm vi triển khai của đề tài được giới hạn trong môi trường mạng mô phỏng GNS3 có kiểm soát. Các thao tác WRITE phải được người dùng có quyền phê duyệt trước khi thực thi. Hoạt động điều tra bổ sung chỉ sử dụng thao tác READ; hoạt động tiêm lỗi và cleanup chỉ được thực hiện trong quy trình benchmark. Hệ thống chưa được thiết kế để tự động vận hành mạng production hoặc tự quyết định mọi thay đổi cấu hình mà không có sự giám sát của con người.
 
@@ -520,7 +520,7 @@ flowchart LR
     CHAT -->|Tạo yêu cầu| TASK
     TASK -->|Điều phối workflow| MAS
     MAS <-->|Prompt và structured output| LLM
-    MAS -->|Đọc inventory, nhận credential khi thực thi| INVENTORY
+    MAS -->|Đọc inventory công khai| INVENTORY
     MAS -->|SSH hoặc Telnet qua NetworkTool| DEV
     BENCH <-->|Project, node và topology| GNS3
     BENCH -->|Tiêm lỗi, xác minh và cleanup| DEV
@@ -541,7 +541,7 @@ Yêu cầu chức năng xác định những khả năng hệ thống cung cấp
 
 2. **Quản lý thiết bị và thông tin kết nối (Device Inventory and Credential Management)** <br> Hệ thống cho phép quản lý thiết bị, brand, category, Netmiko driver và credential. Credential được lưu ở dạng mã hóa và chỉ được giải mã trong quá trình chuẩn bị kết nối. Inventory cung cấp thông tin thiết bị công khai cho Planner và thông tin kết nối cần thiết cho NetworkTool.
 
-3. **Tương tác với AI Agent (Natural Language Interaction)** <br> Người dùng có thể gửi yêu cầu bằng ngôn ngữ tự nhiên, xem và đổi tên hội thoại, theo dõi Activity Timeline, yêu cầu phê duyệt và phản hồi cuối. Mỗi USER_REQUEST hợp lệ có thể tạo một Task gồm nhiều Operation; frontend truy vấn API để cập nhật tiến trình và hiển thị kết quả theo thứ tự xử lý.
+3. **Tương tác với AI Agent (Natural Language Interaction)** <br> Người dùng có thể gửi yêu cầu bằng ngôn ngữ tự nhiên, xem và đổi tên hội thoại, theo dõi Activity Timeline, yêu cầu phê duyệt và phản hồi cuối. Mỗi USER_REQUEST hợp lệ có thể tạo một Task gồm nhiều Operation; frontend nhận Task Activity gần thời gian thực qua Server-Sent Events (SSE), sử dụng REST API để tải dữ liệu chi tiết và chuyển sang polling dự phòng khi stream không khả dụng.
 
 4. **Lập kế hoạch và điều phối tác vụ (Task Planning and Orchestration)** <br> Agent chuyển yêu cầu thành Execution Plan có cấu trúc, gồm các Operation, thông tin thiết bị và quan hệ phụ thuộc. Các quan hệ được tổ chức theo Directed Acyclic Graph (DAG). Kế hoạch phải được kiểm tra tính hợp lệ trước khi lưu trữ và thực thi.
 
@@ -585,7 +585,7 @@ Yêu cầu phi chức năng xác định các đặc tính chất lượng cần
 
 LangGraph được sử dụng làm framework điều phối quy trình xử lý của hệ thống Multi-Agent, hỗ trợ tổ chức và quản lý sự phối hợp giữa các AI Agent. Framework này cung cấp mô hình đồ thị trạng thái (State Graph), trong đó các nút (node) biểu diễn những bước xử lý, còn các cạnh (edge) xác định luồng chuyển tiếp. Cơ chế này cho phép tổ chức quy trình nhiều giai đoạn, hỗ trợ rẽ nhánh có điều kiện và duy trì thông tin trạng thái trong suốt quá trình thực thi.
 
-Trong hệ thống, LangGraph tổ chức các bước xử lý chính, bao gồm kiểm tra môi trường GNS3, phân tích yêu cầu, lập kế hoạch, tương tác với thiết bị mạng và đánh giá kết quả. Các thành phần trao đổi thông tin thông qua trạng thái dùng chung, đồng thời lựa chọn hướng xử lý dựa trên kết quả của những bước trước đó. Đối với nhiệm vụ chẩn đoán sự cố, quy trình có thể chuyển sang bước điều tra bổ sung khi thông tin ban đầu chưa đủ để xác định nguyên nhân. Việc sử dụng LangGraph giúp quản lý luồng xử lý rõ ràng và tạo điều kiện mở rộng các chức năng của hệ thống.
+Trong hệ thống, LangGraph tổ chức các bước xử lý chính, bao gồm kiểm tra môi trường GNS3, phân tích yêu cầu, lập kế hoạch, sinh cấu hình cho Operation WRITE, tương tác với thiết bị mạng và phân tích kết quả thực thi. Các thành phần trao đổi thông tin thông qua trạng thái dùng chung, đồng thời lựa chọn hướng xử lý dựa trên kết quả của những bước trước đó. Đối với nhiệm vụ chẩn đoán sự cố, quy trình có thể chuyển sang bước điều tra bổ sung khi thông tin ban đầu chưa đủ để xác định nguyên nhân. Việc sử dụng LangGraph giúp quản lý luồng xử lý rõ ràng và tạo điều kiện mở rộng các chức năng của hệ thống.
 
 ### 3.3.2. Netmiko và Nornir
 
@@ -612,7 +612,7 @@ Về phía frontend, ứng dụng sử dụng React kết hợp TypeScript để
 Về phía backend, hệ thống được xây dựng bằng Python với framework FastAPI, cung cấp các REST API nghiệp vụ thông qua tiền tố /api/v1. FastAPI đảm nhiệm tiếp nhận yêu cầu, điều phối đến các thành phần xử lý nghiệp vụ và trả về kết quả tương ứng. Thư viện Pydantic được sử dụng để định nghĩa cấu trúc dữ liệu và kiểm tra tính hợp lệ của dữ liệu đầu vào, đầu ra, bảo đảm tính nhất quán trong quá trình giao tiếp giữa các thành phần.
 
 Về cơ sở dữ liệu, PostgreSQL được sử dụng để lưu trữ thông tin thiết bị mạng, nhiệm vụ, trạng thái thực thi, lịch sử hoạt động và kết quả thực nghiệm. Backend tích hợp SQLAlchemy để ánh xạ các mô hình dữ liệu với bảng quan hệ, đồng thời hỗ trợ truy vấn và cập nhật dữ liệu. Cách tổ chức này giúp tách biệt lớp truy cập dữ liệu khỏi logic nghiệp vụ và thuận tiện cho việc bảo trì hệ thống.
-Về tích hợp mô hình ngôn ngữ lớn, backend sử dụng LangChain kết hợp NVIDIA AI Endpoint để tương tác với các mô hình LLM đã được huấn luyện sẵn. LangChain hỗ trợ tổ chức thông điệp, gửi yêu cầu và xử lý phản hồi từ mô hình, phục vụ hoạt động của Planner Agent và Analyst Agent trong quá trình phân tích yêu cầu, lập kế hoạch và đánh giá kết quả. Việc sử dụng API cho phép hệ thống khai thác khả năng của LLM mà không cần triển khai mô hình trực tiếp trên hạ tầng cục bộ.
+Về tích hợp mô hình ngôn ngữ lớn, backend sử dụng LangChain kết hợp NVIDIA AI Endpoint để tương tác với các mô hình LLM đã được huấn luyện sẵn. LangChain hỗ trợ tổ chức thông điệp, gửi yêu cầu và xử lý phản hồi từ mô hình, phục vụ Planner Agent trong lập kế hoạch, Configuration Agent trong sinh CLI WRITE và Analyst Agent trong phân tích kết quả thực thi. Việc sử dụng API cho phép hệ thống khai thác khả năng của LLM mà không cần triển khai mô hình trực tiếp trên hạ tầng cục bộ.
 
 Về môi trường triển khai, Docker Compose được sử dụng để tổ chức các dịch vụ backend, PostgreSQL và pgAdmin trong quá trình phát triển và kiểm thử. Công cụ này hỗ trợ quản lý cấu hình, kết nối và các thành phần phụ thuộc giữa những container. Trong đó, pgAdmin phục vụ việc quản lý và kiểm tra dữ liệu PostgreSQL. Cách triển khai này giúp đơn giản hóa quá trình khởi tạo và bảo đảm tính nhất quán của môi trường kiểm thử.
 
@@ -622,13 +622,13 @@ Về môi trường triển khai, Docker Compose được sử dụng để tổ
 
 Hệ thống Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng được xây dựng theo kiến trúc phân lớp. Kiến trúc tổng thể gồm lớp trình bày, lớp API, các dịch vụ nghiệp vụ cốt lõi, thành phần điều phối Multi-Agent, lớp tích hợp và lớp lưu trữ. Cách tổ chức này phân tách trách nhiệm giữa giao diện người dùng, xử lý nghiệp vụ, suy luận bằng LLM, tương tác thiết bị và quản lý dữ liệu.
 
-Người dùng truy cập hệ thống thông qua ứng dụng web React/TypeScript. Phạm vi chức năng của Super Administrator, System Administrator, Network Engineer và Network Operator được xác định bằng RBAC. Frontend chỉ giao tiếp với FastAPI qua HTTP/REST và không truy cập trực tiếp cơ sở dữ liệu, LLM hoặc thiết bị mạng.
+Người dùng truy cập hệ thống thông qua ứng dụng web React/TypeScript. Phạm vi chức năng của Super Administrator, System Administrator, Network Engineer và Network Operator được xác định bằng RBAC. Frontend giao tiếp với FastAPI qua REST API và SSE trên nền HTTP, không truy cập trực tiếp cơ sở dữ liệu, LLM hoặc thiết bị mạng.
 
 Backend FastAPI cung cấp API cho các dịch vụ cốt lõi đã triển khai, gồm Identity và Access Control, Inventory và Credential, Conversation và Task Execution, Benchmark và Evaluation, Audit Log. Identity Service thực hiện xác thực, quản lý session và kiểm tra quyền. Các dịch vụ nghiệp vụ sử dụng Persistence Layer dựa trên SQLAlchemy để đọc và ghi PostgreSQL.
 
 Thành phần Multi-Agent sử dụng LangGraph và Orchestrator để phối hợp Planner Agent, Configuration Agent, Network Agent và Analyst Agent. Planner, Configuration và Analyst tương tác với NVIDIA AI Endpoint thông qua lớp tích hợp LLM. Workflow kiểm tra GNS3 Server thông qua lớp tích hợp GNS3, trong khi Network Agent sử dụng lớp tích hợp thiết bị dựa trên Netmiko hoặc Nornir để thực thi lệnh. Benchmark Service cũng sử dụng lớp tích hợp thiết bị để kiểm tra baseline, tiêm lỗi, xác minh và cleanup. Các kết nối đến thiết bị được thực hiện qua SSH hoặc Telnet trong phạm vi inventory và credential đã quản lý.
 
-Backend, PostgreSQL và công cụ quản trị cơ sở dữ liệu được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend hiện được vận hành như ứng dụng riêng và kết nối đến backend qua API. Redis, Message Queue và WebSocket không được đưa vào kiến trúc vì chưa được sử dụng trong phiên bản hệ thống hiện tại.
+Backend, PostgreSQL và công cụ quản trị cơ sở dữ liệu được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend hiện được vận hành như ứng dụng riêng và kết nối đến backend qua REST API và SSE. Redis, Message Queue và WebSocket không được đưa vào kiến trúc vì chưa được sử dụng trong phiên bản hệ thống hiện tại.
 
 ```mermaid
 flowchart TB
@@ -671,7 +671,7 @@ flowchart TB
             DEPLOY["Docker Compose<br/>FastAPI · PostgreSQL · pgAdmin"]
         end
 
-        FE -->|HTTP / REST| API
+        FE -->|HTTP / REST và SSE| API
         API --> IDENTITY
         API --> INVENTORY
         API --> OPERATIONS
@@ -718,7 +718,7 @@ Kiến trúc hệ thống gồm các thành phần chức năng được tổ ch
 
 **Lớp trình bày (Presentation Layer).** Web Application được xây dựng bằng React và TypeScript, cung cấp giao diện đăng nhập, Dashboard, hội thoại với AI, theo dõi Task, phê duyệt thay đổi cấu hình, quản lý thiết bị và credential, quản lý Benchmark Scenario và Benchmark Run, xem Evaluation, Audit Log, người dùng và quyền truy cập. Frontend chịu trách nhiệm hiển thị dữ liệu và tiếp nhận thao tác của người dùng, nhưng không trực tiếp thực hiện nghiệp vụ, truy vấn PostgreSQL hoặc kết nối thiết bị mạng.
 
-**Lớp API (API Layer).** FastAPI cung cấp các REST API dưới tiền tố `/api/v1`, tiếp nhận yêu cầu HTTP từ frontend, kiểm tra cấu trúc dữ liệu đầu vào và chuyển yêu cầu đến thành phần xử lý phù hợp. API Layer không chứa nghiệp vụ xác thực hoặc phân quyền; các router sử dụng Identity Service để xác thực phiên và kiểm tra permission trước khi gọi Core Domain Services. Đối với yêu cầu hội thoại hoặc tiếp tục Task sau phê duyệt, API Layer đồng thời kích hoạt Multi-Agent Workflow.
+**Lớp API (API Layer).** FastAPI cung cấp các REST API và endpoint SSE dưới tiền tố `/api/v1`, tiếp nhận yêu cầu HTTP từ frontend, kiểm tra cấu trúc dữ liệu đầu vào và chuyển yêu cầu đến thành phần xử lý phù hợp. API Layer không chứa nghiệp vụ xác thực hoặc phân quyền; các router sử dụng Identity Service để xác thực phiên và kiểm tra permission trước khi gọi Core Domain Services. Đối với yêu cầu hội thoại hoặc tiếp tục Task sau phê duyệt, API Layer đồng thời kích hoạt Multi-Agent Workflow; endpoint SSE phát lại Task Activity đã lưu và truyền sự kiện mới cho frontend.
 
 **Các dịch vụ nghiệp vụ cốt lõi (Core Domain Services).** Các nghiệp vụ của hệ thống được phân chia theo domain:
 
@@ -740,15 +740,15 @@ Domain Service chịu trách nhiệm thực hiện quy tắc nghiệp vụ và p
 
 **Lớp lưu trữ (Persistence Layer).** Repository và SQLAlchemy đảm nhiệm ánh xạ, truy vấn và cập nhật dữ liệu trong PostgreSQL. Cơ sở dữ liệu lưu người dùng, session, quyền truy cập, inventory, credential, conversation, task, operation, approval, execution, benchmark, evaluation và audit. PostgreSQL là nguồn dữ liệu chuẩn đối với trạng thái nghiệp vụ của hệ thống.
 
-**Hạ tầng triển khai.** Backend, PostgreSQL và pgAdmin được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend được vận hành như một ứng dụng riêng và kết nối đến backend qua REST API. NVIDIA AI Endpoint, GNS3 Server và các thiết bị mạng trong GNS3 nằm ngoài ranh giới ứng dụng nhưng được truy cập thông qua các lớp tích hợp tương ứng.
+**Hạ tầng triển khai.** Backend, PostgreSQL và pgAdmin được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend được vận hành như một ứng dụng riêng và kết nối đến backend qua REST API và SSE. NVIDIA AI Endpoint, GNS3 Server và các thiết bị mạng trong GNS3 nằm ngoài ranh giới ứng dụng nhưng được truy cập thông qua các lớp tích hợp tương ứng.
 
 Mối quan hệ giữa các thành phần được thiết kế theo nguyên tắc giới hạn trách nhiệm. Planner Agent không nhận credential và không chạy CLI; Network Agent không dùng LLM để tự lựa chọn mục tiêu hoặc diễn giải kết quả; Analyst Agent không kết nối và không thay đổi cấu hình thiết bị. Các thao tác WRITE phải được kiểm soát bởi Execution Service và Approval Gate trước khi Network Agent thực thi. Sự phân tách này làm giảm phạm vi ảnh hưởng khi một thành phần tạo kết quả không hợp lệ và hỗ trợ kiểm tra toàn bộ quá trình xử lý.
 
 ### 3.4.3. Cơ chế trao đổi và quản lý dữ liệu
 
-Frontend và backend trao đổi dữ liệu bằng HTTP/REST. Sau khi đăng nhập, frontend gửi thông tin xác thực trong các yêu cầu đến API. Router sử dụng Identity Service để kiểm tra tính hợp lệ của access token, trạng thái session, trạng thái tài khoản và permission tương ứng với chức năng được yêu cầu. Chỉ khi các điều kiện này được thỏa mãn, yêu cầu mới được chuyển đến Domain Service. Giao diện cập nhật tiến trình Task bằng cách truy vấn dữ liệu từ API; phiên bản hiện tại không sử dụng WebSocket hoặc Message Queue.
+Frontend và backend trao đổi dữ liệu bằng REST API và SSE trên nền HTTP. Sau khi đăng nhập, frontend gửi access token trong các yêu cầu đến API, bao gồm yêu cầu mở SSE bằng `fetch` để sử dụng được Bearer token. Router sử dụng Identity Service để kiểm tra tính hợp lệ của access token, trạng thái session, trạng thái tài khoản và permission tương ứng với chức năng được yêu cầu. Chỉ khi các điều kiện này được thỏa mãn, yêu cầu mới được chuyển đến Domain Service. Giao diện nhận Task Activity theo sequence qua SSE, tải lại dữ liệu hội thoại chi tiết sau các sự kiện cần thiết và sử dụng polling làm cơ chế dự phòng khi stream lỗi liên tiếp. Phiên bản hiện tại không sử dụng WebSocket hoặc Message Queue.
 
-Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message trước khi API kích hoạt LangGraph Workflow. Planning Orchestrator chuyển yêu cầu, inventory công khai và topology context cho Planner Agent. Structured output của Planner được kiểm tra bằng schema. Nếu kế hoạch có Operation WRITE, Planning Orchestrator chuyển kế hoạch sang Configuration Orchestrator; thành phần này gọi Configuration Agent, chuẩn hóa CLI, đối chiếu interface với inventory GNS3 và ghi activity. Kế hoạch hoàn chỉnh sau đó được Planning Orchestrator kiểm tra device ID và chuyển thành các bản ghi Task, Operation, Operation Dependency và Operation Device.
+Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message trước khi API kích hoạt LangGraph Workflow. Node `plan` sử dụng Planning Orchestrator để lấy tối đa năm Message ngay trước yêu cầu hiện tại từ PostgreSQL, sắp xếp theo thời gian và chuyển chúng cùng yêu cầu mới, inventory công khai và topology context cho Planner Agent. Lịch sử gần chỉ dùng để phân giải các tham chiếu như “thiết bị đó” hoặc “tiếp tục bước trước”; message hiện tại vẫn là yêu cầu điều khiển chính. Structured output được kiểm tra bằng schema rồi lưu tạm trong LangGraph state dưới dạng `PlanningDraft`, chưa tạo Operation. Nếu kế hoạch chỉ có READ, Planning Orchestrator lưu kế hoạch và workflow đi thẳng đến `execute`. Nếu có WRITE, conditional edge chuyển state sang node `configure`; Configuration Orchestrator gọi Configuration Agent, chuẩn hóa CLI và đối chiếu interface với inventory GNS3. Kế hoạch hoàn chỉnh chỉ được chuyển thành Task Operation, Operation Dependency và Operation Device sau khi node phù hợp hoàn tất validation.
 
 Trong quá trình thực thi, Execution Orchestrator đọc lại Task, Operation, dependency, mapping thiết bị và Approval từ Execution Service. Với Operation READ, Network Agent có thể gọi NetworkTool để thu thập trạng thái. Với Operation WRITE, workflow chỉ tiếp tục khi Approval Gate xác nhận nội dung đã được phê duyệt và vẫn khớp với command snapshot. NetworkTool lấy thông tin kết nối thông qua Inventory Service và Device Connection Provider, sau đó gửi lệnh đến thiết bị bằng SSH hoặc Telnet. Output của thiết bị được chuẩn hóa, lưu thành Execution và Device Action Log, rồi chuyển cho Analyst Agent làm bằng chứng phân tích.
 
@@ -758,7 +758,7 @@ GNS3 Provider giao tiếp với GNS3 Server qua HTTP/REST để kiểm tra khả
 
 PostgreSQL được sử dụng làm nguồn dữ liệu chuẩn đối với vòng đời Conversation, Task, Operation, Approval, Execution, Benchmark Run và Evaluation. Mọi thay đổi nghiệp vụ dài hạn được thực hiện thông qua Domain Service và Repository. Các cập nhật cần bảo đảm tính nhất quán, chẳng hạn xoay session hoặc xử lý phê duyệt hết hạn, sử dụng transaction và cơ chế khóa dữ liệu phù hợp tại tầng lưu trữ.
 
-LangGraph state chỉ chứa dữ liệu chuyển tiếp cần thiết giữa các node trong một lượt xử lý, chẳng hạn Conversation, Message, Task, Execution Result, Analysis Result, vòng điều tra và mức độ bao phủ evidence. State này không được sử dụng như nguồn dữ liệu cạnh tranh với PostgreSQL. Trước mỗi giai đoạn quan trọng, Orchestrator đọc lại trạng thái nghiệp vụ đã lưu để hạn chế việc thực thi dựa trên dữ liệu cũ.
+LangGraph state chỉ chứa dữ liệu chuyển tiếp cần thiết giữa các node trong một lượt xử lý, chẳng hạn Conversation, Message, `PlanningDraft`, Task, Execution Result, Analysis Result, vòng điều tra và mức độ bao phủ evidence. State này không được sử dụng như nguồn dữ liệu cạnh tranh với PostgreSQL. Trước mỗi giai đoạn quan trọng, Orchestrator đọc lại trạng thái nghiệp vụ đã lưu để hạn chế việc thực thi dựa trên dữ liệu cũ.
 
 Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Operation, Approval và command snapshot trong PostgreSQL rồi kết thúc lượt workflow hiện tại. Sau khi người dùng đưa ra quyết định, API tải lại Task và khởi chạy workflow tiếp tục từ giai đoạn thực thi. Nhờ đó, hệ thống không phải duy trì một tiến trình LangGraph hoặc kết nối HTTP liên tục trong toàn bộ thời gian chờ phê duyệt, đồng thời vẫn bảo đảm tính tuần tự, khả năng truy vết và tính nhất quán của nội dung đã được chấp thuận.
 
@@ -770,10 +770,10 @@ Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Op
 | Configuration Agent    | Kế hoạch, yêu cầu cấu hình, thiết bị và interface hợp lệ       | Chuyển yêu cầu của từng Operation WRITE thành CLI và chuẩn hóa lệnh                 | Kế hoạch có commands WRITE; không kết nối hoặc thực thi trên thiết bị |
 | Network Agent          | Operation và danh sách command cho mapping                    | Kiểm tra input và gọi NetworkTool qua adapter                                     | NetworkExecutionResult; không dùng LLM, không tự chọn mạng đích |
 | Analyst Agent          | Command outputs, hostname, trạng thái thực thi                | Tóm tắt phát hiện, giả thuyết, khuyến nghị; tạo kết luận RCA dạng JSON            | AnalysisResult; không kết nối hay sửa thiết bị                  |
-| Planning Orchestrator  | Message, Conversation, inventory và topology                  | Gọi Planner, chuyển WRITE plan sang Configuration Orchestrator, kiểm tra device ID và lưu kế hoạch | Task/plan đã xác thực |
+| Planning Orchestrator  | Message, Conversation, inventory và topology                  | Tạo Task gốc, gọi Planner, kiểm tra device/interface, tạo PlanningDraft và lưu kế hoạch hoàn chỉnh | PlanningDraft hoặc Task/plan đã xác thực |
 | Configuration Orchestrator | ExecutionPlanCreate, inventory và interface GNS3          | Xác định WRITE operation, gọi Configuration Agent, kiểm tra command/interface và ghi activity | Kế hoạch có CLI WRITE đã xác thực |
 | Execution Orchestrator | Task và graph operation                                       | Kiểm tra dependency, Approval Gate, thực thi và cập nhật trạng thái               | Execution/result/action logs                                    |
-| Analysis Orchestrator  | Kết quả thực thi                                              | Lưu kết luận có cấu trúc vào timeline và tạo FINAL_RESPONSE                       | Message cuối cùng cùng dấu vết phân tích                        |
+| Analysis Orchestrator  | Task, kết quả thực thi, playbook, Evidence Coverage, inventory và topology | Chuẩn hóa evidence, áp dụng Causal Evidence Gate, điều phối vòng điều tra và tạo FINAL_RESPONSE | Message cuối cùng, structured diagnosis và dấu vết evidence |
 
 ### 3.5.1. Planner Agent
 
@@ -794,7 +794,7 @@ Với yêu cầu cấu hình, Planner mô tả mục tiêu, tham số và ràng 
 
 Với yêu cầu chẩn đoán, Planner ưu tiên tạo các Operation READ nhằm thu thập evidence theo diagnostic playbook. Khi cần quan sát thiết bị lân cận, Agent sử dụng topology neighbor và ánh xạ interface đã được cung cấp, không tự suy đoán quan hệ mạng. Những Operation do vòng điều tra bổ sung tạo ra cũng bị giới hạn ở lệnh READ-only để tránh thay đổi cấu hình trong quá trình thu thập bằng chứng.
 
-Kết quả từ LLM phải là một JSON object phù hợp với `ExecutionPlanCreate`. Planner kiểm tra dữ liệu bằng Pydantic. Nếu phản hồi sai JSON, Operation READ thiếu command, Operation WRITE thiếu yêu cầu cấu hình hoặc vi phạm schema, Agent gửi lại lỗi validation để mô hình sửa trong giới hạn retry và timeout. Planning Orchestrator tiếp tục kiểm tra device ID, thứ tự và dependency, sau đó chuyển kế hoạch có Operation WRITE cho Configuration Orchestrator xử lý.
+Kết quả từ LLM phải là một JSON object phù hợp với `ExecutionPlanCreate`. Planner kiểm tra dữ liệu bằng Pydantic. Nếu phản hồi sai JSON, Operation READ thiếu command, Operation WRITE thiếu yêu cầu cấu hình hoặc vi phạm schema, Agent gửi lại lỗi validation để mô hình sửa trong giới hạn retry và timeout. Planning Orchestrator tiếp tục kiểm tra device ID, thứ tự và dependency rồi tạo `PlanningDraft`. Conditional edge của LangGraph quyết định chuyển draft sang node `configure` khi có WRITE hoặc lưu kế hoạch READ để đi thẳng đến `execute`.
 
 Planner Agent không lưu trực tiếp dữ liệu nghiệp vụ, không giải mã credential, không sinh CLI WRITE, không mở kết nối SSH/Telnet, không phê duyệt cấu hình và không thực thi command. Việc tách lập kế hoạch khỏi sinh cấu hình giúp thu hẹp trách nhiệm của Planner và cho phép kiểm tra riêng từng đầu ra.
 
@@ -817,7 +817,7 @@ Structured output phải chứa đúng một `GeneratedConfiguration` cho mỗi 
 
 Trước khi được đưa vào kế hoạch, command được chuẩn hóa bằng `normalize_config_commands`. Các lệnh quản lý phiên như `configure terminal`, `end`, `write memory` được loại bỏ vì việc vào chế độ cấu hình, lưu cấu hình và đóng phiên thuộc trách nhiệm của NetworkTool. Sau khi Agent trả kết quả, Configuration Orchestrator tiếp tục đối chiếu các interface xuất hiện trong CLI với inventory GNS3. Kế hoạch tham chiếu interface vật lý không tồn tại bị từ chối trước khi được lưu. Orchestrator đồng thời ghi các activity `CONFIGURATION_STARTED` và `CONFIGURATION_COMPLETED` để giao diện thể hiện đúng trình tự xử lý.
 
-Kết quả cuối của giai đoạn này vẫn là `ExecutionPlanCreate`, trong đó Operation READ không thay đổi và Operation WRITE đã có trường `commands`. Kết quả này chưa được phép thực thi ngay. Planning Orchestrator phải lưu kế hoạch thành các bản ghi nghiệp vụ; Execution Orchestrator kiểm tra dependency; Approval Gate tạo và kiểm tra command snapshot trước khi Network Agent được gọi.
+Kết quả cuối của node `configure` vẫn là `ExecutionPlanCreate`, trong đó Operation READ không thay đổi và Operation WRITE đã có trường `commands`. Workflow yêu cầu Planning Orchestrator lưu kế hoạch hoàn chỉnh thành các bản ghi nghiệp vụ trước khi chuyển sang `execute`. Execution Orchestrator tiếp tục kiểm tra dependency; Approval Gate tạo và kiểm tra command snapshot trước khi Network Agent được gọi.
 
 Configuration Agent không kết nối GNS3 hoặc thiết bị mạng, không đọc credential, không quan sát output thực tế, không phê duyệt thay đổi và không tự khắc phục lỗi sau thực thi. Nếu mô hình không trả JSON hợp lệ sau số lần thử cho phép hoặc vượt quá timeout, giai đoạn lập kế hoạch kết thúc với lỗi có cấu trúc thay vì chuyển một cấu hình không xác định xuống thiết bị.
 
@@ -847,7 +847,7 @@ Phạm vi trách nhiệm trên bảo đảm Network Agent không vượt quyền
 
 Analyst Agent là tác tử chuyên trách **diễn giải kết quả thực thi và hình thành kết luận chẩn đoán có cấu trúc**. Agent không kết nối thiết bị và không tự chạy command; đầu vào của nó được Analysis Orchestrator xây dựng từ các `NetworkExecutionResult` đã lưu. Mỗi phần tử đầu vào gồm tên thiết bị dễ đọc, chế độ truy cập, trạng thái thực thi, command, output, lỗi kỹ thuật và `structured_evidence` được parser của backend trích xuất. Khi có thể truy cập GNS3, Orchestrator còn bổ sung thông tin topology lân cận; đối với tác vụ chẩn đoán, trạng thái Evidence Coverage của playbook cũng được đưa vào ngữ cảnh phân tích.
 
-Analyst Agent sử dụng LLM để tổng hợp dữ liệu thành `AnalysisResult`. Kết quả gồm `summary`, `findings`, `likely_causes`, `recommendations`, `requires_more_data`, `confidence`, `evidence_gaps`, `suggested_checks`, `is_anomaly` và `root_causes`. Trong đó, `root_causes` sử dụng cấu trúc `PredictedRootCause` để biểu diễn thiết bị, interface có thể rỗng và loại sự cố; `confidence` nằm trong khoảng từ 0 đến 1. Các danh sách và độ dài chuỗi được giới hạn nhằm giảm nguy cơ phản hồi dài, lặp lại hoặc bị cắt giữa chừng.
+Analyst Agent sử dụng LLM để tổng hợp dữ liệu thành `AnalysisResult`. Kết quả gồm `summary`, `findings`, `likely_causes`, `recommendations`, `requires_more_data`, `confidence`, `evidence_gaps`, `suggested_checks`, `is_anomaly`, `root_causes`, `suspected_causes` và `execution_issues`. Trong đó, `root_causes` sử dụng cấu trúc `PredictedRootCause` để biểu diễn thiết bị, interface có thể rỗng và loại sự cố; `confidence` nằm trong khoảng từ 0 đến 1. Trường `suspected_causes` do Causal Evidence Gate của backend bổ sung sau hậu kiểm, còn `execution_issues` được backend tạo từ các lỗi kết nối hoặc thực thi xác định; hai trường này không phải kết luận tự do do LLM thiết lập. Các danh sách và độ dài chuỗi được giới hạn nhằm giảm nguy cơ phản hồi dài, lặp lại hoặc bị cắt giữa chừng.
 
 Quy trình phân tích của Analyst Agent gồm các bước sau:
 
@@ -870,110 +870,433 @@ Sau khi hoàn tất Evidence Gate, Analysis Orchestrator định dạng kết qu
 
 ### 3.5.5. Orchestrator và cơ chế điều phối
 
-Hệ thống sử dụng kiến trúc đa tác tử có điều phối tập trung với bốn thành phần điều phối chuyên trách. Planning Orchestrator gọi Planner Agent, kiểm tra định danh thiết bị, thứ tự và dependency, đồng thời lưu kế hoạch nghiệp vụ. Configuration Orchestrator nhận kế hoạch có Operation WRITE, gọi Configuration Agent, chuẩn hóa command, xác minh interface và trả lại kế hoạch đã bổ sung CLI. Execution Orchestrator xác định thứ tự thực thi, kiểm tra dependency, xử lý Approval Gate và gọi Network Agent. Analysis Orchestrator tổng hợp dữ liệu, gọi Analyst Agent, kiểm tra bằng chứng và chuẩn bị kết quả để workflow lựa chọn bước tiếp theo.
+Hệ thống sử dụng **cơ chế điều phối tập trung** nhằm bảo đảm các Agent chỉ thực hiện đúng nhiệm vụ chuyên môn và không trực tiếp quyết định toàn bộ vòng đời của một yêu cầu. Lớp điều phối gồm Planning Orchestrator, Configuration Orchestrator, Execution Orchestrator và Analysis Orchestrator. Các thành phần này không thay thế Agent trong việc suy luận hoặc thực thi kỹ thuật; chúng chịu trách nhiệm chuẩn bị ngữ cảnh, gọi đúng Agent, kiểm tra đầu ra, áp dụng quy tắc nghiệp vụ, lưu trạng thái và quyết định giai đoạn tiếp theo của workflow.
 
-Kế hoạch gồm Task, TaskOperation, OperationDependency và TaskOperationDevice. Dependency hỗ trợ `ON_SUCCESS` và `ON_COMPLETION`; Planner chỉ được tham chiếu Operation đứng trước để tránh chu trình. Trạng thái được đọc lại từ cơ sở dữ liệu trước khi thực thi, giúp tránh chạy lại những thao tác đã hoàn tất.
+**Planning Orchestrator** quản lý node `plan`. Thành phần này tạo Task gốc từ Message của người dùng, ghi các activity ban đầu, lấy danh sách thiết bị khả dụng, topology và diagnostic playbook phù hợp, sau đó gọi Planner Agent. Kế hoạch trả về được kiểm tra định danh thiết bị, thứ tự Operation, quan hệ phụ thuộc và interface được tham chiếu. Kết quả của giai đoạn này là `PlanningDraft` gồm Task gốc, `ExecutionPlanCreate`, inventory công khai và ánh xạ interface. Planning Orchestrator chưa lưu Operation WRITE tại thời điểm này. Khi draft chỉ chứa READ, thành phần này lưu ngay kế hoạch hoàn chỉnh; khi có WRITE, conditional edge chuyển draft sang node `configure`. Nếu Planner hoặc bước validation phát sinh lỗi, Task được chuyển sang trạng thái thất bại và nguyên nhân được ghi vào timeline thay vì tiếp tục với kế hoạch chưa hợp lệ.
+
+**Configuration Orchestrator** quản lý nghiệp vụ chính bên trong node LangGraph `configure`, qua đó cô lập quá trình chuyển yêu cầu WRITE thành CLI khỏi node `plan`. Thành phần này nhận `PlanningDraft`, đếm số Operation WRITE, ghi activity `CONFIGURATION_STARTED`, gọi Configuration Agent với kế hoạch, inventory công khai và danh sách interface hợp lệ, sau đó kiểm tra lại CLI được sinh. Các interface vật lý xuất hiện trong command phải tồn tại trong inventory GNS3; command phải được ánh xạ đúng Operation và đã loại các lệnh quản lý phiên không thuộc trách nhiệm của Agent. Chỉ khi toàn bộ kiểm tra thành công, Orchestrator mới ghi `CONFIGURATION_COMPLETED`. Workflow sau đó yêu cầu Planning Orchestrator lưu kế hoạch đã bổ sung CLI thành các bản ghi nghiệp vụ rồi mới chuyển sang node `execute`. Nếu cấu hình hoặc validation thất bại, Task được đánh dấu `FAILED` tại giai đoạn `CONFIGURATION`.
+
+**Execution Orchestrator** quản lý việc thực thi DAG đã được lưu. Trước khi chạy, thành phần này đọc lại Task từ PostgreSQL để ngăn callback phê duyệt đến muộn làm sống lại một Task đã kết thúc. Các Operation được duyệt theo `display_order`; điều kiện dependency được đánh giá trước khi thực thi. Dependency `ON_SUCCESS` yêu cầu Operation trước thành công, trong khi `ON_COMPLETION` chỉ yêu cầu Operation trước đã kết thúc. Operation không thỏa mãn dependency được đánh dấu `SKIPPED`, không được gửi xuống thiết bị.
+
+Đối với mỗi Operation đủ điều kiện, Execution Orchestrator tải các `TaskOperationDevice` và chuyển chúng qua Approval Gate. Mapping READ có thể được thực hiện ngay; mapping WRITE chỉ được phép chạy khi quyết định phê duyệt còn hiệu lực và command hiện tại khớp với snapshot đã được phê duyệt. Nếu còn mapping chờ quyết định, Operation chuyển sang `WAITING_APPROVAL`, activity `APPROVAL_REQUESTED` được ghi lại và lượt workflow hiện tại tạm dừng an toàn. Khi người dùng phê duyệt hoặc từ chối, backend tải lại Task từ cơ sở dữ liệu và khởi chạy nhánh tiếp tục tại giai đoạn `execute`, thay vì giữ một tiến trình LangGraph hoạt động trong toàn bộ thời gian chờ.
+
+Sau khi vượt Approval Gate, Execution Orchestrator sử dụng `MappingExecutor` để gọi Network Agent cho từng ánh xạ thiết bị. `MappingExecutor` tạo `TaskExecution` ở trạng thái `RUNNING`, đo thời gian, lưu output, cập nhật trạng thái mapping và ghi `DeviceActionLog` theo từng command. Trạng thái Operation được tính lại từ toàn bộ mapping; trạng thái Task được tổng hợp từ các Operation thành `SUCCESS`, `PARTIAL_SUCCESS`, `FAILED` hoặc trạng thái kết thúc tương ứng. Nếu một exception ngoài dự kiến xuất hiện, Execution Orchestrator ghi lỗi, kết thúc Task có kiểm soát và không âm thầm tiếp tục các bước phụ thuộc.
+
+Execution Orchestrator còn hỗ trợ các vòng điều tra bổ sung. Kế hoạch điều tra được nối vào Task hiện có nhưng chỉ chứa Operation READ. Thành phần này chỉ thực thi những Operation vừa được bổ sung, tránh chạy lại các Operation trước đó đã hoàn tất. Cơ chế này cho phép Analyst yêu cầu thêm evidence mà vẫn duy trì một lịch sử Task thống nhất và không làm mất dấu mối quan hệ giữa kết quả ban đầu với dữ liệu thu thập sau đó.
+
+**Analysis Orchestrator** quản lý giai đoạn diễn giải kết quả và kiểm soát bằng chứng. Thành phần này chỉ bắt đầu phân tích khi Task không còn ở trạng thái đang chạy hoặc chờ phê duyệt. Output kỹ thuật được gắn hostname, parse thành `DiagnosticEvidence` và kết hợp với topology cùng Evidence Coverage trước khi chuyển cho Analyst Agent. Kết quả `AnalysisResult` sau đó được đưa qua Causal Evidence Gate để phân loại nguyên nhân thành đã xác nhận hoặc còn nghi ngờ. Nếu evidence bắt buộc còn thiếu, Analysis Orchestrator ưu tiên command từ diagnostic playbook, kết hợp các `suggested_checks` hợp lệ của Analyst và tạo kế hoạch điều tra READ-only.
+
+Khi evidence đã đầy đủ nhưng Analyst chưa tạo được root cause mặc dù đã nhận diện bất thường, Analysis Orchestrator có thể yêu cầu diễn giải lại đúng một lần. Khi LLM timeout hoặc trả structured output không hợp lệ, thành phần này tạo phản hồi dự phòng để workflow không bị treo, nhưng không xem phản hồi đó là một kết luận RCA hợp lệ. Sau khi đủ bằng chứng hoặc đạt giới hạn số vòng điều tra, Orchestrator định dạng nội dung dễ đọc, lưu Message `FINAL_RESPONSE` và ghi activity liên kết Message với Task.
+
+Kế hoạch nghiệp vụ được biểu diễn bằng bốn thành phần chính: `Task` mô tả yêu cầu tổng thể; `TaskOperation` mô tả từng bước; `OperationDependency` biểu diễn quan hệ DAG; và `TaskOperationDevice` ánh xạ bước xử lý với thiết bị cùng quyền READ hoặc WRITE. Planner chỉ được tham chiếu Operation đứng trước để hạn chế chu trình. Bên cạnh đó, Approval, TaskExecution, DeviceActionLog và TaskActivityEvent lưu quyết định của người dùng, kết quả kỹ thuật và dấu vết thực thi.
+
+PostgreSQL là nguồn dữ liệu chuẩn đối với toàn bộ trạng thái nghiệp vụ. LangGraph state chỉ vận chuyển dữ liệu cần thiết giữa các node trong một lượt chạy, chẳng hạn `PlanningDraft`, Task hiện tại, execution results, analysis, số vòng điều tra và mức bao phủ evidence. Draft chỉ tồn tại trong giai đoạn `plan → configure`; trước node `execute`, kế hoạch hoàn chỉnh phải được lưu vào PostgreSQL. Trước các giai đoạn quan trọng, Orchestrator đọc lại trạng thái đã lưu thay vì chỉ tin vào state trong bộ nhớ. Cách tổ chức này hỗ trợ tiếp tục sau phê duyệt, tránh thực thi lặp, xử lý callback muộn và phục hồi luồng dựa trên dữ liệu đã tồn tại.
+
+Mọi Orchestrator đều ghi `TaskActivityEvent` để frontend hiển thị tiến trình theo trình tự. Activity chỉ phản ánh sự kiện đã xảy ra hoặc trạng thái đang chờ; dữ liệu thực thi chi tiết vẫn được lưu trong các bảng nghiệp vụ tương ứng. Nhờ đó, cơ chế điều phối vừa hỗ trợ người dùng theo dõi tiến trình xử lý, vừa duy trì khả năng truy vết cần thiết cho Audit Log và Benchmark Evaluation.
+
+Sự phân tách giữa bốn Orchestrator tạo ra các ranh giới kiểm soát rõ ràng: Planning Orchestrator không trực tiếp thực thi CLI; Configuration Orchestrator không kết nối thiết bị; Execution Orchestrator không tự phân tích nguyên nhân sự cố; Analysis Orchestrator không được tạo thao tác WRITE. Các Agent cũng không truy cập Repository trực tiếp. Mọi thay đổi trạng thái dài hạn đều đi qua Domain Service, nhờ đó quy tắc nghiệp vụ, phân quyền, phê duyệt và audit không phụ thuộc vào phản hồi không xác định của LLM.
 
 ### 3.5.6. Quy trình thực thi Multi-Agent trên LangGraph
 
-LangGraph sử dụng graph chính `check_gns3 → plan → execute → analyze → (investigate → analyze)* → finalize → END` và graph tiếp tục sau approval bắt đầu tại `execute`. Workflow đầu tiên được kích hoạt từ một USER_REQUEST. Trong node `plan`, Planning Orchestrator gọi Planner Agent để tạo kế hoạch nghiệp vụ; nếu có Operation WRITE, thành phần này chuyển kế hoạch cho Configuration Orchestrator gọi Configuration Agent và kiểm tra CLI trước khi Task cùng sơ đồ Operation được lưu. Configuration Orchestrator là thành phần nội bộ của giai đoạn lập kế hoạch, không phải một node LangGraph độc lập. Execution node duyệt kế hoạch và gọi Network Agent. Analysis node đánh giá độ đầy đủ của bằng chứng; finalize chỉ tạo phản hồi cuối sau khi đã kết luận hoặc đạt số vòng bổ sung `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi vẫn chờ phê duyệt, workflow phát thông báo APPROVAL_REQUEST.
+Trong mã nguồn, LangGraph biên dịch một graph thống nhất phục vụ hai chế độ kích hoạt: xử lý Message mới và tiếp tục Task sau phê duyệt. State chứa `entry_mode` với giá trị `message` hoặc `approval`; conditional edge tại `START` dùng giá trị này để chọn điểm xử lý tiếp theo. Các điều kiện được đặt trên cạnh và không được biểu diễn thành node nghiệp vụ riêng.
+
+Khi `entry_mode=message`, yêu cầu đi qua `check_gns3` và `plan`. Khi `entry_mode=approval`, backend đã tải Task được lưu theo mapping phê duyệt và graph đi trực tiếp đến `execute`, không chạy lại bước kiểm tra GNS3, lập kế hoạch hoặc sinh cấu hình. Sau `plan`, conditional edge chuyển kế hoạch có WRITE qua `configure`; kế hoạch chỉ có READ đi thẳng đến `execute`. Node `analyze` tiếp tục sử dụng conditional edge để chọn `investigate` hoặc `finalize`.
+
+Theo ký hiệu lý thuyết đồ thị, workflow được mô tả bởi `G = (V, E)`, trong đó `V = {START, check_gns3, plan, configure, execute, analyze, investigate, finalize, END}`. `START` và `END` là các đỉnh đặc biệt của LangGraph; tập node nghiệp vụ thực sự là `{check_gns3, plan, configure, execute, analyze, investigate, finalize}`. Tập cạnh `E` gồm các chuyển tiếp trực tiếp và có điều kiện được thể hiện trên Hình 3.3.
 
 Các giới hạn vận hành được ngoại hóa qua biến môi trường: retry và timeout của Planner/Analyst, số vòng điều tra, ngưỡng confidence và giới hạn token Analyst. Cách này cho phép hiệu chỉnh thực nghiệm mà không thay đổi mã nguồn; các giới hạn bảo đảm hợp đồng như command READ-only và kích thước schema vẫn được cố định trong code.
 
-Một approval có thể làm quy trình tạm dừng trong khoảng thời gian dài. Để tránh thực thi lại các lệnh đã xong, nhánh resume dùng Task và mapping đã lưu. Phần chờ quyết định của con người được ghi thành activity timeline và được loại trừ khỏi cách đo thời gian workflow AI mới.
+Một approval có thể làm quy trình tạm dừng trong khoảng thời gian dài. Để tránh thực thi lại các lệnh đã xong, chế độ `approval` sử dụng Task và mapping đã lưu rồi đi từ `START` đến `execute`. Phần chờ quyết định của con người được ghi thành activity timeline và được loại trừ khỏi cách đo thời gian workflow AI. Cả hai chế độ gọi cùng `_graph`; việc chọn cạnh khởi đầu không làm thay đổi trạng thái nghiệp vụ đã lưu trong PostgreSQL.
 
 ```mermaid
 flowchart TD
-    START([Yêu cầu người dùng]) --> CHECK[check_gns3]
-    subgraph PLAN_NODE["plan node"]
-        direction LR
-        PLAN_ORCH[Planning Orchestrator] --> PLANNER[Planner Agent]
-        PLANNER --> CONFIG_ORCH[Configuration Orchestrator]
-        CONFIG_ORCH --> CONFIG_AGENT[Configuration Agent]
-    end
-    CHECK --> PLAN_ORCH
-    CONFIG_AGENT --> EXEC[execute / Execution Orchestrator + Network Agent]
-    EXEC -->|Chờ WRITE approval| WAIT[Approval Gate]
-    WAIT -->|Approved| EXEC
-    WAIT -->|Rejected hoặc Expired| FINAL[finalize]
-    EXEC --> ANALYZE[analyze / Analyst Agent]
+    START([START]) -->|entry_mode = message| CHECK[check_gns3]
+    START -->|entry_mode = approval| EXEC[execute]
+    CHECK --> PLAN[plan]
+    PLAN -->|Có Operation WRITE| CONFIGURE[configure]
+    PLAN -->|Chỉ có Operation READ| EXEC
+    CONFIGURE --> EXEC
+    EXEC --> ANALYZE[analyze]
     ANALYZE -->|Thiếu bằng chứng| INVESTIGATE[investigate / READ-only]
     INVESTIGATE --> ANALYZE
-    ANALYZE -->|Đủ bằng chứng hoặc đạt giới hạn| FINAL
-    FINAL --> END([Phản hồi cuối])
+    ANALYZE -->|Đủ bằng chứng hoặc đạt giới hạn| FINAL[finalize]
+    FINAL --> END([END])
 ```
 
-_Hình 3.3. Sơ đồ workflow Multi-Agent trên LangGraph._
+_Hình 3.3. Đồ thị workflow thống nhất với conditional edge tại START._
+
+| Node LangGraph | Thành phần xử lý chính | Kết quả |
+| --- | --- | --- |
+| `check_gns3` | GNS3 Provider | Xác nhận GNS3 Server có thể truy cập |
+| `plan` | Planning Orchestrator và Planner Agent | `PlanningDraft`; kế hoạch READ đã lưu hoặc kế hoạch WRITE chờ cấu hình |
+| `configure` | Configuration Orchestrator và Configuration Agent | Kế hoạch WRITE có CLI đã xác thực và được lưu |
+| `execute` | Execution Orchestrator, Approval Gate và Network Agent | Kết quả thực thi hoặc trạng thái chờ phê duyệt |
+| `analyze` | Analysis Orchestrator, Analyst Agent và Causal Evidence Gate | `AnalysisResult` cùng Evidence Coverage |
+| `investigate` | Analysis Orchestrator và Execution Orchestrator | Operation READ bổ sung và evidence mới |
+| `finalize` | Analysis Orchestrator | Message `FINAL_RESPONSE` hoặc phản hồi chờ phê duyệt |
 
 ## 3.6. Thiết kế các quy trình xử lý nghiệp vụ
 
 ### 3.6.1. Quy trình tiếp nhận và phân tích yêu cầu
 
-Người dùng đăng nhập và gửi yêu cầu qua giao diện hội thoại. Conversation Service lưu USER_REQUEST, xác định Conversation và kích hoạt workflow nền. LangGraph kiểm tra GNS3, tạo Task và chuyển yêu cầu cho Planner. Kế hoạch sau khi kiểm tra được lưu thành các Operation, dependency và mapping thiết bị. Frontend lấy Message và Activity Timeline để hiển thị tiến trình.
+Quy trình bắt đầu khi người dùng đã được xác thực gửi một yêu cầu ngôn ngữ tự nhiên từ giao diện Chat. Với yêu cầu đầu tiên, Conversation Service tạo `Conversation` và lưu `Message` loại `USER_REQUEST` trong một transaction ngắn. Với hội thoại đã tồn tại, Service kiểm tra Conversation rồi lưu Message mới. Message phải được ghi thành công trước khi kích hoạt AI workflow để Task luôn có `source_message_id` hợp lệ và lịch sử yêu cầu vẫn được bảo toàn nếu LLM hoặc thiết bị mạng phát sinh lỗi.
 
-### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
+API trả Message đã lưu cho frontend ngay sau bước ghi dữ liệu, còn `NetworkAutomationWorkflow.run_message` được đưa vào `BackgroundTasks`. Cách tổ chức này tách thời gian phản hồi HTTP khỏi thời gian Planner, thiết bị mạng và Analyst xử lý. Chỉ Message do người dùng gửi mới kích hoạt workflow; Message của Agent hoặc System chỉ được lưu làm lịch sử và không tạo Task mới, qua đó ngăn vòng lặp hội thoại ngoài ý muốn. Đối với Message đầu tiên, tiêu đề Conversation được sinh sau workflow để tránh gọi đồng thời hai yêu cầu LLM trên cùng một lượt xử lý.
 
-Planner Agent nhận yêu cầu cùng inventory công khai và tạo kế hoạch có cấu trúc. Planning Orchestrator xác minh thiết bị, thứ tự và quan hệ phụ thuộc. Khi kế hoạch chứa Operation WRITE, Planning Orchestrator chuyển kế hoạch cho Configuration Orchestrator. Thành phần này gọi Configuration Agent để sinh CLI từ `configuration_requirements`, chuẩn hóa các lệnh quản lý phiên, đối chiếu interface với inventory GNS3 và ghi activity tương ứng. Kế hoạch chỉ được lưu sau khi vượt qua các bước kiểm tra trên. Execution Orchestrator sau đó chỉ chạy các mapping đủ điều kiện: Operation READ được thực hiện trực tiếp, còn Operation WRITE chuyển sang trạng thái chờ phê duyệt. Sau thực thi, kết quả được lưu và cung cấp cho Analyst Agent.
+Sau khi gửi Message, frontend mở kết nối SSE theo `source_message_id`. Backend liên kết Message với Task khi Task được tạo, phát lại các `TaskActivityEvent` có sequence lớn hơn cursor của client và tiếp tục gửi sự kiện mới. Cơ chế `Last-Event-ID` hoặc `after_sequence` cho phép tiếp tục từ vị trí đã nhận khi kết nối lại. Frontend tải lại dữ liệu hội thoại sau những activity cần thiết; nếu SSE lỗi liên tiếp, client chuyển sang polling dự phòng. SSE chỉ truyền dấu vết tiến trình đã lưu, không phải nguồn dữ liệu chuẩn thay thế PostgreSQL.
 
-### 3.6.3. Quy trình chẩn đoán sự cố và phân tích nguyên nhân gốc
-
-Với tác vụ chẩn đoán, Planner tạo các Operation READ để thu thập trạng thái interface, route, neighbor hoặc cấu hình liên quan. Analyst tổng hợp bằng chứng và đưa ra root cause có cấu trúc. Khi còn thiếu dữ liệu, Orchestrator chỉ tạo kiểm tra bổ sung thuộc nhóm `show`, `ping` hoặc `traceroute`, ưu tiên thiết bị mục tiêu và láng giềng một hop. Causal Evidence Gate xác nhận hoặc hạ mức kết luận dựa trên bằng chứng thực tế.
-
-```mermaid
-flowchart TD
-    A[Thu thập bằng chứng ban đầu] --> B[Analyst phân tích]
-    B --> C{Đủ required evidence?}
-    C -->|Có| D[Causal Evidence Gate]
-    D --> E{Root cause được xác nhận?}
-    E -->|Có| F[Finalize kết luận]
-    E -->|Không| G[Ghi nhận suspected hoặc unknown]
-    C -->|Không| H{Còn vòng điều tra?}
-    H -->|Có| I[Tạo Operation READ bổ sung]
-    I --> J[Thu thập từ thiết bị hoặc peer]
-    J --> B
-    H -->|Không| G
-    G --> F
-```
-
-_Hình 3.4. Quy trình chẩn đoán và thu thập bổ sung bằng chứng._
-
-### 3.6.4. Quy trình phê duyệt và kiểm soát thực thi
-
-Approval Gate phân biệt READ và WRITE. Với WRITE, backend lưu snapshot câu lệnh, request hash SHA-256, thời hạn và người có quyền quyết định. Sau khi phê duyệt, engine tính lại hash từ nội dung canonical và chỉ thực thi khi dữ liệu vẫn khớp snapshot. Quyết định REJECTED hoặc EXPIRED kết thúc thao tác mà không kết nối thiết bị.
+Trong graph xử lý Message mới, node `check_gns3` kiểm tra khả năng truy cập GNS3 Server trước khi tạo kế hoạch. Node `plan` sau đó yêu cầu Planning Orchestrator tạo Task, ghi các activity `MESSAGE_RECEIVED` và `TASK_CREATED`, lấy inventory cùng topology, rồi gọi Planner Agent. Nếu một lỗi xuất hiện trong giai đoạn lập kế hoạch hoặc validation, Task được chuyển sang `FAILED`, activity chứa giai đoạn và thông báo lỗi được lưu để frontend có thể hiển thị nguyên nhân thay vì giữ tiến trình ở trạng thái đang xử lý.
 
 ```mermaid
 sequenceDiagram
-    actor User as Quản trị viên mạng
+    actor User as Người dùng
     participant FE as Frontend
-    participant API as Backend API
-    participant EO as Execution Orchestrator
+    participant API as Conversation API
+    participant CS as Conversation Service
+    participant WF as LangGraph Workflow
+    participant PO as Planning Orchestrator
+    participant ES as Execution Service
+    participant SSE as SSE Endpoint
     participant DB as PostgreSQL
-    participant NA as Network Agent
-    participant DEV as Thiết bị GNS3
 
-    EO->>DB: Lưu approval request, snapshot và hash
-    EO-->>FE: Thông báo WAITING_APPROVAL
-    User->>FE: Phê duyệt hoặc từ chối
-    FE->>API: Gửi quyết định
-    API->>DB: Lưu quyết định và người phê duyệt
-    API->>EO: Tiếp tục workflow
-    EO->>DB: Đọc lại Operation và snapshot
-    EO->>EO: Kiểm tra trạng thái, timeout và hash
-    alt Approved và dữ liệu nhất quán
-        EO->>NA: Thực thi Operation WRITE
-        NA->>DEV: Gửi lệnh cấu hình
-        DEV-->>NA: Trả kết quả
-        NA-->>EO: NetworkExecutionResult
-    else Rejected, Expired hoặc hash không khớp
-        EO->>DB: Ghi trạng thái kết thúc hoặc FAILED
+    User->>FE: Gửi yêu cầu ngôn ngữ tự nhiên
+    FE->>API: POST Conversation/Message
+    API->>CS: Tạo Conversation và lưu USER_REQUEST
+    CS->>DB: Ghi dữ liệu thông qua Repository
+    DB-->>CS: Conversation và Message
+    CS-->>API: Message đã lưu
+    API-->>FE: Trả Message có ID dùng làm source_message_id
+
+    API-->>WF: Chạy run_message trong BackgroundTasks
+    FE->>SSE: Mở stream theo source_message_id
+
+    WF->>PO: Thực hiện node plan
+    PO->>ES: Tạo Task và ghi Activity
+    ES->>DB: Lưu Task và TaskActivityEvent
+
+    loop Khi workflow còn hoạt động
+        SSE->>ES: Lấy event sau sequence hiện tại
+        ES->>DB: Truy vấn TaskActivityEvent qua Repository
+        DB-->>ES: Danh sách event mới
+        ES-->>SSE: TaskStreamEvent
+        SSE-->>FE: SSE task_activity
+        FE->>API: Tải lại Conversation hoặc Task khi cần
     end
 ```
 
-_Hình 3.5. Sequence Diagram của quy trình Approval Gate._
+_Hình 3.4. Quy trình tiếp nhận Message, xử lý nền và cập nhật tiến trình qua SSE._
 
-### 3.6.5. Quy trình kiểm tra kết quả và ghi nhận nhật ký
+### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
 
-Sau mỗi thao tác, hệ thống ghi trạng thái và dữ liệu kết quả gắn với Task, Operation và thiết bị. `task_activity_events` lưu các mốc workflow và approval; `task_executions` lưu từng lần gọi công cụ; `device_action_logs` lưu lệnh thực tế cùng output; `audit_logs` ghi sự kiện quản trị cấp hệ thống. Nhật ký hỗ trợ truy vết nhưng không thay thế kiểm chứng trạng thái mạng sau cấu hình.
+Planner Agent nhận yêu cầu, inventory công khai, danh sách interface, topology neighbor, diagnostic playbook phù hợp và JSON Schema của `ExecutionPlanCreate`. Agent xác định `task_type`, phân rã mục tiêu thành các Operation, gán thiết bị, chỉ định `access_mode` và thiết lập dependency. Operation READ phải chứa `command` hoặc `commands`; Operation WRITE chỉ chứa `configuration_requirements` mô tả mục tiêu và ràng buộc cấu hình. Planner không nhận credential và không sinh CLI WRITE.
+
+Planning Orchestrator kiểm tra toàn bộ `device_id` có thuộc inventory, kiểm tra interface vật lý được tham chiếu, thứ tự Operation và dependency. Kết quả hợp lệ được giữ dưới dạng `PlanningDraft`, gồm Task gốc, `ExecutionPlanCreate`, inventory và ánh xạ interface. Ở thời điểm này, các Operation chưa được vật hóa vào PostgreSQL để node `configure` có thể bổ sung CLI mà không phải sửa một kế hoạch WRITE đã lưu dở dang.
+
+Conditional edge sau node `plan` kiểm tra thuộc tính `requires_configuration`. Nếu kế hoạch chỉ có READ, Planning Orchestrator lưu ngay Task Operation, Operation Dependency và Task Operation Device rồi chuyển đến `execute`. Nếu có ít nhất một mapping WRITE, state được chuyển sang node `configure`. Configuration Orchestrator ghi `CONFIGURATION_STARTED`, gọi Configuration Agent với phần kế hoạch WRITE và inventory tối thiểu, sau đó kiểm tra structured output `GeneratedConfigurationSet`.
+
+Configuration Agent phải trả đúng một cấu hình cho mỗi Operation WRITE theo `operation_order`; kết quả trùng, thiếu hoặc thừa Operation đều bị từ chối. Các lệnh quản lý phiên như `configure terminal`, `end` và `write memory` được loại khỏi payload vì NetworkTool chịu trách nhiệm quản lý chế độ cấu hình và lưu cấu hình. Configuration Orchestrator tiếp tục đối chiếu interface trong CLI với dữ liệu GNS3. Chỉ sau khi kiểm tra thành công, activity `CONFIGURATION_COMPLETED` được ghi và Planning Orchestrator mới lưu kế hoạch hoàn chỉnh. Nếu Configuration Agent timeout, trả JSON sai schema hoặc sinh interface không tồn tại, Task kết thúc tại giai đoạn `CONFIGURATION` và không có lệnh nào được gửi đến thiết bị.
+
+```mermaid
+stateDiagram-v2
+    state "USER_REQUEST đã lưu" as A
+    state "Planning Orchestrator tạo Task" as B
+    state "Planner Agent tạo ExecutionPlanCreate" as C
+    state "Plan và inventory hợp lệ?" as D
+    state D <<choice>>
+    state "Task FAILED tại PLANNING" as X
+    state "PlanningDraft" as E
+    state "Có mapping WRITE?" as F
+    state F <<choice>>
+    state "Lưu kế hoạch READ" as I
+    state "Configuration Agent sinh CLI WRITE" as G
+    state "Schema, operation và interface hợp lệ?" as H
+    state H <<choice>>
+    state "Task FAILED tại CONFIGURATION" as Y
+    state "Lưu kế hoạch đã có CLI" as J
+    state "Chuyển sang node execute" as K
+
+    [*] --> A
+    A --> B
+    B --> C
+    C --> D
+    D --> X: Không
+    D --> E: Có
+    E --> F
+    F --> I: Không
+    F --> G: Có
+    G --> H
+    H --> Y: Không
+    H --> J: Có
+    I --> K
+    J --> K
+    X --> [*]
+    Y --> [*]
+    K --> [*]
+```
+
+_Hình 3.5. Quy trình lập kế hoạch và sinh cấu hình có điều kiện._
+
+### 3.6.3. Quy trình thực thi DAG và tổng hợp trạng thái
+
+Node `execute` tải Task đã lưu và chuyển nó sang `RUNNING`. Execution Orchestrator duyệt các Operation theo `display_order`, nhưng chỉ thực thi Operation khi dependency đã thỏa mãn. Với dependency `ON_SUCCESS`, Operation tiền nhiệm phải có trạng thái `SUCCESS`; với `ON_COMPLETION`, Operation tiền nhiệm chỉ cần thuộc một trạng thái kết thúc. Operation không thỏa điều kiện được đánh dấu `SKIPPED`. Cơ chế này cho phép biểu diễn DAG trong cơ sở dữ liệu nhưng thực thi theo một thứ tự xác định và có thể truy vết.
+
+Mỗi Operation được ánh xạ đến một hoặc nhiều `TaskOperationDevice`. Approval Gate lọc các mapping được phép thực thi: mapping READ có thể chuyển trực tiếp đến Network Agent, trong khi mapping WRITE phải có approval hợp lệ. Mapping đã `SUCCESS`, `REJECTED` hoặc `SKIPPED` không được chạy lại. Điều này đặc biệt quan trọng khi workflow được tiếp tục sau phê duyệt hoặc khi callback đến muộn.
+
+Với mỗi mapping đủ điều kiện, `MappingExecutor` tạo `TaskExecution` ở trạng thái `RUNNING`, gọi Network Agent, đo `duration_ms`, lưu output và cập nhật trạng thái mapping. Từng `CommandResult` được ghi thành `DeviceActionLog`; activity `COMMAND_EXECUTED` liên kết Task, Operation, mapping và execution tương ứng. Lỗi kết nối, timeout, lỗi công cụ hoặc lỗi CLI được chuyển thành kết quả `FAILED` có thông báo thay vì làm mất dấu lần thực thi.
+
+Sau khi các mapping kết thúc, trạng thái Operation được tổng hợp theo quy tắc: toàn bộ mapping thành công tạo `SUCCESS`; có cả thành công và thất bại tạo `PARTIAL_SUCCESS`; toàn bộ bị từ chối tạo `REJECTED`; còn lại là `FAILED`. Tương tự, trạng thái Task được tổng hợp từ các Operation thành `SUCCESS`, `PARTIAL_SUCCESS`, `REJECTED` hoặc `FAILED`. Nếu Operation chuyển sang `WAITING_APPROVAL`, lượt workflow hiện tại tạm dừng và không thực thi các Operation phụ thuộc phía sau.
+
+Execution Orchestrator luôn đọc lại trạng thái Task trước các bước quan trọng. Task đã kết thúc không bị khởi động lại bởi callback phê duyệt đến muộn; Operation đã hoàn tất không được thực thi lại khi resume. Đối với vòng điều tra bổ sung, Orchestrator chỉ chạy các Operation READ mới được nối vào Task, giữ nguyên kết quả của kế hoạch ban đầu.
+
+```mermaid
+stateDiagram-v2
+    state "Node execute nhận Task đã lưu" as A
+    state "Task đã kết thúc?" as B
+    state B <<choice>>
+    state "Không thực thi lại" as Z
+    state "Chuyển Task sang RUNNING" as C
+    state "Lấy Operation tiếp theo theo display_order" as D
+    state "Dependency đã thỏa mãn?" as E
+    state E <<choice>>
+    state "Đánh dấu Operation SKIPPED" as F
+    state "Lấy các TaskOperationDevice" as G
+    state "Access mode" as H
+    state H <<choice>>
+    state "Approval hợp lệ và hash khớp?" as I
+    state I <<choice>>
+    state "Cho phép thực thi" as J
+    state "Chuyển WAITING_APPROVAL" as W
+    state "Ghi APPROVAL_REQUESTED" as X
+    state "Tạm dừng lượt workflow" as Y
+    state "Đánh dấu mapping REJECTED" as R
+    state "Đánh dấu mapping FAILED" as S
+    state "MappingExecutor gọi Network Agent" as K
+    state "Lưu TaskExecution và DeviceActionLog" as L
+    state "Tổng hợp mapping thành trạng thái Operation" as M
+    state "Còn Operation?" as N
+    state N <<choice>>
+    state "Tổng hợp trạng thái các Operation" as O
+    state "Chốt trạng thái Task" as P
+    state "Chuyển sang node analyze" as Q
+
+    [*] --> A
+    A --> B
+    B --> Z: Có
+    B --> C: Không
+    C --> D
+    D --> E
+    E --> F: Không
+    F --> N
+    E --> G: Có
+    G --> H
+    H --> J: READ
+    H --> I: WRITE
+    I --> W: Chưa có quyết định
+    W --> X
+    X --> Y
+    I --> R: REJECTED hoặc EXPIRED
+    I --> S: Snapshot hoặc hash sai
+    I --> J: APPROVED
+    J --> K
+    K --> L
+    L --> M
+    R --> M
+    S --> M
+    M --> N
+    N --> D: Có
+    N --> O: Không
+    O --> P
+    P --> Q
+    Z --> [*]
+    Y --> [*]
+    Q --> [*]
+```
+
+_Hình 3.6. Quy trình thực thi DAG, kiểm soát mapping và tổng hợp trạng thái._
+
+### 3.6.4. Quy trình chẩn đoán sự cố và phân tích nguyên nhân gốc
+
+Với Task `DIAGNOSIS` hoặc `COMPOSITE`, Planner ưu tiên tạo Operation READ theo diagnostic playbook nhằm thu thập trạng thái interface, cấu hình đang chạy, route, neighbor hoặc dữ liệu giao thức liên quan. Kết quả từ Network Agent được Analysis Orchestrator gắn hostname, phân tích thành `DiagnosticEvidence` và kết hợp với topology GNS3. Evidence Coverage được tính bằng cách so sánh những loại evidence thực tế với `required_evidence` của các playbook đang áp dụng.
+
+Analyst Agent nhận output đã chuẩn hóa, structured evidence và trạng thái coverage để tạo `AnalysisResult`. Kết quả bao gồm phát hiện, nguyên nhân có khả năng, mức tin cậy, khoảng trống evidence, các phép kiểm tra đề xuất và submission RCA có cấu trúc. Ground Truth của Benchmark Scenario không được đưa vào prompt của Planner hoặc Analyst.
+
+Kết luận của Analyst được chuyển qua Causal Evidence Gate. Gate đối chiếu candidate root cause với bằng chứng trực tiếp, thiết bị, interface và phạm vi topology. Candidate đủ bằng chứng được đưa vào `root_causes`; candidate chưa đủ bằng chứng được chuyển sang `suspected_causes`, đồng thời lý do bị hạ mức được bổ sung vào `evidence_gaps`. Khi playbook đã đủ evidence nhưng Analyst không tạo root cause dù đã phát hiện bất thường, hệ thống cho phép một lần diễn giải lại có kiểm soát trước khi kết luận.
+
+Nếu evidence bắt buộc còn thiếu hoặc Analyst yêu cầu thêm dữ liệu, conditional edge sau node `analyze` có thể chuyển sang `investigate`. Analysis Orchestrator ưu tiên command còn thiếu từ playbook, kết hợp `suggested_checks` hợp lệ và ánh xạ chúng đến thiết bị mục tiêu hoặc láng giềng trong topology. Mọi Operation điều tra đều là READ-only; schema chỉ chấp nhận lệnh bắt đầu bằng `show`, `ping` hoặc `traceroute`. Các lệnh đã chạy được loại bỏ để tránh thu thập lặp lại không cần thiết.
+
+Node `investigate` thực thi kế hoạch bổ sung rồi quay lại `analyze`. Vòng lặp dừng khi evidence hoàn chỉnh, root cause đã được xác nhận, không còn phép kiểm tra mới hoặc đạt `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi dừng, hệ thống ghi Evidence Coverage, evidence còn thiếu và lý do dừng vào activity. Nếu LLM timeout hoặc structured output không hợp lệ sau retry, Analysis Orchestrator tạo phản hồi dự phòng, không tạo root cause giả và đánh dấu cần thêm dữ liệu.
+
+```mermaid
+stateDiagram-v2
+    state "Thu thập bằng chứng ban đầu" as A
+    state "Analyst phân tích" as B
+    state "Đủ required evidence?" as C
+    state C <<choice>>
+    state "Causal Evidence Gate" as D
+    state "Root cause được xác nhận?" as E
+    state E <<choice>>
+    state "Finalize kết luận" as F
+    state "Ghi nhận suspected hoặc unknown" as G
+    state "Còn vòng điều tra?" as H
+    state H <<choice>>
+    state "Tạo Operation READ bổ sung" as I
+    state "Thu thập từ thiết bị hoặc peer" as J
+
+    [*] --> A
+    A --> B
+    B --> C
+    C --> D: Có
+    D --> E
+    E --> F: Có
+    E --> G: Không
+    C --> H: Không
+    H --> I: Có
+    I --> J
+    J --> B
+    H --> G: Không
+    G --> F
+    F --> [*]
+```
+
+_Hình 3.7. Quy trình chẩn đoán và thu thập bổ sung bằng chứng._
+
+### 3.6.5. Quy trình phê duyệt và kiểm soát thực thi
+
+Approval Gate phân biệt mapping READ và WRITE. Khi gặp một mapping WRITE chưa có approval, Execution Service tạo yêu cầu phê duyệt gồm danh sách command snapshot, SHA-256 request hash, thời điểm tạo và thời hạn hiệu lực; mapping chuyển sang `WAITING_APPROVAL`. Execution Orchestrator ghi activity `APPROVAL_REQUESTED` rồi kết thúc lượt graph hiện tại. Frontend dừng SSE của lượt xử lý đang chờ và hiển thị thẻ phê duyệt từ dữ liệu đã lưu.
+
+Chỉ người dùng có permission `Task Management/Approve` mới được gửi quyết định. Backend lấy `user_id` từ access token, không nhận danh tính người phê duyệt tùy ý từ payload. Quyết định được lưu một lần và activity `APPROVAL_APPROVED` hoặc `APPROVAL_REJECTED` được ghi kèm approval ID và người quyết định.
+
+Sau mọi quyết định, backend khởi chạy `resume_after_approval` trong BackgroundTasks. Approval graph không lặp lại các node `check_gns3`, `plan` và `configure`; graph tải Task từ PostgreSQL và bắt đầu tại `execute`. Approval Gate tính lại hash từ mapping ID và danh sách command hiện tại. Operation WRITE chỉ được thực thi khi trạng thái là `APPROVED`, approval chưa hết hạn, `commands_snapshot` còn nguyên và request hash khớp. Approval `REJECTED` hoặc `EXPIRED` làm mapping chuyển sang `REJECTED`; snapshot hoặc hash không khớp làm mapping chuyển sang `FAILED`. Trong các trường hợp này, Network Agent không được gọi cho mapping đó.
+
+Nếu Task thuộc Benchmark Run, việc resume chỉ hoàn tất Evaluation khi lượt chạy `entry_mode=approval` đã tạo Message `FINAL_RESPONSE`. Một phản hồi yêu cầu phê duyệt không được xem là kết quả benchmark cuối cùng.
+
+```mermaid
+stateDiagram-v2
+    state "Approval Gate nhận mapping WRITE" as A
+    state "Đã có approval?" as B
+    state B <<choice>>
+    state "Tạo snapshot, SHA-256 hash và thời hạn" as C
+    state "Chuyển mapping sang WAITING_APPROVAL" as D
+    state "Ghi activity APPROVAL_REQUESTED" as E
+    state "Tạm dừng lượt workflow hiện tại" as F
+    state "Frontend hiển thị yêu cầu phê duyệt" as G
+    state "Trạng thái approval" as H
+    state H <<choice>>
+    state "Chuyển approval thành EXPIRED" as I
+    state "Đánh dấu mapping REJECTED" as J
+    state "Người dùng gửi quyết định" as K
+    state "Có permission Approve?" as L
+    state L <<choice>>
+    state "Từ chối yêu cầu API" as M
+    state "Lưu quyết định và người phê duyệt" as N
+    state "Ghi activity quyết định" as O
+    state "Khởi chạy workflow ở chế độ approval trong BackgroundTasks" as P
+    state "Tải lại Task và bắt đầu tại node execute" as Q
+    state "Tính lại hash từ mapping và commands" as R
+    state "Snapshot và hash còn khớp?" as S
+    state S <<choice>>
+    state "Đánh dấu mapping FAILED" as T
+    state "Cho phép Network Agent thực thi WRITE" as U
+    state "Lưu Execution, Device Action Log và trạng thái" as V
+    state "Tổng hợp lại trạng thái Operation và Task" as W
+    state "Tiếp tục workflow" as X
+
+    [*] --> A
+    A --> B
+    B --> C: Chưa có
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    B --> H: Đã có
+    H --> D: PENDING và còn hạn
+    H --> I: PENDING nhưng hết hạn
+    I --> J
+    H --> J: REJECTED hoặc EXPIRED
+    G --> K
+    K --> L
+    L --> M: Không
+    L --> N: Có
+    N --> O
+    O --> P
+    P --> Q
+    Q --> H
+    H --> R: APPROVED
+    R --> S
+    S --> T: Không
+    S --> U: Có
+    U --> V
+    J --> W
+    T --> W
+    V --> W
+    W --> X
+    M --> [*]
+    X --> [*]
+```
+
+_Hình 3.8. Activity Diagram của quy trình Approval Gate._
+
+### 3.6.6. Quy trình kết luận, phản hồi và ghi nhận nhật ký
+
+Sau node `execute`, node `analyze` chỉ tạo kết luận khi Task không còn ở trạng thái đang thực thi hoặc chờ quyết định. Khi workflow đã đủ điều kiện dừng, node `finalize` ghi Evidence Gate cuối cùng, định dạng `AnalysisResult` thành nội dung tiếng Việt dễ đọc và lưu Message loại `FINAL_RESPONSE`. Activity `FINAL_RESPONSE_CREATED` liên kết phản hồi với Task; SSE đóng stream sau khi phát sự kiện này. Với lỗi ở giai đoạn Planning hoặc Configuration, SSE cũng có thể kết thúc sau activity `TASK_FAILED` tương ứng để giao diện không tiếp tục chờ vô hạn.
+
+Hệ thống sử dụng nhiều nhóm bản ghi có mục đích khác nhau. `task_activity_events` lưu các mốc workflow, actor, trạng thái và sequence phục vụ timeline; `task_executions` lưu từng lần gọi công cụ cùng thời gian và output; `device_action_logs` lưu command thực tế và kết quả theo thiết bị; Approval lưu quyết định của người dùng; `audit_logs` ghi những thao tác quản trị cần kiểm toán ở cấp hệ thống. Các nhật ký này hỗ trợ truy vết nhưng không thay thế việc xác minh trạng thái mạng bằng command READ hoặc điều kiện benchmark.
+
+Structured diagnosis được lưu trong activity `ANALYSIS_COMPLETED` trước khi evaluator đọc kết quả. Dữ liệu bao gồm `is_anomaly`, `root_causes`, `suspected_causes`, Evidence Coverage, lỗi thực thi và thông tin Causal Evidence Gate. Cách lưu này cho phép Benchmark Evaluator chấm submission do Agent tạo ra mà không phải suy diễn root cause từ văn bản phản hồi cuối và không làm rò rỉ Ground Truth vào quá trình chẩn đoán.
+
+```mermaid
+stateDiagram-v2
+    state "Nhận Task và kết quả từ node analyze" as A
+    state "Có AnalysisResult?" as B
+    state B <<choice>>
+    state "Lưu Message APPROVAL_REQUEST" as C
+    state "Structured diagnosis đã được ghi trong ANALYSIS_COMPLETED" as H
+    state "Xác định stop reason của Evidence Gate" as D
+    state "Ghi EVIDENCE_COVERAGE_EVALUATED" as E
+    state "Định dạng AnalysisResult thành tiếng Việt" as F
+    state "Lưu Message FINAL_RESPONSE" as G
+    state "Ghi activity FINAL_RESPONSE_CREATED" as I
+    state "SSE phát sự kiện cuối và đóng stream" as J
+
+    [*] --> A
+    A --> B
+    B --> C: Không, Task đang chờ approval
+    C --> [*]
+    B --> H: Có
+    H --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> I
+    I --> J
+    J --> [*]
+```
+
+_Hình 3.9. Quy trình tạo phản hồi cuối, lưu kết quả phân tích và kết thúc SSE._
+
+### 3.6.7. Quy trình Benchmark Run và khôi phục môi trường
+
+Benchmark Run là quy trình nghiệp vụ bao quanh workflow chẩn đoán. Khi người dùng bắt đầu một Scenario đang hoạt động, Benchmark Service đóng băng toàn bộ Scenario thành `scenario_snapshot`, tạo Run ở trạng thái `PREPARING` và lưu Run trước khi tác động đến topology. Service lần lượt kiểm tra precondition bằng READ, thực thi injection bằng WRITE và kiểm tra `fault_verification`. Nếu toàn bộ bước chuẩn bị thành công, Run chuyển sang `READY` và `cleanup_required=true`.
+
+Khi người dùng bắt đầu Chat từ Run, Conversation và USER_REQUEST được liên kết với Run; Run chuyển sang `RUNNING`. Workflow Multi-Agent xử lý yêu cầu theo cùng quy trình thông thường. Chỉ khi có `FINAL_RESPONSE`, Benchmark Service mới đọc structured diagnosis và các observation đã lưu, tạo `TaskEvaluation` cùng các metric, liên kết Evaluation và Task với Run rồi chuyển Run sang `COMPLETED`. Nếu workflow dừng để chờ approval, Run tiếp tục ở trạng thái `RUNNING` cho đến khi nhánh resume tạo phản hồi cuối.
+
+Nếu precondition, injection hoặc fault verification thất bại, Run chuyển sang `FAILED`. Khi injection đã bắt đầu, hệ thống ưu tiên cleanup trước khi ghi nhận kết quả lỗi; nếu cleanup cũng thất bại, `cleanup_required` vẫn được giữ để cảnh báo môi trường chưa được khôi phục. Cleanup sử dụng các action trong snapshot, mở kết nối mới cho mỗi lần thử, tạo READ check tương ứng và chỉ đánh dấu `CLEANED` sau khi trạng thái phục hồi được xác minh. Cơ chế retry có giới hạn; khi hết số lần thử, Run không được xem là đã cleanup thành công. Thiết kế chi tiết Scenario, action, Ground Truth và evaluator được trình bày tiếp tại mục 3.9.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PREPARING: Bắt đầu Scenario
+    PREPARING --> READY: Precondition, injection và verification thành công
+    PREPARING --> FAILED: Chuẩn bị hoặc verification thất bại
+    READY --> RUNNING: Liên kết Conversation và USER_REQUEST
+    RUNNING --> RUNNING: Chờ approval hoặc workflow tiếp tục
+    RUNNING --> COMPLETED: Có FINAL_RESPONSE và Evaluation
+    RUNNING --> FAILED: Workflow thất bại
+    COMPLETED --> CLEANED: Cleanup và READ verification thành công
+    FAILED --> CLEANED: Cleanup bắt buộc thành công
+    CLEANED --> [*]
+```
+
+_Hình 3.10. Vòng đời Benchmark Run và điều kiện khôi phục môi trường._
 
 ## 3.7. Thiết kế dữ liệu và cơ sở dữ liệu
 
@@ -1006,7 +1329,7 @@ erDiagram
     USERS ||--o{ AUDIT_LOGS : acts
 ```
 
-_Hình 3.6. Sơ đồ quan hệ thực thể rút gọn của hệ thống._
+_Hình 3.11. Sơ đồ quan hệ thực thể rút gọn của hệ thống._
 
 ### 3.7.2. Quản lý thiết bị và thông tin kết nối
 
@@ -1192,13 +1515,13 @@ Bảng 4.3. Các tham số cấu hình của hệ thống Multi-Agent
 
 Các giá trị trong Bảng 4.3 là tham số mặc định được khai báo tại Backend. Tên mô hình và những thông số thực tế cần được xác nhận từ cấu hình sử dụng khi tiến hành thực nghiệm.
 
-### 4.3. Xây dựng các kịch bản thực nghiệm
+## 4.3. Xây dựng các kịch bản thực nghiệm
 
 Các kịch bản thực nghiệm được xây dựng nhằm đánh giá khả năng chẩn đoán sự cố của hệ thống trong những tình huống mạng xác định trước. Mỗi Benchmark Scenario bao gồm thông tin mô tả, điều kiện ban đầu (Preconditions), thao tác tiêm lỗi (Fault Injection), điều kiện xác minh sự cố (Fault Verification), dữ liệu Ground Truth và các thao tác khôi phục (Cleanup).
 
 Bộ dữ liệu seed trong mã nguồn định nghĩa 33 kịch bản ứng viên, bao gồm 10 kịch bản cơ sở, 17 kịch bản mở rộng và 6 kịch bản liên quan đến BGP. Các kịch bản này được xây dựng cho topology tham chiếu của đề tài và không phải dữ liệu thực nghiệm được nhập trực tiếp từ NIKA [3].
 
-# 4.3.1. Đối tượng và biến quan sát
+### 4.3.1. Đối tượng và biến quan sát
 
 Đơn vị kiểm thử là một **Benchmark Run** gắn với một phiên bản **Benchmark Scenario** cụ thể. Đầu vào bao gồm trạng thái lab, hành động tiêm lỗi, điều kiện xác nhận sự cố, prompt bắt đầu hội thoại và Ground Truth đã xác định. Đầu ra gồm phản hồi chẩn đoán, submission có cấu trúc từ Analyst, Evaluation theo metric, thời gian và số lần gọi công cụ. Run giữ snapshot scenario để việc chỉnh sửa kịch bản sau này không làm thay đổi đề bài đã dùng tại thời điểm chấm.
 
@@ -1723,7 +2046,7 @@ Nhóm hiện có bằng chứng kiểm thử phần mềm đạt và một lần
 
 | Thành phần             | File/đường dẫn                                                       | Vai trò xác minh                                 |
 | ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
-| LangGraph              | `src/app/agents/workflow.py`                                         | Message graph và approval graph                  |
+| LangGraph              | `src/app/agents/workflow.py`                                         | Graph thống nhất với entry route theo state      |
 | Planner Agent          | `src/app/agents/planner/`                                            | Sinh và validate execution plan                  |
 | Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/`     | Điều phối Task/Operation/Approval                |
 | Network Agent          | `src/app/agents/network/`, `src/app/tools/network/`                  | Kết nối và thực thi qua Netmiko/Nornir           |

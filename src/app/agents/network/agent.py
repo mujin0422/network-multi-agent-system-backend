@@ -6,6 +6,7 @@ from app.agents.network.schemas import (
     NetworkExecutionResult,
     NetworkExecutionStatus,
 )
+from app.agents.network.errors import classify_network_error
 from app.domains.execution.schemas import Operation, TaskOperationDevice
 from app.tools import NetworkTool
 
@@ -54,13 +55,15 @@ class NetworkAgent:
             )
         except Exception as exc:
             # Bước 5: Chuyển lỗi công cụ thành kết quả thất bại có cấu trúc.
+            error_message = str(exc)
             return NetworkExecutionResult(
                 operation_id=operation.id,
                 operation_device_id=operation_device.id,
                 device_id=operation_device.device_id,
                 access_mode=operation_device.access_mode,
                 status=NetworkExecutionStatus.FAILED,
-                error_message=str(exc),
+                error_message=error_message,
+                error_code=classify_network_error(error_message),
             )
 
     @staticmethod

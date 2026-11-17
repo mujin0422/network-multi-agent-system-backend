@@ -1,6 +1,8 @@
 """Repository cho bảng messages."""
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import and_, or_, select
 
 from app.core.database import create_session_factory
 from app.domains.conversation.models import MessageModel
@@ -37,3 +39,71 @@ class MessageRepository:
                 Message.model_validate(item, from_attributes=True)
                 for item in models
             ]
+
+    def get_page_by_conversation_id(
+        self,
+        conversation_id: str,
+        *,
+        limit: int,
+        before_created_at: datetime | None = None,
+        before_id: str | None = None,
+    ) -> tuple[list[Message], bool]:
+        """Lấy message cũ dần bằng keyset pagination và trả theo chiều thời gian."""
+
+        statement = select(MessageModel).where(
+            MessageModel.conversation_id == conversation_id
+        )
+        if before_created_at is not None and before_id is not None:
+            statement = statement.where(
+                or_(
+                    MessageModel.created_at < before_created_at,
+                    and_(
+                        MessageModel.created_at == before_created_at,
+                        MessageModel.id < before_id,
+                    ),
+                )
+            )
+        statement = statement.order_by(
+            MessageModel.created_at.desc(),
+            MessageModel.id.desc(),
+        ).limit(limit + 1)
+        with self._sessions() as session:
+            models = list(session.scalars(statement).all())
+        has_more = len(models) > limit
+        items = [
+            Message.model_validate(item, from_attributes=True)
+            for item in reversed(models[:limit])
+        ]
+        return items, has_more
+
+    def get_recent_before(
+        self,
+        conversation_id: str,
+        *,
+        before_created_at: datetime,
+        before_id: str,
+        limit: int,
+    ) -> list[Message]:
+        """Lấy tối đa ``limit`` message ngay trước một message theo thời gian."""
+
+        statement = (
+            select(MessageModel)
+            .where(
+                MessageModel.conversation_id == conversation_id,
+                or_(
+                    MessageModel.created_at < before_created_at,
+                    and_(
+                        MessageModel.created_at == before_created_at,
+                        MessageModel.id < before_id,
+                    ),
+                ),
+            )
+            .order_by(MessageModel.created_at.desc(), MessageModel.id.desc())
+            .limit(limit)
+        )
+        with self._sessions() as session:
+            models = list(session.scalars(statement).all())
+        return [
+            Message.model_validate(item, from_attributes=True)
+            for item in reversed(models)
+        ]

@@ -47,6 +47,45 @@ class DiagnosticCheck(BaseModel):
         return normalized
 
 
+class ExecutionIssue(BaseModel):
+    """Lỗi thực thi xác định do hệ thống cung cấp, không do LLM suy đoán."""
+
+    device: str = Field(min_length=1, max_length=100)
+    endpoint: str | None = Field(default=None, max_length=200)
+    error_code: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=300)
+    recommendation: str = Field(min_length=1, max_length=300)
+
+
+class ConfigurationProposal(BaseModel):
+    """CLI đề xuất để người dùng tham khảo, tuyệt đối không được thực thi."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    device: str = Field(min_length=1, max_length=100)
+    commands: list[str] = Field(min_length=1, max_length=20)
+    rationale: str | None = Field(default=None, max_length=300)
+
+    @field_validator("commands")
+    @classmethod
+    def normalize_commands(cls, commands: list[str]) -> list[str]:
+        """Loại dòng trống nhưng giữ nguyên thứ tự CLI đề xuất."""
+
+        normalized = [command.strip() for command in commands if command.strip()]
+        if not normalized:
+            raise ValueError("Cấu hình đề xuất phải có ít nhất một command")
+        return normalized
+
+
+class ConfigurationProposalSet(BaseModel):
+    """Tập CLI preview theo thiết bị, tách khỏi schema phân tích RCA."""
+
+    configurations: list[ConfigurationProposal] = Field(
+        default_factory=list,
+        max_length=4,
+    )
+
+
 class AnalysisResult(BaseModel):
     """Kết quả phân tích của Analyst Agent, bao gồm tóm tắt, phát hiện, nguyên nhân có khả năng, khuyến nghị và yêu cầu thêm dữ liệu nếu cần."""
     summary: str = Field(max_length=600, description="Kết luận tổng thể bằng tiếng Việt, tối đa 600 ký tự.")
@@ -60,4 +99,17 @@ class AnalysisResult(BaseModel):
     is_anomaly: bool | None = Field(default=None, description="True nếu phát hiện bất thường, False nếu không, None nếu chưa đủ thông tin.")
     root_causes: list[PredictedRootCause] = Field(default_factory=list, max_length=8, description="Các nguyên nhân gốc đã được dự đoán." )
     suspected_causes: list[PredictedRootCause] = Field(default_factory=list, max_length=8, description="Các nguyên nhân nghi ngờ đã được dự đoán." )
+    execution_issues: list[ExecutionIssue] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Lỗi kết nối/thực thi xác định do backend bổ sung.",
+    )
+    configuration_proposals: list[ConfigurationProposal] = Field(
+        default_factory=list,
+        max_length=4,
+        description=(
+            "CLI chỉ để đề xuất theo thiết bị khi người dùng yêu cầu preview; "
+            "không biểu thị lệnh đã được thực thi."
+        ),
+    )
 

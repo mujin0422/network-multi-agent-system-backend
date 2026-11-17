@@ -58,3 +58,19 @@ class ConversationStarted(BaseModel):
 
     conversation: Conversation = Field(description="Conversation vừa được tạo.")
     message: Message = Field(description="USER_REQUEST đầu tiên đã được lưu.")
+
+
+class ConversationPage(BaseModel):
+    """Một trang conversation dùng cursor ổn định theo thời gian cập nhật."""
+
+    items: list[Conversation]
+    next_cursor: str | None = None
+    has_more: bool = False
+
+
+class MessagePage(BaseModel):
+    """Một trang message; items luôn theo thứ tự thời gian tăng dần."""
+
+    items: list[Message]
+    next_cursor: str | None = None
+    has_more: bool = False

@@ -3,8 +3,18 @@
 import re
 from datetime import UTC, datetime
 
-from app.agents.analyst import AnalystAgent, AnalysisResult, DiagnosticCheck
-from app.agents.network import NetworkExecutionResult
+from app.agents.analyst import (
+    AnalystAgent,
+    AnalysisResult,
+    DiagnosticCheck,
+    ExecutionIssue,
+)
+from app.agents.network import (
+    NetworkErrorCode,
+    NetworkExecutionResult,
+    classify_network_error,
+)
+from app.agents.planner import PlannerAgent
 from app.diagnostics import (
     CausalGateResult,
     CausalScope,
@@ -88,7 +98,13 @@ class AnalysisOrchestrator:
             started_at=analysis_started_at,
         )
         # Bước 3: Chuẩn hóa output kỹ thuật và bổ sung topology context.
-        analysis_inputs = self._build_analysis_inputs(execution_results)
+        analysis_inputs = [
+            {
+                "context_type": "USER REQUEST",
+                "message": task.input_message,
+            },
+            *self._build_analysis_inputs(execution_results),
+        ]
         if evidence_coverage is not None:
             analysis_inputs.append(
                 {
@@ -106,6 +122,34 @@ class AnalysisOrchestrator:
         except Exception as exc:
             fallback_error = str(exc)
             analysis = self._build_fallback_analysis(analysis_inputs)
+
+        # Bước 4b: Tách CLI preview khỏi schema RCA lớn. Yêu cầu đề xuất không
+        # tạo WRITE/approval nhưng vẫn nhận command cụ thể trong phản hồi cuối.
+        proposal_requested = PlannerAgent.is_configuration_proposal(
+            task.input_message
+        )
+        if proposal_requested:
+            try:
+                proposals = await self._analyst.propose_configurations(
+                    task.input_message,
+                    analysis_inputs,
+                )
+                analysis = analysis.model_copy(
+                    update={"configuration_proposals": proposals.configurations}
+                )
+            except Exception as exc:
+                analysis = analysis.model_copy(
+                    update={
+                        "recommendations": list(
+                            dict.fromkeys(
+                                [
+                                    *analysis.recommendations,
+                                    "Không thể chuẩn hóa CLI đề xuất: " + str(exc),
+                                ]
+                            )
+                        )[:4]
+                    }
+                )
 
         # Bước 5: Khi đã đủ loại evidence nhưng Analyst không tạo prediction, yêu cầu diễn giải lại đúng một lần thay vì finalize với false negative.
         if (
@@ -209,7 +253,18 @@ class AnalysisOrchestrator:
                 }
             )
 
-        # Bước 7: Lưu structured diagnosis trước khi evaluator đọc kết quả.
+        # Bước 7: Bổ sung lỗi thực thi xác định, không phụ thuộc
+        # vào việc LLM có diễn giải lỗi kết nối hay không.
+        execution_issues = self._build_execution_issues(execution_results)
+        if execution_issues:
+            analysis = analysis.model_copy(
+                update={
+                    "execution_issues": execution_issues,
+                    "requires_more_data": True,
+                }
+            )
+
+        # Bước 8: Lưu structured diagnosis trước khi evaluator đọc kết quả.
         self._execution_service.record_activity(
             task.id,
             ActivityActorType.ANALYST,
@@ -219,6 +274,10 @@ class AnalysisOrchestrator:
                 "confidence": analysis.confidence,
                 "evidence_gaps": analysis.evidence_gaps,
                 "suggested_check_count": len(analysis.suggested_checks),
+                "execution_issues": [
+                    issue.model_dump(mode="json")
+                    for issue in analysis.execution_issues
+                ],
                 "evidence_coverage": (
                     evidence_coverage.model_dump(mode="json")
                     if evidence_coverage is not None
@@ -248,6 +307,66 @@ class AnalysisOrchestrator:
             completed_at=datetime.now(UTC),
         )
         return analysis
+
+
+    def _build_execution_issues(
+        self,
+        execution_results: list[NetworkExecutionResult],
+    ) -> list[ExecutionIssue]:
+        """Tạo danh sách lỗi thiết bị an toàn để hiển thị cho người dùng."""
+
+        devices = {
+            device.id: device
+            for device in self._device_service.list_available_devices()
+        }
+        recommendations = {
+            NetworkErrorCode.DEVICE_NOT_FOUND: (
+                "Kiểm tra thiết bị và credential trong Inventory."
+            ),
+            NetworkErrorCode.DEVICE_UNREACHABLE: (
+                "Kiểm tra node GNS3, console port và endpoint trong Inventory."
+            ),
+            NetworkErrorCode.CONNECTION_TIMEOUT: (
+                "Kiểm tra trạng thái node, đường kết nối và timeout."
+            ),
+            NetworkErrorCode.AUTHENTICATION_FAILED: (
+                "Kiểm tra credential và quyền truy cập thiết bị."
+            ),
+            NetworkErrorCode.COMMAND_REJECTED: (
+                "Kiểm tra cú pháp lệnh và device_type của thiết bị."
+            ),
+            NetworkErrorCode.UNKNOWN_NETWORK_ERROR: (
+                "Kiểm tra chi tiết Task execution và log backend."
+            ),
+        }
+        issues: list[ExecutionIssue] = []
+        seen: set[tuple[str, str]] = set()
+        for result in execution_results:
+            if not result.error_message:
+                continue
+            error_code = result.error_code or classify_network_error(
+                result.error_message
+            )
+            error_code = error_code or NetworkErrorCode.UNKNOWN_NETWORK_ERROR
+            key = (result.device_id, error_code.value)
+            if key in seen:
+                continue
+            seen.add(key)
+            device = devices.get(result.device_id)
+            hostname = getattr(device, "hostname", None) or result.device_id
+            host = getattr(device, "host", None)
+            port = getattr(device, "port", None)
+            endpoint = f"{host}:{port}" if host and port is not None else None
+            issues.append(
+                ExecutionIssue(
+                    device=hostname,
+                    endpoint=endpoint,
+                    error_code=error_code.value,
+                    message=result.error_message[:300],
+                    recommendation=recommendations[error_code],
+                )
+            )
+        return issues[:4]
 
 
     @staticmethod
@@ -582,6 +701,9 @@ class AnalysisOrchestrator:
                         result.operation_device_id, []
                     ),
                     "error_message": result.error_message,
+                    "error_code": (
+                        result.error_code.value if result.error_code else None
+                    ),
                 }
             )
         if self._gns3_provider is not None:
@@ -628,8 +750,13 @@ class AnalysisOrchestrator:
     def _build_fallback_analysis(analysis_inputs: list[dict]) -> AnalysisResult:
         """Tạo phân tích an toàn khi Analyst Agent trả dữ liệu không hợp lệ."""
 
+        execution_inputs = [
+            item
+            for item in analysis_inputs
+            if "device" in item and "status" in item
+        ]
         findings: list[str] = []
-        for item in analysis_inputs[:4]:
+        for item in execution_inputs[:4]:
             device = str(item.get("device") or "Thiết bị không xác định")
             status = str(item.get("status") or "UNKNOWN")
             command_count = len(item.get("command_results") or [])
@@ -642,7 +769,7 @@ class AnalysisOrchestrator:
 
         device_names = ", ".join(
             str(item.get("device") or "thiết bị không xác định")
-            for item in analysis_inputs[:4]
+            for item in execution_inputs[:4]
         )
         if not device_names:
             device_names = "các thiết bị được chọn"
@@ -693,6 +820,31 @@ class AnalysisOrchestrator:
                 sections.append(
                     f"{title}\n" + "\n".join(f"• {item.strip()}" for item in values)
                 )
+        if analysis.execution_issues:
+            issue_lines = []
+            for issue in analysis.execution_issues:
+                endpoint = f" tại {issue.endpoint}" if issue.endpoint else ""
+                issue_lines.append(
+                    f"• {issue.device}{endpoint} [{issue.error_code}]: "
+                    f"{issue.message}\n  Hướng xử lý: {issue.recommendation}"
+                )
+            sections.append("Lỗi thực thi\n" + "\n".join(issue_lines))
+        if analysis.configuration_proposals:
+            proposal_sections = []
+            for proposal in analysis.configuration_proposals:
+                commands = "\n".join(f"  {command}" for command in proposal.commands)
+                rationale = (
+                    f"\n  Lý do: {proposal.rationale}"
+                    if proposal.rationale
+                    else ""
+                )
+                proposal_sections.append(
+                    f"• {proposal.device}\n{commands}{rationale}"
+                )
+            sections.append(
+                "Cấu hình đề xuất (chưa thực thi)\n"
+                + "\n".join(proposal_sections)
+            )
         if analysis.requires_more_data:
             sections.append(
                 "Trạng thái dữ liệu\n"

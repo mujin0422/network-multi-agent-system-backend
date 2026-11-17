@@ -180,7 +180,8 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
         execution_service,
         device_service,
         _build_gns3_provider(),
-        configuration,
+        conversation_service,
+        settings.agent_conversation_context_messages,
     )
     execution = ExecutionOrchestrator(execution_service, _build_network_agent())
     analysis = AnalysisOrchestrator(
@@ -193,6 +194,7 @@ def _build_network_automation_workflow() -> NetworkAutomationWorkflow:
     return NetworkAutomationWorkflow(
         _build_gns3_provider(),
         planning,
+        configuration,
         execution,
         analysis,
         settings.agent_max_investigation_rounds,

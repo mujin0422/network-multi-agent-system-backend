@@ -50,6 +50,7 @@ from app.domains.execution.schemas.task_activity_event import (
     ActivityEventType,
     TaskActivityEvent,
 )
+from app.domains.execution.schemas.task_stream_event import TaskStreamEvent
 
 __all__ = [
     "AccessMode",
@@ -85,6 +86,7 @@ __all__ = [
     "TaskStatus",
     "TaskExecution",
     "TaskActivityEvent",
+    "TaskStreamEvent",
     "TaskOperationDevice",
     "TaskType",
 ]

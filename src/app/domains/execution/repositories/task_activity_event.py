@@ -30,6 +30,33 @@ class TaskActivityEventRepository:
                 for model in session.scalars(statement).all()
             ]
 
+
+    def get_all_after_sequence(
+        self,
+        task_id: str,
+        sequence_number: int,
+        limit: int = 100,
+    ) -> list[TaskActivityEvent]:
+        """Lấy phần timeline mới hơn sequence client đã nhận."""
+
+        statement = (
+            select(TaskActivityEventModel)
+            .where(
+                TaskActivityEventModel.task_id == task_id,
+                TaskActivityEventModel.sequence_number > sequence_number,
+            )
+            .order_by(
+                TaskActivityEventModel.sequence_number,
+                TaskActivityEventModel.id,
+            )
+            .limit(limit)
+        )
+        with self._sessions() as session:
+            return [
+                TaskActivityEvent.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]
+
         
     def save_task_activity_event(self, event: TaskActivityEvent) -> None:
         """Tạo hoặc cập nhật một mốc timeline."""

@@ -344,6 +344,31 @@ def test_write_mapping_waits_without_approved_request() -> None:
     assert service.tasks[-1].completed_at is None
 
 
+def test_execute_task_requests_approvals_for_all_independent_write_operations() -> None:
+    task = build_task().model_copy(
+        update={
+            "task_type": TaskType.CONFIGURATION,
+            "operations": build_task().operations[:2],
+        }
+    )
+    service = StubExecutionService(task.operations)
+    service.task = task
+    for operation in task.operations:
+        service.mappings[operation.id] = service.mappings[operation.id].model_copy(
+            update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+        )
+    agent = StubNetworkAgent()
+
+    asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+    assert agent.calls == []
+    assert len(service.approvals) == 2
+    assert all(
+        mapping.operation_device_status == OperationDeviceStatus.WAITING_APPROVAL
+        for mapping in service.mappings.values()
+    )
+
+
 def test_write_mapping_runs_only_when_snapshot_and_hash_match() -> None:
     task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
     operation = task.operations[0]

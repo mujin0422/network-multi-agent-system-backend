@@ -1,6 +1,8 @@
 """Thực thi một operation-device mapping và ghi execution/audit log."""
 
 from datetime import UTC, datetime
+import json
+import logging
 from time import monotonic
 
 from app.agents.network import (
@@ -25,6 +27,9 @@ from app.domains.execution.schemas import (
     TaskOperationDevice,
 )
 from app.domains.execution.services import ExecutionService
+
+
+logger = logging.getLogger(__name__)
 
 
 class MappingExecutor:
@@ -99,6 +104,30 @@ class MappingExecutor:
             }
         )
         self._execution_service.save_task_execution(completed_execution)
+        log_context = {
+            "task_id": operation.task_id,
+            "operation_id": operation.id,
+            "operation_device_id": mapping.id,
+            "device_id": mapping.device_id,
+            "access_mode": mapping.access_mode.value,
+            "agent_name": self._network_agent.name,
+            "tool_name": self._network_agent.tool_name,
+            "command_count": len(commands),
+            "execution_status": result.status.value,
+            "error_code": result.error_code.value if result.error_code else None,
+            "error_message": result.error_message,
+            "duration_ms": completed_execution.duration_ms,
+        }
+        if succeeded:
+            logger.info(
+                "Network operation completed | context=%s",
+                json.dumps(log_context, ensure_ascii=False),
+            )
+        else:
+            logger.warning(
+                "Network operation failed | context=%s",
+                json.dumps(log_context, ensure_ascii=False),
+            )
         self._execution_service.save_device_action_logs(
             build_action_logs(
                 operation,
@@ -171,6 +200,9 @@ class MappingExecutor:
             event_data={
                 "device_id": mapping.device_id,
                 "command_count": len(commands),
+                "error_code": (
+                    result.error_code.value if result.error_code else None
+                ),
                 "error": result.error_message,
             },
             started_at=started_at,

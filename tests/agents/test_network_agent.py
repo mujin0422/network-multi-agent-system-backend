@@ -5,7 +5,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.agents.network import NetworkAgent, NetworkExecutionStatus
+from app.agents.network import (
+    NetworkAgent,
+    NetworkErrorCode,
+    NetworkExecutionStatus,
+)
 from app.domains.execution.schemas import (
     AccessMode,
     DeviceRole,
@@ -94,3 +98,40 @@ def test_network_agent_returns_failed_result_when_tool_fails(
 
     assert result.status == NetworkExecutionStatus.FAILED
     assert result.error_message == "Không thể đăng nhập"
+    assert result.error_code == NetworkErrorCode.AUTHENTICATION_FAILED
+
+
+def test_network_agent_classifies_unreachable_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run_immediately(function, *args):
+        return function(*args)
+
+    monkeypatch.setattr(asyncio, "to_thread", run_immediately)
+
+    class UnreachableTool:
+        def execute(self, device_id, access_mode, commands):
+            raise ConnectionError("Kết nối thất bại: [Errno 101] Network is unreachable")
+
+    now = datetime.now(UTC)
+    operation = Operation(
+        id="oper-1",
+        task_id="task-1",
+        operation_intent="GET_STATE",
+        display_order=1,
+        operation_status=OperationStatus.PENDING,
+        operation_parameters={"commands": ["show ip interface brief"]},
+        created_at=now,
+    )
+    mapping = TaskOperationDevice(
+        id="oper-devv-1",
+        operation_id=operation.id,
+        device_id="devc-1",
+        operation_device_status=OperationDeviceStatus.PENDING,
+        device_role=DeviceRole.TARGET,
+        access_mode=AccessMode.READ,
+    )
+
+    result = asyncio.run(NetworkAgent(UnreachableTool()).execute(operation, mapping))
+
+    assert result.error_code == NetworkErrorCode.DEVICE_UNREACHABLE
