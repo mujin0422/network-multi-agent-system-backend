@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.domains.execution.schemas import AccessMode
 from app.tools import CommandResult
+from app.agents.network.errors import NetworkErrorCode
 
 
 class NetworkExecutionStatus(StrEnum):
@@ -23,3 +24,7 @@ class NetworkExecutionResult(BaseModel):
     status: NetworkExecutionStatus = Field(description="Trạng thái thực thi.")
     results: list[CommandResult] = Field(default_factory=list, description="Danh sách kết quả thực thi các lệnh.")
     error_message: str | None = Field(default=None, description="Thông báo lỗi nếu có.")
+    error_code: NetworkErrorCode | None = Field(
+        default=None,
+        description="Mã lỗi ổn định dùng cho giao diện, log và benchmark.",
+    )
