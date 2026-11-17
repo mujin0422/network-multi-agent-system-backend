@@ -8,7 +8,11 @@ import pytest
 from app.agents.analyst import AnalystAgent
 from app.agents.analyst.prompts import ANALYST_SYSTEM_PROMPT
 from app.agents.analyst.schemas import AnalysisResult
-from app.agents.network import NetworkExecutionResult, NetworkExecutionStatus
+from app.agents.network import (
+    NetworkErrorCode,
+    NetworkExecutionResult,
+    NetworkExecutionStatus,
+)
 from app.agents.orchestrator import AnalysisOrchestrator
 from app.diagnostics import (
     CausalClaimDecision,
@@ -36,8 +40,18 @@ class StubChatModel:
 class StubDeviceService:
     def list_available_devices(self):
         return [
-            SimpleNamespace(id="devc-221026-00000001", hostname="P1"),
-            SimpleNamespace(id="devc-221026-00000002", hostname="P2"),
+            SimpleNamespace(
+                id="devc-221026-00000001",
+                hostname="P1",
+                host="host.docker.internal",
+                port=5000,
+            ),
+            SimpleNamespace(
+                id="devc-221026-00000002",
+                hostname="P2",
+                host="host.docker.internal",
+                port=5001,
+            ),
         ]
 
 
@@ -99,6 +113,31 @@ def test_analyst_validation_retries_can_be_disabled() -> None:
             )
         )
 
+
+def test_analyst_generates_configuration_preview_with_small_schema() -> None:
+    model = StubChatModel(
+        [
+            '{"configurations":[{"device":"P4","commands":['
+            '"interface FastEthernet0/0","mpls ip","no shutdown"],'
+            '"rationale":"Đồng bộ với MPLS core hiện có."}]}'
+        ]
+    )
+
+    result = asyncio.run(
+        AnalystAgent(model).propose_configurations(
+            "Đề xuất cấu hình P4 tham gia MPLS.",
+            [{"device": "P4", "command_results": []}],
+        )
+    )
+
+    assert result.configurations[0].device == "P4"
+    assert result.configurations[0].commands == [
+        "interface FastEthernet0/0",
+        "mpls ip",
+        "no shutdown",
+    ]
+    assert "CHỈ ĐỂ ĐỀ XUẤT" in model.calls[0][0].content
+
     assert len(model.calls) == 1
 
 
@@ -147,6 +186,47 @@ def test_analysis_response_is_formatted_as_readable_sections() -> None:
     )
 
 
+def test_analysis_response_formats_configuration_proposal_as_unexecuted_cli() -> None:
+    content = AnalysisOrchestrator._format_analysis(
+        AnalysisResult(
+            summary="Đã xây dựng cấu hình MPLS đề xuất cho P4.",
+            configuration_proposals=[
+                {
+                    "device": "P4",
+                    "commands": [
+                        "interface FastEthernet0/0",
+                        "mpls ip",
+                        "no shutdown",
+                    ],
+                    "rationale": "Đồng bộ với liên kết MPLS của P1 và P2.",
+                }
+            ],
+        )
+    )
+
+    assert "Cấu hình đề xuất (chưa thực thi)" in content
+    assert "• P4" in content
+    assert "  interface FastEthernet0/0" in content
+    assert "  mpls ip" in content
+    assert "Lý do: Đồng bộ với liên kết MPLS của P1 và P2." in content
+
+
+def test_fallback_ignores_user_request_and_topology_context_rows() -> None:
+    result = AnalysisOrchestrator._build_fallback_analysis(
+        [
+            {"context_type": "USER REQUEST", "message": "Đề xuất cấu hình P4"},
+            {
+                "device": "P1",
+                "status": "SUCCESS",
+                "command_results": [{"command": "show running-config"}],
+            },
+            {"context_type": "AVAILABLE TOPOLOGY CONTEXT", "neighbors": {}},
+        ]
+    )
+
+    assert "thiết bị không xác định" not in result.summary.casefold()
+    assert result.findings == ["P1: đã thực thi thành công 1 lệnh kiểm tra."]
+
 def test_analysis_input_replaces_internal_device_id_with_hostname() -> None:
     orchestrator = AnalysisOrchestrator(
         analyst=None,
@@ -177,6 +257,41 @@ def test_analysis_input_replaces_internal_device_id_with_hostname() -> None:
     assert payload[0]["structured_evidence"][0]["resource_id"] == "node/p1"
     assert payload[0]["error_message"] is None
     assert "devc-" not in str(payload)
+
+
+def test_analysis_response_always_surfaces_device_execution_issue() -> None:
+    orchestrator = AnalysisOrchestrator(
+        analyst=None,
+        execution_service=None,
+        conversation_service=None,
+        device_service=StubDeviceService(),
+    )
+    results = [
+        NetworkExecutionResult(
+            operation_id="oper-1",
+            operation_device_id="opdv-1",
+            device_id="devc-221026-00000002",
+            access_mode=AccessMode.READ,
+            status=NetworkExecutionStatus.FAILED,
+            error_message="Kết nối thất bại: [Errno 101] Network is unreachable",
+            error_code=NetworkErrorCode.DEVICE_UNREACHABLE,
+        )
+    ]
+
+    issues = orchestrator._build_execution_issues(results)
+    content = orchestrator._format_analysis(
+        AnalysisResult(
+            summary="Chưa thu thập được trạng thái thiết bị.",
+            execution_issues=issues,
+            requires_more_data=True,
+        )
+    )
+
+    assert issues[0].device == "P2"
+    assert issues[0].endpoint == "host.docker.internal:5001"
+    assert "Lỗi thực thi" in content
+    assert "[DEVICE_UNREACHABLE]" in content
+    assert "console port" in content
 
 
 def test_complete_evidence_retries_empty_diagnosis_and_applies_scope_gate() -> None:

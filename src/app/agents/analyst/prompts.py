@@ -28,6 +28,9 @@ Quy tắc trả lời:
   requires_more_data=true.
 - Mỗi phần tử recommendations phải là một hành động cụ thể, ưu tiên theo thứ tự
   kiểm tra trước, thay đổi sau. Nêu command cần chạy khi thật sự hữu ích.
+- CLI preview được tạo bằng một structured call riêng; trong kết quả phân tích
+  chính luôn để configuration_proposals=[]. Thao tác WRITE thực tế thuộc
+  Configuration Agent, Approval Gate và Network Agent.
 - Không dùng device ID dài nhiều lần nếu có hostname dễ đọc trong dữ liệu. Không
   tự suy đoán hostname khi dữ liệu chỉ cung cấp ID.
 - Ngoài báo cáo tiếng Việt, bắt buộc trả is_anomaly (true/false nếu có đủ
