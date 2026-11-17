@@ -22,9 +22,30 @@ class StubPlanning:
     def __init__(self, calls):
         self.calls = calls
 
-    async def plan_user_message(self, conversation, message):
+    async def prepare_user_message(self, conversation, message):
         self.calls.append("plan")
-        return SimpleNamespace(id="task-1", task_type=TaskType.DIAGNOSIS)
+        return SimpleNamespace(
+            task=SimpleNamespace(id="task-1", task_type=TaskType.DIAGNOSIS),
+            plan=object(),
+            devices=[],
+            interfaces_by_device_id={},
+            requires_configuration=False,
+        )
+
+    def persist_plan(self, draft, plan=None):
+        return draft.task
+
+    def fail_task(self, task, actor, stage, error):
+        self.calls.append(f"failed:{stage}")
+
+
+class StubConfiguration:
+    def __init__(self, calls):
+        self.calls = calls
+
+    async def configure_plan(self, task_id, plan, devices, interfaces):
+        self.calls.append("configure")
+        return plan
 
 
 class StubExecution:
@@ -80,6 +101,7 @@ def build_workflow(calls):
     return NetworkAutomationWorkflow(
         StubGNS3Provider(calls),
         StubPlanning(calls),
+        StubConfiguration(calls),
         StubExecution(calls),
         StubAnalysis(calls),
     )
@@ -94,6 +116,28 @@ def test_message_entrypoint_runs_all_langgraph_nodes_in_order() -> None:
     assert calls == ["check_gns3", "plan", "execute", "analyze"]
     assert state["task"].id == "task-1"
     assert state["response"]["result_count"] == 1
+
+
+def test_write_plan_runs_configuration_node_before_execution() -> None:
+    calls = []
+
+    class WritePlanning(StubPlanning):
+        async def prepare_user_message(self, conversation, message):
+            draft = await super().prepare_user_message(conversation, message)
+            draft.requires_configuration = True
+            return draft
+
+    workflow = NetworkAutomationWorkflow(
+        StubGNS3Provider(calls),
+        WritePlanning(calls),
+        StubConfiguration(calls),
+        StubExecution(calls),
+        StubAnalysis(calls),
+    )
+
+    asyncio.run(workflow.run_message("conversation", "message"))
+
+    assert calls == ["check_gns3", "plan", "configure", "execute", "analyze"]
 
 
 def test_approval_entrypoint_resumes_at_execution_node() -> None:
@@ -111,6 +155,7 @@ def test_workflow_exposes_langgraph_diagram() -> None:
 
     assert "check_gns3" in diagram
     assert "plan" in diagram
+    assert "configure" in diagram
     assert "execute" in diagram
     assert "analyze" in diagram
     assert "investigate" in diagram
@@ -157,6 +202,7 @@ def test_workflow_collects_more_evidence_before_finalizing() -> None:
     workflow = NetworkAutomationWorkflow(
         StubGNS3Provider(calls),
         StubPlanning(calls),
+        StubConfiguration(calls),
         StubExecution(calls),
         IterativeAnalysis(calls),
         max_investigation_rounds=2,
@@ -217,6 +263,7 @@ def test_workflow_finalizes_confirmed_root_cause_despite_auxiliary_gaps() -> Non
     workflow = NetworkAutomationWorkflow(
         StubGNS3Provider(calls),
         StubPlanning(calls),
+        StubConfiguration(calls),
         StubExecution(calls),
         ConfirmedAnalysis(calls),
         max_investigation_rounds=2,
@@ -277,6 +324,7 @@ def test_workflow_blocks_finalize_until_playbook_evidence_is_complete() -> None:
     workflow = NetworkAutomationWorkflow(
         StubGNS3Provider(calls),
         StubPlanning(calls),
+        StubConfiguration(calls),
         StubExecution(calls),
         analysis,
         max_investigation_rounds=2,

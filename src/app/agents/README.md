@@ -135,18 +135,21 @@ Execution Orchestrator/Execution domain, không đưa vào Network Agent hay too
 
 ## LangGraph workflow
 
-`NetworkAutomationWorkflow` biên dịch hai graph:
+`NetworkAutomationWorkflow` chỉ biên dịch một graph. Conditional edge tại
+`START` đọc `entry_mode` để chọn luồng message mới hoặc tiếp tục sau phê duyệt:
 
 ```text
-USER message:       check_gns3 → plan → execute → analyze ─┬→ finalize → END
-                                                           └→ investigate → analyze
-Approval decision:               execute → analyze ────────┬→ finalize → END
-                                                           └→ investigate → analyze
+START ─┬─ entry_mode=message  → check_gns3 → plan ─┬→ configure → execute
+       │                                            └────────────→ execute
+       └─ entry_mode=approval ───────────────────────────────────→ execute
+
+execute → analyze ─┬→ finalize → END
+                   └→ investigate → analyze
 ```
 
-Graph thứ hai khôi phục Task từ PostgreSQL bằng `operation_device_id`. Business
-state không được sao chép sang một checkpointer khác; các bảng Task, Operation,
-Approval và Activity Event vẫn là nguồn sự thật.
+Trước khi gọi chế độ `approval`, backend khôi phục Task từ PostgreSQL bằng
+`operation_device_id`. Business state không được sao chép sang một checkpointer
+khác; các bảng Task, Operation, Approval và Activity Event vẫn là nguồn sự thật.
 
 Với Task `DIAGNOSIS`, node `analyze` có thể yêu cầu thêm evidence có cấu trúc.
 Node `investigate` chỉ nối Operation `READ` dùng `show`, `ping` hoặc
@@ -158,6 +161,14 @@ của hai LLM agent được cấu hình độc lập bằng
 `PLANNER_VALIDATION_RETRIES`, `PLANNER_TIMEOUT_SECONDS`,
 `ANALYST_VALIDATION_RETRIES` và `ANALYST_TIMEOUT_SECONDS`; timeout bao phủ toàn
 bộ lần gọi đầu cùng các lần sửa JSON.
+
+Khi xử lý message mới, Planning Orchestrator đọc tối đa
+`AGENT_CONVERSATION_CONTEXT_MESSAGES` message ngay trước yêu cầu hiện tại từ
+PostgreSQL (mặc định `5`) và gửi cho Planner theo thứ tự thời gian. Dữ liệu này
+chỉ hỗ trợ phân giải tham chiếu trong hội thoại; message hiện tại vẫn là yêu cầu
+chính. Không dùng `InMemorySaver` làm conversation memory vì message đã có nguồn
+dữ liệu bền vững trong Conversation domain và phải còn hiệu lực sau khi backend
+restart hoặc request được worker khác xử lý.
 
 ## Dependency composition
 
