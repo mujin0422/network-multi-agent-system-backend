@@ -243,7 +243,6 @@ class ExecutionService:
 
         self._require_task(task_id)
         now = datetime.now(UTC)
-        events = self._activities.get_all_by_task_id(task_id)
         if started_at is None:
             started_at = now
         if completed_at is None and event_status in {
@@ -260,14 +259,14 @@ class ExecutionService:
             actor_type=actor_type,
             event_type=event_type,
             event_status=event_status,
-            sequence_number=max((item.sequence_number for item in events), default=0) + 1,
+            # Repository cấp sequence thật trong transaction có advisory lock.
+            sequence_number=1,
             event_data=event_data or {},
             started_at=started_at,
             completed_at=completed_at,
             created_at=now,
         )
-        self._activities.save_task_activity_event(event)
-        return event
+        return self._activities.append_task_activity_event(event)
 
     # =============================================================================
     # Operation Device Approval — yêu cầu và quyết định phê duyệt

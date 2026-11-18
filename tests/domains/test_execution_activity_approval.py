@@ -154,6 +154,28 @@ def test_task_stream_events_support_sequence_replay() -> None:
     assert exhausted == []
 
 
+def test_record_activity_delegates_atomic_sequence_to_repository() -> None:
+    repository = ApprovalRepositoryStub()
+    appended: list[TaskActivityEvent] = []
+
+    def append(event: TaskActivityEvent) -> TaskActivityEvent:
+        persisted = event.model_copy(update={"sequence_number": 2})
+        appended.append(persisted)
+        return persisted
+
+    repository.append_task_activity_event = append
+    service = build_execution_service_stub(repository)
+
+    event = service.record_activity(
+        repository.task.id,
+        ActivityActorType.ORCHESTRATOR,
+        ActivityEventType.TASK_COMPLETED,
+    )
+
+    assert event.sequence_number == 2
+    assert appended == [event]
+
+
 class TaskRecordsRepositoryStub(ApprovalRepositoryStub):
     """Read-only repository stub for the Group 3 Task records endpoint."""
 

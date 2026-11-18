@@ -20,6 +20,26 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
 
         return missing
 
+    def append_activity(event):
+        custom = getattr(repository, "append_task_activity_event", None)
+        if custom is not None:
+            return custom(event)
+        existing = method(
+            "get_all_task_activity_events_by_task_id",
+            lambda _id: [],
+        )(event.task_id)
+        persisted = event.model_copy(
+            update={
+                "sequence_number": max(
+                    (item.sequence_number for item in existing),
+                    default=0,
+                )
+                + 1
+            }
+        )
+        method("save_task_activity_event")(persisted)
+        return persisted
+
     tasks = SimpleNamespace(
         get_by_source_message_id=method("get_task_by_source_message_id"),
         save_task=method("save_task"),
@@ -92,6 +112,7 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
             lambda _task_id, _sequence, _limit: [],
         ),
         save_task_activity_event=method("save_task_activity_event"),
+        append_task_activity_event=append_activity,
     )
     approvals = SimpleNamespace(
         get_all_by_operation_id=method(
