@@ -12,7 +12,6 @@ from app.agents.orchestrator.execution_runtime.status import (
     task_status,
 )
 from app.domains.execution.schemas import (
-    AccessMode,
     ActivityActorType,
     ActivityEventStatus,
     ActivityEventType,
@@ -85,7 +84,7 @@ class ExecutionOrchestrator:
                 task.operations,
                 key=lambda item: item.display_order,
             )
-            for operation_index, operation in enumerate(ordered_operations):
+            for operation in ordered_operations:
                 if task.task_status == TaskStatus.RUNNING and (
                     self._execution_service.get_task(task.id).task_status
                     in {
@@ -112,13 +111,6 @@ class ExecutionOrchestrator:
                 persisted = self._execution_service.get_operation(operation.id)
                 statuses[operation.id] = persisted.operation_status
                 if persisted.operation_status == OperationStatus.WAITING_APPROVAL:
-                    # Các WRITE độc lập đã đủ dependency cũng được tạo approval
-                    # ngay trong lượt này để người dùng có thể duyệt theo từng
-                    # thiết bị, thay vì phải chờ tuần tự từng operation.
-                    self._request_ready_write_approvals(
-                        ordered_operations[operation_index + 1 :],
-                        statuses,
-                    )
                     # Bước 5: Tạm dừng an toàn; graph sẽ tiếp tục sau quyết định.
                     self._pause_for_approval(running_task, operation, started_at)
                     return results
@@ -140,57 +132,6 @@ class ExecutionOrchestrator:
         self._complete_task(running_task, started_at, statuses)
         return results
 
-    def _request_ready_write_approvals(
-        self,
-        operations: list[Operation],
-        statuses: dict[str, OperationStatus],
-    ) -> None:
-        """Tạo phiếu cho các WRITE độc lập đã đủ điều kiện dependency."""
-
-        for operation in operations:
-            if operation.operation_status in TERMINAL_OPERATION_STATUSES:
-                continue
-            dependencies = self._execution_service.list_dependencies(operation.id)
-            if not dependencies_satisfied(dependencies, statuses):
-                continue
-            mappings = self._execution_service.list_operation_devices(operation.id)
-            write_mappings = [
-                mapping for mapping in mappings if mapping.access_mode == AccessMode.WRITE
-            ]
-            if not write_mappings:
-                continue
-
-            commands = self._network_agent.extract_commands(
-                operation.operation_parameters
-            )
-            created = False
-            for mapping in write_mappings:
-                if self._execution_service.get_operation_device_approval(mapping.id) is None:
-                    created = True
-                self._approval_gate.can_execute(operation, mapping, commands)
-
-            current_mappings = self._execution_service.list_operation_devices(
-                operation.id
-            )
-            status = operation_status(current_mappings)
-            self._execution_service.update_operation(
-                operation.model_copy(
-                    update={
-                        "operation_status": status,
-                        "started_at": operation.started_at or datetime.now(UTC),
-                        "completed_at": None,
-                    }
-                )
-            )
-            statuses[operation.id] = status
-            if created and status == OperationStatus.WAITING_APPROVAL:
-                self._execution_service.record_activity(
-                    operation.task_id,
-                    ActivityActorType.ORCHESTRATOR,
-                    ActivityEventType.APPROVAL_REQUESTED,
-                    ActivityEventStatus.WAITING_APPROVAL,
-                    operation_id=operation.id,
-                )
 
     async def execute_investigation(
         self,

@@ -344,7 +344,7 @@ def test_write_mapping_waits_without_approved_request() -> None:
     assert service.tasks[-1].completed_at is None
 
 
-def test_execute_task_requests_approvals_for_all_independent_write_operations() -> None:
+def test_execute_task_requests_only_next_independent_write_approval() -> None:
     task = build_task().model_copy(
         update={
             "task_type": TaskType.CONFIGURATION,
@@ -362,10 +362,18 @@ def test_execute_task_requests_approvals_for_all_independent_write_operations() 
     asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
 
     assert agent.calls == []
-    assert len(service.approvals) == 2
-    assert all(
-        mapping.operation_device_status == OperationDeviceStatus.WAITING_APPROVAL
-        for mapping in service.mappings.values()
+    assert len(service.approvals) == 1
+    first_operation = sorted(task.operations, key=lambda item: item.display_order)[0]
+    assert (
+        service.mappings[first_operation.id].operation_device_status
+        == OperationDeviceStatus.WAITING_APPROVAL
+    )
+    other_operation = next(
+        operation for operation in task.operations if operation.id != first_operation.id
+    )
+    assert (
+        service.mappings[other_operation.id].operation_device_status
+        == OperationDeviceStatus.PENDING
     )
 
 
