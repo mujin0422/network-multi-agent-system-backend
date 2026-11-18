@@ -5,12 +5,12 @@ import logging
 from time import monotonic
 from typing import Annotated, AsyncIterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from app.agents.dependencies import get_network_automation_workflow
-from app.agents.workflow import NetworkAutomationWorkflow
-from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
-from app.domains.benchmark.services import BenchmarkRunService
+from app.core.config import get_settings
+from app.core.pagination import PageResponse
+from app.core.task_event_listener import PostgresTaskEventListener
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 
@@ -31,6 +31,8 @@ from app.domains.execution.schemas import (
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.execution.routers.dependencies import get_execution_service
+from app.domains.workflow_job.dependencies import get_workflow_job_service
+from app.domains.workflow_job.service import WorkflowJobService
 
 
 router = APIRouter()
@@ -39,7 +41,6 @@ approvals_router = APIRouter()
 device_action_logs_router = APIRouter()
 logger = logging.getLogger(__name__)
 
-SSE_POLL_INTERVAL_SECONDS = 0.75
 SSE_HEARTBEAT_SECONDS = 15.0
 SSE_TERMINAL_IDLE_SECONDS = 30.0
 
@@ -78,64 +79,77 @@ async def _stream_task_events(
     )
     try:
         yield "retry: 2000\n\n"
-        while not await request.is_disconnected():
-            if task_id is None:
-                task = await asyncio.to_thread(
-                    service.get_task_by_source_message_id,
-                    source_message_id,
-                )
-                if task is not None:
-                    task_id = task.id
-                    logger.info(
-                        "SSE_TASK_BOUND | source_message_id=%s task_id=%s user_id=%s",
+        async with PostgresTaskEventListener(
+            get_settings().database_url
+        ) as listener:
+            while not await request.is_disconnected():
+                if task_id is None:
+                    task = await asyncio.to_thread(
+                        service.get_task_by_source_message_id,
                         source_message_id,
+                    )
+                    if task is not None:
+                        task_id = task.id
+                        logger.info(
+                            "SSE_TASK_BOUND | source_message_id=%s task_id=%s user_id=%s",
+                            source_message_id,
+                            task_id,
+                            user_id,
+                        )
+
+                events: list[TaskStreamEvent] = []
+                if task_id is not None:
+                    events = await asyncio.to_thread(
+                        service.list_task_stream_events,
                         task_id,
-                        user_id,
+                        cursor,
+                        100,
                     )
-
-            events: list[TaskStreamEvent] = []
-            if task_id is not None:
-                events = await asyncio.to_thread(
-                    service.list_task_stream_events,
-                    task_id,
-                    cursor,
-                    100,
-                )
-            for event in events:
-                yield _encode_sse_event(event)
-                cursor = event.sequence_number
-                sent_count += 1
-                last_sent_at = monotonic()
-                if event.event_type.value == "FINAL_RESPONSE_CREATED":
-                    disconnect_reason = "FINAL_RESPONSE_CREATED"
-                    return
-                if event.event_type.value == "TASK_FAILED":
-                    activity_data = event.data.get("event_data", {})
-                    failure_stage = (
-                        activity_data.get("stage")
-                        if isinstance(activity_data, dict)
-                        else None
-                    )
-                    if failure_stage in {
-                        "PLANNING",
-                        "CONFIGURATION",
-                        "PLAN_PERSISTENCE",
-                    }:
-                        disconnect_reason = f"TASK_FAILED_{failure_stage}"
+                for event in events:
+                    yield _encode_sse_event(event)
+                    cursor = event.sequence_number
+                    sent_count += 1
+                    last_sent_at = monotonic()
+                    if event.event_type.value == "FINAL_RESPONSE_CREATED":
+                        disconnect_reason = "FINAL_RESPONSE_CREATED"
                         return
-                    terminal_since = terminal_since or monotonic()
+                    if event.event_type.value == "TASK_FAILED":
+                        activity_data = event.data.get("event_data", {})
+                        failure_stage = (
+                            activity_data.get("stage")
+                            if isinstance(activity_data, dict)
+                            else None
+                        )
+                        if failure_stage in {
+                            "PLANNING",
+                            "CONFIGURATION",
+                            "PLAN_PERSISTENCE",
+                        }:
+                            disconnect_reason = f"TASK_FAILED_{failure_stage}"
+                            return
+                        terminal_since = terminal_since or monotonic()
 
-            now = monotonic()
-            if (
-                terminal_since is not None
-                and now - terminal_since >= SSE_TERMINAL_IDLE_SECONDS
-            ):
-                disconnect_reason = "TERMINAL_IDLE_TIMEOUT"
-                return
-            if now - last_sent_at >= SSE_HEARTBEAT_SECONDS:
-                yield f": heartbeat {int(now)}\n\n"
-                last_sent_at = now
-            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
+                now = monotonic()
+                if (
+                    terminal_since is not None
+                    and now - terminal_since >= SSE_TERMINAL_IDLE_SECONDS
+                ):
+                    disconnect_reason = "TERMINAL_IDLE_TIMEOUT"
+                    return
+                heartbeat_in = max(
+                    0.1,
+                    SSE_HEARTBEAT_SECONDS - (now - last_sent_at),
+                )
+                notification = await listener.wait(heartbeat_in)
+                if notification is None:
+                    now = monotonic()
+                    if now - last_sent_at >= SSE_HEARTBEAT_SECONDS:
+                        yield f": heartbeat {int(now)}\n\n"
+                        last_sent_at = now
+                    continue
+                notified_task_id = notification.get("task_id")
+                if task_id is not None and notified_task_id != task_id:
+                    continue
     finally:
         logger.info(
             "SSE_DISCONNECTED | source_message_id=%s task_id=%s user_id=%s "
@@ -151,7 +165,7 @@ async def _stream_task_events(
 
 
 @device_action_logs_router.get("/", response_model=list[DeviceActionLog])
-async def list_device_action_logs(
+def list_device_action_logs(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
     limit: Annotated[int, Query(ge=1, le=1000)] = 500,
@@ -165,7 +179,7 @@ async def list_device_action_logs(
     "/by-task/{task_id}",
     response_model=list[DeviceActionLog],
 )
-async def list_device_action_logs_by_task(
+def list_device_action_logs_by_task(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
@@ -175,21 +189,8 @@ async def list_device_action_logs_by_task(
     return service.list_device_action_logs_by_task(task_id)
 
 
-async def _resume_approved_workflow(
-    operation_device_id: str,
-    workflow: NetworkAutomationWorkflow,
-    benchmark_service: BenchmarkRunService,
-) -> None:
-    """Resume and finalize a benchmark only after the final Agent response."""
-
-    state = await workflow.resume_after_approval(operation_device_id)
-    task = state.get("task")
-    if task is not None:
-        benchmark_service.complete_for_task(task, state.get("response"))
-
-
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
-async def create_task(
+def create_task(
     payload: TaskCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
@@ -198,11 +199,23 @@ async def create_task(
 
 
 @router.get("/", response_model=list[Task])
-async def list_tasks(
+def list_tasks(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[Task]:
     return service.list_tasks()
+
+
+@router.get("/page", response_model=PageResponse[Task])
+def get_task_page(
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> PageResponse[Task]:
+    """Trả Task và metadata phân trang trong một response."""
+
+    return service.get_task_page(page=page, page_size=page_size)
 
 
 @router.get("/by-source-message/{message_id}/events/stream")
@@ -234,7 +247,7 @@ async def stream_task_events_by_source_message(
 
 
 @router.get("/{task_id}", response_model=TaskDetail)
-async def get_task(
+def get_task(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -243,7 +256,7 @@ async def get_task(
 
 
 @router.get("/{task_id}/records", response_model=TaskRecords)
-async def get_task_records(
+def get_task_records(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -254,7 +267,7 @@ async def get_task_records(
 
 
 @router.get("/{task_id}/activity-events", response_model=list[TaskActivityEvent])
-async def list_task_activity_events(
+def list_task_activity_events(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -269,7 +282,7 @@ async def list_task_activity_events(
     response_model=Operation,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_operation(
+def create_operation(
     task_id: str,
     payload: OperationCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
@@ -282,7 +295,7 @@ async def create_operation(
     "/{operation_id}/approvals",
     response_model=list[OperationDeviceApprovalResponse],
 )
-async def list_operation_approvals(
+def list_operation_approvals(
     operation_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -299,28 +312,28 @@ async def list_operation_approvals(
 async def decide_operation_device_approval(
     approval_id: str,
     payload: OperationDeviceApprovalDecision,
-    background_tasks: BackgroundTasks,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
-    workflow: Annotated[
-        NetworkAutomationWorkflow,
-        Depends(get_network_automation_workflow),
-    ],
-    benchmark_service: Annotated[
-        BenchmarkRunService,
-        Depends(get_benchmark_run_service),
+    workflow_jobs: Annotated[
+        WorkflowJobService,
+        Depends(get_workflow_job_service),
     ],
     user: Annotated[User, Depends(require_permission("Task Management", "Approve"))],
 ) -> OperationDeviceApprovalResponse:
     """Phê duyệt hoặc từ chối một lần bằng User trong access token."""
 
-    approval = service.decide_operation_approval(
+    approval = await run_in_threadpool(
+        service.decide_operation_approval,
         approval_id,
         user_id=user.id,
         decision=payload.decision,
     )
-    mapping = service.get_operation_device(approval.operation_device_id)
-    operation = service.get_operation(mapping.operation_id)
-    service.record_activity(
+    mapping = await run_in_threadpool(
+        service.get_operation_device,
+        approval.operation_device_id,
+    )
+    operation = await run_in_threadpool(service.get_operation, mapping.operation_id)
+    await run_in_threadpool(
+        service.record_activity,
         operation.task_id,
         ActivityActorType.ORCHESTRATOR,
         (
@@ -331,10 +344,8 @@ async def decide_operation_device_approval(
         operation_id=operation.id,
         event_data={"approval_id": approval.id, "decided_by": user.id},
     )
-    background_tasks.add_task(
-        _resume_approved_workflow,
+    await run_in_threadpool(
+        workflow_jobs.enqueue_approval,
         approval.operation_device_id,
-        workflow,
-        benchmark_service,
     )
     return approval

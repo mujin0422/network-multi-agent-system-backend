@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 
 from app.core.database import create_session_factory
 from app.domains.audit.models import AuditLogModel
@@ -80,3 +80,49 @@ class AuditLogRepository:
                 AuditLog.model_validate(row, from_attributes=True)
                 for row in rows
             ]
+
+    def get_page(
+        self,
+        *,
+        actor_user_id: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        event_status: AuditEventStatus | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[AuditLog], int]:
+        """Lấy Audit Log và tổng số bản ghi khớp cùng một bộ lọc."""
+
+        filters = []
+        if actor_user_id is not None:
+            filters.append(AuditLogModel.actor_user_id == actor_user_id)
+        if action is not None:
+            filters.append(AuditLogModel.action == action)
+        if resource_type is not None:
+            filters.append(AuditLogModel.resource_type == resource_type)
+        if event_status is not None:
+            filters.append(AuditLogModel.event_status == event_status)
+        if occurred_from is not None:
+            filters.append(AuditLogModel.occurred_at >= occurred_from)
+        if occurred_to is not None:
+            filters.append(AuditLogModel.occurred_at <= occurred_to)
+
+        data_statement = (
+            select(AuditLogModel)
+            .where(*filters)
+            .order_by(AuditLogModel.occurred_at.desc(), AuditLogModel.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = (
+            select(func.count()).select_from(AuditLogModel).where(*filters)
+        )
+        with self._sessions() as session:
+            rows = list(session.scalars(data_statement).all())
+            total = int(session.scalar(count_statement) or 0)
+        return (
+            [AuditLog.model_validate(row, from_attributes=True) for row in rows],
+            total,
+        )

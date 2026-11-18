@@ -2381,6 +2381,7 @@ Message do Agent tạo có thể tham chiếu đến Message nguồn của ngư�
 | sender_by           | enum       | No       | Xác định đối tượng gửi tin nhắn. Giá trị có thể gồm `USER`/`AGENT`.                                     |
 | message_type        | enum       | No       | Phân loại vai trò của Message trong Conversation và workflow AI.                                        |
 | message             | text       | No       | Nội dung của tin nhắn được người dùng hoặc hệ thống AI gửi trong phiên hội thoại.                       |
+| structured_data     | jsonb      | Yes      | Payload máy đọc được đi kèm phản hồi, hiện dùng để lưu configuration proposals theo từng thiết bị.      |
 | created_at          | timestamp  | No       | Thời điểm tin nhắn được tạo và lưu vào hệ thống.                                                        |
 
 **_[3] Ràng buộc (constraint):_**
@@ -2445,6 +2446,16 @@ Quan hệ được truy vết theo chiều:
             -> Task và các dữ liệu runtime tương ứng.
 
 Tasks.source_message_id có ràng buộc UNIQUE, do đó một USER Message chỉ tạo tối đa một Task.
+```
+
+[4.5] Trường `structured_data`
+
+```
+FINAL_RESPONSE có cấu hình đề xuất phải lưu đồng thời nội dung trình bày trong
+message và danh sách configuration_proposals trong structured_data. Mỗi phần tử
+gồm device, commands và rationale. Khi người dùng yêu cầu thực thi cấu hình đã
+đề xuất, Planner sử dụng payload này làm nguồn chuẩn, tạo đúng một WRITE
+operation cho mỗi thiết bị và không phân tích ngược nội dung văn bản.
 ```
 
 ## 2.5 GROUP 5: AI EVALUATION

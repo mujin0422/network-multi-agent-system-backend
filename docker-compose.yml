@@ -60,6 +60,25 @@ services:
     networks:
       - backend
 
+  workflow-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-network_automation_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-network_automation_db}
+      GNS3_IP: ${DOCKER_GNS3_IP:-host.docker.internal}
+    command: ["python", "scripts/run_workflow_worker.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
   migrate:
     build:
       context: .

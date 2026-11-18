@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
 from app.domains.evaluation.models import TaskEvaluationModel
@@ -53,6 +53,32 @@ class TaskEvaluationRepository:
                 TaskEvaluation.model_validate(row, from_attributes=True)
                 for row in session.scalars(statement).all()
             ]
+
+    def get_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[TaskEvaluation], int]:
+        """Lấy trang Evaluation mới nhất và tổng số bản ghi."""
+
+        data_statement = (
+            select(TaskEvaluationModel)
+            .order_by(TaskEvaluationModel.created_at.desc(), TaskEvaluationModel.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count()).select_from(TaskEvaluationModel)
+        with self._sessions() as session:
+            rows = list(session.scalars(data_statement).all())
+            total = int(session.scalar(count_statement) or 0)
+        return (
+            [
+                TaskEvaluation.model_validate(row, from_attributes=True)
+                for row in rows
+            ],
+            total,
+        )
 
 
     def save(self, evaluation: TaskEvaluation) -> None:

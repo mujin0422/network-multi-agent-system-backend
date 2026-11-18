@@ -22,7 +22,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Thêm người dùng",
 )
-async def create_user(
+def create_user(
     payload: UserCreate,
     service: Annotated[UserService, Depends(get_user_service)],
     _: Annotated[User, Depends(require_permission("User Management", "Add"))],
@@ -34,7 +34,7 @@ async def create_user(
 
 # READ — Lấy danh sách người dùng.
 @router.get("/", response_model=list[User], summary="Lấy danh sách người dùng")
-async def list_users(
+def list_users(
     service: Annotated[UserService, Depends(get_user_service)],
     _: Annotated[User, Depends(require_permission("User Management", "View"))],
 ) -> list[User]:
@@ -49,7 +49,7 @@ async def list_users(
     response_model=User,
     summary="Lấy người dùng theo ID",
 )
-async def get_user(
+def get_user(
     user_id: str,
     service: Annotated[UserService, Depends(get_user_service)],
     _: Annotated[User, Depends(require_permission("User Management", "View"))],
@@ -65,7 +65,7 @@ async def get_user(
     response_model=User,
     summary="Cập nhật người dùng",
 )
-async def update_user(
+def update_user(
     user_id: str,
     payload: UserUpdate,
     service: Annotated[UserService, Depends(get_user_service)],

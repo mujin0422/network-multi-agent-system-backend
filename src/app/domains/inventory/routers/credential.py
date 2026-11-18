@@ -21,7 +21,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Thêm credential",
 )
-async def create_credential(
+def create_credential(
     payload: CredentialCreate,
     service: Annotated[CredentialService, Depends(get_credential_service)],
     user: Annotated[User, Depends(require_permission("Device Management", "Add"))],
@@ -35,7 +35,7 @@ async def create_credential(
     response_model=list[Credential],
     summary="Lấy danh sách credential",
 )
-async def list_credentials(
+def list_credentials(
     service: Annotated[CredentialService, Depends(get_credential_service)],
     _user: Annotated[User, Depends(require_permission("Device Management", "View"))],
 ) -> list[Credential]:
@@ -48,7 +48,7 @@ async def list_credentials(
     response_model=Credential,
     summary="Lấy credential theo ID",
 )
-async def get_credential(
+def get_credential(
     credential_id: str,
     service: Annotated[CredentialService, Depends(get_credential_service)],
     _user: Annotated[User, Depends(require_permission("Device Management", "View"))],
@@ -62,7 +62,7 @@ async def get_credential(
     response_model=Credential,
     summary="Cập nhật credential",
 )
-async def update_credential(
+def update_credential(
     credential_id: str,
     payload: CredentialUpdate,
     service: Annotated[CredentialService, Depends(get_credential_service)],

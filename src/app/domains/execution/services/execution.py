@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.core.config import get_settings
+from app.core.pagination import PageResponse
 
 from app.core.exceptions import (
     InvalidStateTransitionError,
@@ -106,6 +107,20 @@ class ExecutionService:
 
         return self._tasks.get_all()
 
+    def get_task_page(self, *, page: int, page_size: int) -> PageResponse[Task]:
+        """Lấy Task theo trang với tổng số bản ghi do database tính."""
+
+        items, total = self._tasks.get_page(
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        return PageResponse[Task].create(
+            items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
     def get_task(self, task_id: str) -> TaskDetail:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_task."""
         task = self._require_task(task_id)
@@ -121,28 +136,15 @@ class ExecutionService:
         operation_ids = [operation.id for operation in task.operations]
         return TaskRecords(
             task=task,
-            operation_devices=[
-                mapping
-                for operation_id in operation_ids
-                for mapping in self._operation_devices.get_all_by_operation_id(
-                    operation_id
-                )
-            ],
-            dependencies=[
-                dependency
-                for operation_id in operation_ids
-                for dependency in self._dependencies.get_all_by_operation_id(
-                    operation_id
-                )
-            ],
+            operation_devices=self._operation_devices.get_all_by_operation_ids(
+                operation_ids
+            ),
+            dependencies=self._dependencies.get_all_by_operation_ids(operation_ids),
             executions=self._task_executions.get_all_by_task_id(task_id),
             activity_events=self._activities.get_all_by_task_id(task_id),
             approvals=[
                 to_approval_response(approval)
-                for operation_id in operation_ids
-                for approval in self._approvals.get_all_by_operation_id(
-                    operation_id
-                )
+                for approval in self._approvals.get_all_by_operation_ids(operation_ids)
             ],
         )
 
@@ -241,7 +243,6 @@ class ExecutionService:
 
         self._require_task(task_id)
         now = datetime.now(UTC)
-        events = self._activities.get_all_by_task_id(task_id)
         if started_at is None:
             started_at = now
         if completed_at is None and event_status in {
@@ -258,14 +259,14 @@ class ExecutionService:
             actor_type=actor_type,
             event_type=event_type,
             event_status=event_status,
-            sequence_number=max((item.sequence_number for item in events), default=0) + 1,
+            # Repository cấp sequence thật trong transaction có advisory lock.
+            sequence_number=1,
             event_data=event_data or {},
             started_at=started_at,
             completed_at=completed_at,
             created_at=now,
         )
-        self._activities.save_task_activity_event(event)
-        return event
+        return self._activities.append_task_activity_event(event)
 
     # =============================================================================
     # Operation Device Approval — yêu cầu và quyết định phê duyệt

@@ -19,12 +19,12 @@ async def login(payload: LoginRequest, service: Annotated[IdentityService, Depen
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest, service: Annotated[IdentityService, Depends(get_identity_service)]) -> TokenResponse:
+def refresh(payload: RefreshRequest, service: Annotated[IdentityService, Depends(get_identity_service)]) -> TokenResponse:
     return service.refresh(payload.refresh_token)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(
+def logout(
     identity: Annotated[tuple[User, str], Depends(get_current_identity)],
     service: Annotated[IdentityService, Depends(get_identity_service)],
 ) -> Response:
@@ -33,5 +33,5 @@ async def logout(
 
 
 @router.get("/me", response_model=User)
-async def me(identity: Annotated[tuple[User, str], Depends(get_current_identity)]) -> User:
+def me(identity: Annotated[tuple[User, str], Depends(get_current_identity)]) -> User:
     return identity[0]

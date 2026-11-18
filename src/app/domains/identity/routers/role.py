@@ -29,7 +29,7 @@ router = APIRouter()
     response_model=PermissionCatalog,
     summary="Lấy catalog phân quyền",
 )
-async def get_permission_catalog(
+def get_permission_catalog(
     service: Annotated[AccessControlService, Depends(get_access_control_service)],
     _: Annotated[
         User,
@@ -44,7 +44,7 @@ async def get_permission_catalog(
     response_model=list[RolePermission],
     summary="Lấy quyền của vai trò",
 )
-async def list_role_permissions(
+def list_role_permissions(
     role_id: str,
     service: Annotated[AccessControlService, Depends(get_access_control_service)],
     _: Annotated[
@@ -60,7 +60,7 @@ async def list_role_permissions(
     response_model=list[RolePermission],
     summary="Thay thế quyền của vai trò",
 )
-async def replace_role_permissions(
+def replace_role_permissions(
     role_id: str,
     payload: RolePermissionsUpdate,
     service: Annotated[AccessControlService, Depends(get_access_control_service)],
@@ -79,7 +79,7 @@ async def replace_role_permissions(
     status_code=status.HTTP_201_CREATED,
     summary="Thêm vai trò",
 )
-async def create_role(
+def create_role(
     payload: RoleCreate,
     service: Annotated[RoleService, Depends(get_role_service)],
     current_user: Annotated[
@@ -94,7 +94,7 @@ async def create_role(
 
 # READ — Lấy danh sách vai trò.
 @router.get("/", response_model=list[Role], summary="Lấy danh sách vai trò")
-async def list_roles(
+def list_roles(
     service: Annotated[RoleService, Depends(get_role_service)],
     _: Annotated[
         User,
@@ -112,7 +112,7 @@ async def list_roles(
     response_model=Role,
     summary="Lấy vai trò theo ID",
 )
-async def get_role(
+def get_role(
     role_id: str,
     service: Annotated[RoleService, Depends(get_role_service)],
     _: Annotated[
@@ -131,7 +131,7 @@ async def get_role(
     response_model=Role,
     summary="Cập nhật vai trò",
 )
-async def update_role(
+def update_role(
     role_id: str,
     payload: RoleUpdate,
     service: Annotated[RoleService, Depends(get_role_service)],

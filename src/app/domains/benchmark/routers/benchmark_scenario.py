@@ -2,8 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
+from app.core.pagination import PageResponse
 from app.domains.benchmark.routers.dependencies import get_benchmark_scenario_service
 from app.domains.benchmark.schemas import (
     BenchmarkScenario,
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/scenarios")
 
 
 @router.get("", response_model=list[BenchmarkScenarioSummary])
-async def list_scenarios(
+def list_scenarios(
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
     ],
@@ -29,8 +30,22 @@ async def list_scenarios(
     return service.list()
 
 
+@router.get("/page", response_model=PageResponse[BenchmarkScenarioSummary])
+def get_scenario_page(
+    service: Annotated[
+        BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
+    ],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 6,
+) -> PageResponse[BenchmarkScenarioSummary]:
+    """Trả Scenario và metadata phân trang trong một response."""
+
+    return service.get_page(page=page, page_size=page_size)
+
+
 @router.post("", response_model=BenchmarkScenarioSummary)
-async def create_scenario(
+def create_scenario(
     payload: BenchmarkScenario,
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
@@ -41,7 +56,7 @@ async def create_scenario(
 
 
 @router.get("/{scenario_id}", response_model=BenchmarkScenarioRecord)
-async def get_scenario(
+def get_scenario(
     scenario_id: str,
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
@@ -54,7 +69,7 @@ async def get_scenario(
 
 
 @router.patch("/{scenario_id}", response_model=BenchmarkScenarioSummary)
-async def update_scenario(
+def update_scenario(
     scenario_id: str,
     payload: BenchmarkScenarioUpdate,
     service: Annotated[

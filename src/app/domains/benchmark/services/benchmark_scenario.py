@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from app.core.pagination import PageResponse
 from app.core.exceptions import ResourceConflictError
 from app.core.utils import IdPrefix, generate_id
 from app.domains.benchmark.repositories import BenchmarkScenarioRepository
@@ -24,6 +25,29 @@ class BenchmarkScenarioService:
             BenchmarkScenarioSummary.model_validate(scenario.model_dump())
             for scenario in self._repository.get_all()
         ]
+
+    def get_page(
+        self,
+        *,
+        page: int,
+        page_size: int,
+    ) -> PageResponse[BenchmarkScenarioSummary]:
+        """Lấy Scenario theo trang mà không tải toàn bộ definition vào API list."""
+
+        records, total = self._repository.get_page(
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        items = [
+            BenchmarkScenarioSummary.model_validate(record.model_dump())
+            for record in records
+        ]
+        return PageResponse[BenchmarkScenarioSummary].create(
+            items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
     def get(self, scenario_id: str) -> BenchmarkScenarioRecord:
         """Lấy đủ các bước inject/verify/cleanup để chỉnh sửa một scenario."""

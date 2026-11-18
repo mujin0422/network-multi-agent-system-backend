@@ -97,6 +97,29 @@ class AnalysisOrchestrator:
             ActivityEventStatus.RUNNING,
             started_at=analysis_started_at,
         )
+        if current_task.task_status == TaskStatus.REJECTED:
+            analysis = self._build_rejected_configuration_analysis(current_task)
+            self._execution_service.record_activity(
+                task.id,
+                ActivityActorType.ANALYST,
+                ActivityEventType.ANALYSIS_COMPLETED,
+                event_data={
+                    "requires_more_data": False,
+                    "confidence": analysis.confidence,
+                    "evidence_gaps": [],
+                    "suggested_check_count": 0,
+                    "execution_issues": [],
+                    "evidence_coverage": (
+                        evidence_coverage.model_dump(mode="json")
+                        if evidence_coverage is not None
+                        else None
+                    ),
+                    "used_fallback": False,
+                    "approval_outcome": "ALL_REJECTED",
+                },
+                started_at=analysis_started_at,
+            )
+            return analysis
         # Bước 3: Chuẩn hóa output kỹ thuật và bổ sung topology context.
         analysis_inputs = [
             {
@@ -485,6 +508,16 @@ class AnalysisOrchestrator:
                 reply_to_message_id=task.source_message_id,
                 message_type=MessageType.FINAL_RESPONSE,
                 message=self._format_analysis(analysis),
+                structured_data=(
+                    {
+                        "configuration_proposals": [
+                            proposal.model_dump(mode="json")
+                            for proposal in analysis.configuration_proposals
+                        ]
+                    }
+                    if analysis.configuration_proposals
+                    else None
+                ),
             ),
         )
         # Bước 3: Ghi message ID vào timeline để Benchmark liên kết chính xác.
@@ -790,6 +823,20 @@ class AnalysisOrchestrator:
     def _save_waiting_response(self, task: TaskDetail) -> Message:
         """Lưu message thông báo Task đang tạm dừng để chờ phê duyệt."""
 
+        existing = next(
+            (
+                message
+                for message in reversed(
+                    self._conversation_service.list_messages(task.conversation_id)
+                )
+                if message.reply_to_message_id == task.source_message_id
+                and message.message_type == MessageType.APPROVAL_REQUEST
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+
         return self._conversation_service.create_message(
             task.conversation_id,
             MessageCreate(
@@ -798,6 +845,46 @@ class AnalysisOrchestrator:
                 message_type=MessageType.APPROVAL_REQUEST,
                 message="Kế hoạch đã được tạo. Một hoặc nhiều thao tác cấu hình đang chờ bạn phê duyệt.",
             ),
+        )
+
+    def _build_rejected_configuration_analysis(
+        self,
+        task: TaskDetail,
+    ) -> AnalysisResult:
+        """Tóm tắt xác định khi mọi thay đổi cấu hình đều bị từ chối."""
+
+        device_names: list[str] = []
+        for operation in task.operations:
+            for mapping in self._execution_service.list_operation_devices(
+                operation.id
+            ):
+                if mapping.operation_device_status.value != "REJECTED":
+                    continue
+                try:
+                    name = self._device_service.get_device(mapping.device_id).hostname
+                except Exception:
+                    name = mapping.device_id
+                if name not in device_names:
+                    device_names.append(name)
+        names = ", ".join(device_names) or "các thiết bị mục tiêu"
+        return AnalysisResult(
+            summary=(
+                f"Các thay đổi cấu hình trên {names} đã bị người dùng từ chối. "
+                "Không có command cấu hình nào được thực thi và trạng thái thiết bị "
+                "được giữ nguyên."
+            ),
+            findings=[
+                f"{name}: yêu cầu thay đổi cấu hình đã bị từ chối."
+                for name in device_names[:4]
+            ],
+            likely_causes=[],
+            recommendations=[
+                "Xem lại nội dung cấu hình đề xuất và gửi yêu cầu thực thi mới nếu cần thay đổi."
+            ],
+            requires_more_data=False,
+            confidence=1.0,
+            evidence_gaps=[],
+            is_anomaly=False,
         )
 
 

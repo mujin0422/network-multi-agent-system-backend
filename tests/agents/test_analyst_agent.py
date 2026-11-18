@@ -23,7 +23,12 @@ from app.diagnostics import (
     build_causal_scope,
 )
 from app.domains.evaluation.schemas import PredictedRootCause
-from app.domains.execution.schemas import AccessMode, TaskStatus, TaskType
+from app.domains.execution.schemas import (
+    AccessMode,
+    OperationDeviceStatus,
+    TaskStatus,
+    TaskType,
+)
 from app.tools import CommandResult
 
 
@@ -292,6 +297,47 @@ def test_analysis_response_always_surfaces_device_execution_issue() -> None:
     assert "Lỗi thực thi" in content
     assert "[DEVICE_UNREACHABLE]" in content
     assert "console port" in content
+
+
+def test_rejected_configuration_analysis_reports_no_commands_executed() -> None:
+    class ExecutionService:
+        @staticmethod
+        def list_operation_devices(operation_id):
+            device_id = (
+                "devc-221026-00000001"
+                if operation_id == "oper-1"
+                else "devc-221026-00000002"
+            )
+            return [
+                SimpleNamespace(
+                    device_id=device_id,
+                    operation_device_status=OperationDeviceStatus.REJECTED,
+                )
+            ]
+
+    class DeviceService(StubDeviceService):
+        def get_device(self, device_id):
+            return next(
+                device for device in self.list_available_devices() if device.id == device_id
+            )
+
+    orchestrator = AnalysisOrchestrator(
+        analyst=None,
+        execution_service=ExecutionService(),
+        conversation_service=None,
+        device_service=DeviceService(),
+    )
+    task = SimpleNamespace(
+        operations=[SimpleNamespace(id="oper-1"), SimpleNamespace(id="oper-2")]
+    )
+
+    analysis = orchestrator._build_rejected_configuration_analysis(task)
+
+    assert analysis.requires_more_data is False
+    assert analysis.confidence == 1.0
+    assert "P1, P2" in analysis.summary
+    assert "Không có command cấu hình nào được thực thi" in analysis.summary
+    assert len(analysis.findings) == 2
 
 
 def test_complete_evidence_retries_empty_diagnosis_and_applies_scope_gate() -> None:

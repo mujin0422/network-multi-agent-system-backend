@@ -27,18 +27,18 @@ class NetworkWorkflowState(TypedDict):
     dữ liệu cạnh tranh cho vòng đời Task, Operation và Approval.
     """
 
-    entry_mode: Literal["message", "approval"]
-    conversation: NotRequired[Conversation]
-    message: NotRequired[Message]
-    task: NotRequired[TaskDetail]
-    planning_draft: NotRequired[PlanningDraft]
-    execution_results: NotRequired[list[NetworkExecutionResult]]
-    response: NotRequired[Message | None]
-    analysis: NotRequired[AnalysisResult | None]
-    investigation_round: NotRequired[int]
-    playbook_keys: NotRequired[list[str]]
-    evidence_coverage: NotRequired[EvidenceCoverage]
-    evidence_stop_reason: NotRequired[str]
+    entry_mode: Literal["message", "approval"] # Nguồn kích hoạt workflow: message mới hay resume sau approval.
+    conversation: NotRequired[Conversation] # Conversation chứa toàn bộ lịch sử hội thoại, được dùng để lập kế hoạch và phân tích.
+    message: NotRequired[Message] # Message mới do người dùng gửi, được dùng để lập kế hoạch và phân tích.
+    task: NotRequired[TaskDetail] # Task được tạo ra từ message hoặc được load từ PostgreSQL khi resume sau approval.
+    planning_draft: NotRequired[PlanningDraft] # Bản nháp kế hoạch được tạo ra từ message, chứa operation, dependency và các thiết bị liên quan.
+    execution_results: NotRequired[list[NetworkExecutionResult]] # Kết quả thực thi các operation, được cộng dồn qua các vòng điều tra.
+    response: NotRequired[Message | None] # Phản hồi cuối cùng được tạo ra từ phân tích, có thể là message trả lời người dùng hoặc None nếu không đủ dữ liệu.
+    analysis: NotRequired[AnalysisResult | None] # Kết quả phân tích từ execution_results, có thể là None nếu không đủ dữ liệu.
+    investigation_round: NotRequired[int] # Số vòng điều tra đã thực hiện, bắt đầu từ 0 và tăng dần khi đi qua node investigate.
+    playbook_keys: NotRequired[list[str]] # Danh sách các playbook được áp dụng cho message, được dùng để đánh giá coverage và xác định các check cần thực hiện.
+    evidence_coverage: NotRequired[EvidenceCoverage] # Đánh giá coverage của evidence hiện có so với các playbook, được dùng để quyết định có cần điều tra thêm hay không.
+    evidence_stop_reason: NotRequired[str] # Lý do dừng điều tra evidence, có thể là "NO_ADDITIONAL_CHECKS", "INVESTIGATION_EXECUTED", "EVIDENCE_COMPLETE" hoặc "MAX_ROUNDS_REACHED".
 
 
 class NetworkAutomationWorkflow:

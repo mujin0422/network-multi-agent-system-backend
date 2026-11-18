@@ -31,6 +31,10 @@ class Settings(BaseSettings):
         "postgresql://network_automation_user:network_dev_password@localhost:5432/"
         "network_automation_db"
     )
+    db_pool_size: int = Field(default=10, ge=1, le=100)
+    db_max_overflow: int = Field(default=20, ge=0, le=200)
+    db_pool_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    db_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
     # Chỉ backend dùng khóa này để giải mã credential khi mở kết nối Netmiko.
     device_credential_encryption_key: str = ""
     # Khóa ký access token identity, độc lập với khóa credential thiết bị.
@@ -64,6 +68,12 @@ class Settings(BaseSettings):
     approval_timeout_minutes: int = Field(default=15, ge=1, le=1440)
     approval_sweep_interval_seconds: int = Field(default=30, ge=5, le=3600)
     approval_sweep_enabled: bool = True
+
+    # Durable AI workflow worker backed by PostgreSQL SKIP LOCKED.
+    workflow_job_poll_interval_seconds: float = Field(default=0.5, ge=0.1, le=30)
+    workflow_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    workflow_job_retry_delay_seconds: float = Field(default=5.0, ge=0, le=300)
+    workflow_job_lock_timeout_seconds: int = Field(default=900, ge=30, le=7200)
 
     # Network connection timeouts.
     ssh_timeout: int = Field(default=60, gt=0)

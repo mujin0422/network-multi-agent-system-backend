@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.pagination import PageResponse
 from app.domains.evaluation.routers.dependencies import get_task_evaluation_service
 from app.domains.evaluation.schemas import TaskEvaluationDetail, TaskEvaluationSummary
 from app.domains.evaluation.services import TaskEvaluationService
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[TaskEvaluationSummary])
-async def list_evaluations(
+def list_evaluations(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
     evaluation_service: Annotated[
         TaskEvaluationService,
@@ -29,8 +30,23 @@ async def list_evaluations(
     return evaluation_service.get_recent(limit)
 
 
+@router.get("/page", response_model=PageResponse[TaskEvaluationSummary])
+def get_evaluation_page(
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    evaluation_service: Annotated[
+        TaskEvaluationService,
+        Depends(get_task_evaluation_service),
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> PageResponse[TaskEvaluationSummary]:
+    """Trả Evaluation và metadata phân trang trong một response."""
+
+    return evaluation_service.get_page(page=page, page_size=page_size)
+
+
 @router.get("/tasks/{task_id}", response_model=TaskEvaluationDetail | None)
-async def get_task_evaluation(
+def get_task_evaluation(
     task_id: str,
     execution_service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],

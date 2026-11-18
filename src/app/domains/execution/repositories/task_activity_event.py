@@ -1,8 +1,11 @@
 """Repository cho timeline trong bảng task_activity_events."""
 
-from sqlalchemy import select
+import json
+
+from sqlalchemy import func, select, text
 
 from app.core.database import create_session_factory
+from app.core.task_events import TASK_ACTIVITY_CHANNEL
 from app.domains.execution.models import TaskActivityEventModel
 from app.domains.execution.schemas import TaskActivityEvent
 
@@ -67,4 +70,51 @@ class TaskActivityEventRepository:
                 return
             for field, value in event.model_dump().items():
                 setattr(model, field, value)
+
+    def append_task_activity_event(
+        self,
+        event: TaskActivityEvent,
+    ) -> TaskActivityEvent:
+        """Cấp sequence, insert và phát NOTIFY trong cùng transaction.
+
+        Advisory lock theo ``task_id`` tuần tự hóa các writer của cùng một Task,
+        nhưng vẫn cho phép các Task khác ghi activity song song.
+        """
+
+        with self._sessions.begin() as session:
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:task_id))"),
+                {"task_id": event.task_id},
+            )
+            next_sequence = int(
+                session.scalar(
+                    select(
+                        func.coalesce(
+                            func.max(TaskActivityEventModel.sequence_number),
+                            0,
+                        )
+                        + 1
+                    ).where(TaskActivityEventModel.task_id == event.task_id)
+                )
+                or 1
+            )
+            persisted = event.model_copy(
+                update={"sequence_number": next_sequence}
+            )
+            session.add(TaskActivityEventModel(**persisted.model_dump()))
+            session.flush()
+            session.execute(
+                text("SELECT pg_notify(:channel, :payload)"),
+                {
+                    "channel": TASK_ACTIVITY_CHANNEL,
+                    "payload": json.dumps(
+                        {
+                            "task_id": persisted.task_id,
+                            "sequence_number": persisted.sequence_number,
+                        },
+                        separators=(",", ":"),
+                    ),
+                },
+            )
+            return persisted
 

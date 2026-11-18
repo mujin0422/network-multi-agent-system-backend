@@ -42,6 +42,33 @@ class OperationDeviceApprovalRepository:
                 for model in session.scalars(statement).all()
             ]
 
+    def get_all_by_operation_ids(
+        self,
+        operation_ids: list[str],
+    ) -> list[OperationDeviceApproval]:
+        """Lấy Approval của nhiều Operation bằng một truy vấn."""
+
+        if not operation_ids:
+            return []
+        statement = (
+            select(OperationDeviceApprovalModel)
+            .join(
+                TaskOperationDeviceModel,
+                TaskOperationDeviceModel.id
+                == OperationDeviceApprovalModel.operation_device_id,
+            )
+            .where(TaskOperationDeviceModel.operation_id.in_(operation_ids))
+            .order_by(
+                OperationDeviceApprovalModel.requested_at,
+                OperationDeviceApprovalModel.id,
+            )
+        )
+        with self._sessions() as session:
+            return [
+                OperationDeviceApproval.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]
+
 
     def get_by_id(self, approval_id: str,) -> OperationDeviceApproval | None:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_by_id."""

@@ -80,12 +80,13 @@ class PlanningOrchestrator:
         6. Trả bản nháp cho node configure hoặc bước lưu kế hoạch READ.
         """
 
-        # Bước 1: Chỉ message do USER gửi mới được chuyển thành task. Việc này
+        # Bước 1: Kiểm tra nguồn và quan hệ của message.
+        # Bước 1.1: Chỉ message do USER gửi mới được chuyển thành task. Việc này
         # ngăn message trả lời của ASSISTANT tạo thêm task theo vòng lặp.
         if message.sender_by != MessageSender.USER:
             raise ValueError("Planner chỉ nhận message từ USER")
 
-        # Message và Conversation được truyền riêng nên phải xác nhận chúng thực
+        # Bước 1.2: Message và Conversation được truyền riêng nên phải xác nhận chúng thực
         # sự thuộc cùng một luồng hội thoại trước khi ghi dữ liệu execution.
         if message.conversation_id != conversation.id:
             raise ValueError("Message không thuộc conversation được cung cấp")
