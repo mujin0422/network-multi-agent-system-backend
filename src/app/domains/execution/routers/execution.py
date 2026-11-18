@@ -9,7 +9,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request,
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from app.agents.dependencies import get_network_automation_workflow
+from app.core.config import get_settings
 from app.core.pagination import PageResponse
+from app.core.task_event_listener import PostgresTaskEventListener
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
 from app.domains.benchmark.services import BenchmarkRunService
@@ -41,7 +43,6 @@ approvals_router = APIRouter()
 device_action_logs_router = APIRouter()
 logger = logging.getLogger(__name__)
 
-SSE_POLL_INTERVAL_SECONDS = 0.75
 SSE_HEARTBEAT_SECONDS = 15.0
 SSE_TERMINAL_IDLE_SECONDS = 30.0
 
@@ -80,64 +81,77 @@ async def _stream_task_events(
     )
     try:
         yield "retry: 2000\n\n"
-        while not await request.is_disconnected():
-            if task_id is None:
-                task = await asyncio.to_thread(
-                    service.get_task_by_source_message_id,
-                    source_message_id,
-                )
-                if task is not None:
-                    task_id = task.id
-                    logger.info(
-                        "SSE_TASK_BOUND | source_message_id=%s task_id=%s user_id=%s",
+        async with PostgresTaskEventListener(
+            get_settings().database_url
+        ) as listener:
+            while not await request.is_disconnected():
+                if task_id is None:
+                    task = await asyncio.to_thread(
+                        service.get_task_by_source_message_id,
                         source_message_id,
+                    )
+                    if task is not None:
+                        task_id = task.id
+                        logger.info(
+                            "SSE_TASK_BOUND | source_message_id=%s task_id=%s user_id=%s",
+                            source_message_id,
+                            task_id,
+                            user_id,
+                        )
+
+                events: list[TaskStreamEvent] = []
+                if task_id is not None:
+                    events = await asyncio.to_thread(
+                        service.list_task_stream_events,
                         task_id,
-                        user_id,
+                        cursor,
+                        100,
                     )
-
-            events: list[TaskStreamEvent] = []
-            if task_id is not None:
-                events = await asyncio.to_thread(
-                    service.list_task_stream_events,
-                    task_id,
-                    cursor,
-                    100,
-                )
-            for event in events:
-                yield _encode_sse_event(event)
-                cursor = event.sequence_number
-                sent_count += 1
-                last_sent_at = monotonic()
-                if event.event_type.value == "FINAL_RESPONSE_CREATED":
-                    disconnect_reason = "FINAL_RESPONSE_CREATED"
-                    return
-                if event.event_type.value == "TASK_FAILED":
-                    activity_data = event.data.get("event_data", {})
-                    failure_stage = (
-                        activity_data.get("stage")
-                        if isinstance(activity_data, dict)
-                        else None
-                    )
-                    if failure_stage in {
-                        "PLANNING",
-                        "CONFIGURATION",
-                        "PLAN_PERSISTENCE",
-                    }:
-                        disconnect_reason = f"TASK_FAILED_{failure_stage}"
+                for event in events:
+                    yield _encode_sse_event(event)
+                    cursor = event.sequence_number
+                    sent_count += 1
+                    last_sent_at = monotonic()
+                    if event.event_type.value == "FINAL_RESPONSE_CREATED":
+                        disconnect_reason = "FINAL_RESPONSE_CREATED"
                         return
-                    terminal_since = terminal_since or monotonic()
+                    if event.event_type.value == "TASK_FAILED":
+                        activity_data = event.data.get("event_data", {})
+                        failure_stage = (
+                            activity_data.get("stage")
+                            if isinstance(activity_data, dict)
+                            else None
+                        )
+                        if failure_stage in {
+                            "PLANNING",
+                            "CONFIGURATION",
+                            "PLAN_PERSISTENCE",
+                        }:
+                            disconnect_reason = f"TASK_FAILED_{failure_stage}"
+                            return
+                        terminal_since = terminal_since or monotonic()
 
-            now = monotonic()
-            if (
-                terminal_since is not None
-                and now - terminal_since >= SSE_TERMINAL_IDLE_SECONDS
-            ):
-                disconnect_reason = "TERMINAL_IDLE_TIMEOUT"
-                return
-            if now - last_sent_at >= SSE_HEARTBEAT_SECONDS:
-                yield f": heartbeat {int(now)}\n\n"
-                last_sent_at = now
-            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
+                now = monotonic()
+                if (
+                    terminal_since is not None
+                    and now - terminal_since >= SSE_TERMINAL_IDLE_SECONDS
+                ):
+                    disconnect_reason = "TERMINAL_IDLE_TIMEOUT"
+                    return
+                heartbeat_in = max(
+                    0.1,
+                    SSE_HEARTBEAT_SECONDS - (now - last_sent_at),
+                )
+                notification = await listener.wait(heartbeat_in)
+                if notification is None:
+                    now = monotonic()
+                    if now - last_sent_at >= SSE_HEARTBEAT_SECONDS:
+                        yield f": heartbeat {int(now)}\n\n"
+                        last_sent_at = now
+                    continue
+                notified_task_id = notification.get("task_id")
+                if task_id is not None and notified_task_id != task_id:
+                    continue
     finally:
         logger.info(
             "SSE_DISCONNECTED | source_message_id=%s task_id=%s user_id=%s "
