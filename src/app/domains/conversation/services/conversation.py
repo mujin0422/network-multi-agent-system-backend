@@ -230,6 +230,7 @@ class ConversationService:
                 else MessageType.GENERAL
             ),
             message=payload.message,
+            structured_data=payload.structured_data,
             created_at=now,
         )
         self._message_repository.save(message)

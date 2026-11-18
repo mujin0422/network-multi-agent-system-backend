@@ -127,6 +127,7 @@ SCHEMA_FIELDS: list[tuple[type[BaseModel], set[str]]] = [
             "sender_by",
             "message_type",
             "message",
+            "structured_data",
             "created_at",
         },
     ),

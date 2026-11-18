@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -18,4 +19,5 @@ class MessageModel(Base):
     sender_by: Mapped[MessageSender] = mapped_column(Enum(MessageSender, name="message_sender"), nullable=False)
     message_type: Mapped[MessageType] = mapped_column(Enum(MessageType, name="message_type"), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    structured_data: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

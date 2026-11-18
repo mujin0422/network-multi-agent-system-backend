@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,6 +39,10 @@ class MessageCreate(BaseModel):
         description="Nếu bỏ trống, service suy ra USER_REQUEST hoặc GENERAL.",
     )
     message: str = Field(min_length=1, description="Nội dung message không rỗng.")
+    structured_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Payload máy đọc được đi kèm nội dung hiển thị.",
+    )
 
 
 class Message(BaseModel):
@@ -55,4 +60,8 @@ class Message(BaseModel):
         description="Vai trò của message trong workflow.",
     )
     message: str = Field(description="Nội dung message.")
+    structured_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Payload máy đọc được, ví dụ configuration proposals.",
+    )
     created_at: datetime = Field(description="Thời điểm gửi theo UTC.")
