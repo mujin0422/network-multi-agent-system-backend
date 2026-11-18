@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request,
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from app.agents.dependencies import get_network_automation_workflow
+from app.core.pagination import PageResponse
 from app.agents.workflow import NetworkAutomationWorkflow
 from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
 from app.domains.benchmark.services import BenchmarkRunService
@@ -204,6 +205,18 @@ def list_tasks(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[Task]:
     return service.list_tasks()
+
+
+@router.get("/page", response_model=PageResponse[Task])
+def get_task_page(
+    service: Annotated[ExecutionService, Depends(get_execution_service)],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> PageResponse[Task]:
+    """Trả Task và metadata phân trang trong một response."""
+
+    return service.get_task_page(page=page, page_size=page_size)
 
 
 @router.get("/by-source-message/{message_id}/events/stream")

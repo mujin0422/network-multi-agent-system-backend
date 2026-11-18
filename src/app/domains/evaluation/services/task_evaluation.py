@@ -3,6 +3,7 @@
 from collections import defaultdict
 from uuid import UUID
 
+from app.core.pagination import PageResponse
 from app.domains.evaluation.repositories import (
     TaskEvaluationMetricRepository,
     TaskEvaluationRepository,
@@ -60,6 +61,35 @@ class TaskEvaluationService:
             )
             for evaluation in evaluations
         ]
+
+    def get_page(
+        self,
+        *,
+        page: int,
+        page_size: int,
+    ) -> PageResponse[TaskEvaluationSummary]:
+        """Tổng hợp metric cho đúng Evaluation thuộc trang được yêu cầu."""
+
+        evaluations, total = self._evaluations.get_page(
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        metrics = self._metrics.get_all_by_evaluation_ids(
+            evaluation.id for evaluation in evaluations
+        )
+        metrics_by_evaluation: dict[UUID, list[TaskEvaluationMetric]] = defaultdict(list)
+        for metric in metrics:
+            metrics_by_evaluation[metric.evaluation_id].append(metric)
+        items = [
+            self._to_summary(evaluation, metrics_by_evaluation[evaluation.id])
+            for evaluation in evaluations
+        ]
+        return PageResponse[TaskEvaluationSummary].create(
+            items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
     def _to_detail(
         self,

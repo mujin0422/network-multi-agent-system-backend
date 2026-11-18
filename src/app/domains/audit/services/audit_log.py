@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.core.pagination import PageResponse
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils import generate_uuid
 from app.domains.audit.repositories import AuditLogRepository
@@ -61,4 +62,37 @@ class AuditLogService:
             occurred_to=occurred_to,
             offset=offset,
             limit=limit,
+        )
+
+    def get_page(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        actor_user_id: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        event_status: AuditEventStatus | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> PageResponse[AuditLog]:
+        """Trả Audit Log theo trang với tổng số khớp bộ lọc."""
+
+        items, total = self._repository.get_page(
+            actor_user_id=actor_user_id,
+            action=action.upper() if action is not None else None,
+            resource_type=(
+                resource_type.upper() if resource_type is not None else None
+            ),
+            event_status=event_status,
+            occurred_from=occurred_from,
+            occurred_to=occurred_to,
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        return PageResponse[AuditLog].create(
+            items,
+            total=total,
+            page=page,
+            page_size=page_size,
         )

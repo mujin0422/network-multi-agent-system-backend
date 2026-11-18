@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.pagination import PageResponse
 from app.domains.audit.routers.dependencies import get_audit_log_service
 from app.domains.audit.schemas import AuditEventStatus, AuditLog
 from app.domains.audit.services import AuditLogService
@@ -40,6 +41,33 @@ def list_audit_logs(
         occurred_to=occurred_to,
         offset=offset,
         limit=limit,
+    )
+
+
+@router.get("/page", response_model=PageResponse[AuditLog])
+def get_audit_log_page(
+    service: Annotated[AuditLogService, Depends(get_audit_log_service)],
+    _: Annotated[User, Depends(require_permission("Audit Log", "View"))],
+    actor_user_id: Annotated[str | None, Query(max_length=64)] = None,
+    action: Annotated[str | None, Query(max_length=100)] = None,
+    resource_type: Annotated[str | None, Query(max_length=100)] = None,
+    event_status: AuditEventStatus | None = None,
+    occurred_from: datetime | None = None,
+    occurred_to: datetime | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 5,
+) -> PageResponse[AuditLog]:
+    """Trả Audit Log và total theo cùng bộ lọc."""
+
+    return service.get_page(
+        page=page,
+        page_size=page_size,
+        actor_user_id=actor_user_id,
+        action=action,
+        resource_type=resource_type,
+        event_status=event_status,
+        occurred_from=occurred_from,
+        occurred_to=occurred_to,
     )
 
 

@@ -1,6 +1,6 @@
 """Repository của bảng benchmark_scenarios."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
 from app.core.exceptions import ResourceNotFoundError
@@ -25,6 +25,32 @@ class BenchmarkScenarioRepository:
                 BenchmarkScenarioRecord.model_validate(row, from_attributes=True)
                 for row in rows
             ]
+
+    def get_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[BenchmarkScenarioRecord], int]:
+        """Lấy trang Scenario ổn định theo tên và ID."""
+
+        data_statement = (
+            select(BenchmarkScenarioModel)
+            .order_by(BenchmarkScenarioModel.name, BenchmarkScenarioModel.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count()).select_from(BenchmarkScenarioModel)
+        with self._sessions() as session:
+            rows = list(session.scalars(data_statement).all())
+            total = int(session.scalar(count_statement) or 0)
+        return (
+            [
+                BenchmarkScenarioRecord.model_validate(row, from_attributes=True)
+                for row in rows
+            ],
+            total,
+        )
 
 
     def get_by_id(self, scenario_id: str) -> BenchmarkScenarioRecord:

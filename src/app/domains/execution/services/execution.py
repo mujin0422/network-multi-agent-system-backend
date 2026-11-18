@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.core.config import get_settings
+from app.core.pagination import PageResponse
 
 from app.core.exceptions import (
     InvalidStateTransitionError,
@@ -105,6 +106,20 @@ class ExecutionService:
         """Lấy toàn bộ Task theo thứ tự do repository cung cấp."""
 
         return self._tasks.get_all()
+
+    def get_task_page(self, *, page: int, page_size: int) -> PageResponse[Task]:
+        """Lấy Task theo trang với tổng số bản ghi do database tính."""
+
+        items, total = self._tasks.get_page(
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        return PageResponse[Task].create(
+            items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
     def get_task(self, task_id: str) -> TaskDetail:
         """Truy vấn dữ liệu theo phạm vi của phương thức get_task."""

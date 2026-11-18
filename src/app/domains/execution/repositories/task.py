@@ -1,6 +1,6 @@
 """Repository cho bảng tasks."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.database import create_session_factory
 from app.domains.execution.models import TaskModel
@@ -53,6 +53,24 @@ class TaskRepository:
                 Task.model_validate(model, from_attributes=True)
                 for model in session.scalars(statement).all()
             ]
+
+    def get_page(self, *, offset: int, limit: int) -> tuple[list[Task], int]:
+        """Lấy một trang Task mới nhất và tổng số Task trong cùng session."""
+
+        data_statement = (
+            select(TaskModel)
+            .order_by(TaskModel.created_at.desc(), TaskModel.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count()).select_from(TaskModel)
+        with self._sessions() as session:
+            models = list(session.scalars(data_statement).all())
+            total = int(session.scalar(count_statement) or 0)
+        return (
+            [Task.model_validate(model, from_attributes=True) for model in models],
+            total,
+        )
 
 
     def get_by_source_message_id(self, message_id: str) -> Task | None:

@@ -2,8 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
+from app.core.pagination import PageResponse
 from app.domains.benchmark.routers.dependencies import get_benchmark_scenario_service
 from app.domains.benchmark.schemas import (
     BenchmarkScenario,
@@ -27,6 +28,20 @@ def list_scenarios(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[BenchmarkScenarioSummary]:
     return service.list()
+
+
+@router.get("/page", response_model=PageResponse[BenchmarkScenarioSummary])
+def get_scenario_page(
+    service: Annotated[
+        BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
+    ],
+    _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 6,
+) -> PageResponse[BenchmarkScenarioSummary]:
+    """Trả Scenario và metadata phân trang trong một response."""
+
+    return service.get_page(page=page, page_size=page_size)
 
 
 @router.post("", response_model=BenchmarkScenarioSummary)
