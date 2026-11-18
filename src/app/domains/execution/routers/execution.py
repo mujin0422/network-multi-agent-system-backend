@@ -5,16 +5,12 @@ import logging
 from time import monotonic
 from typing import Annotated, AsyncIterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from app.agents.dependencies import get_network_automation_workflow
 from app.core.config import get_settings
 from app.core.pagination import PageResponse
 from app.core.task_event_listener import PostgresTaskEventListener
-from app.agents.workflow import NetworkAutomationWorkflow
-from app.domains.benchmark.routers.dependencies import get_benchmark_run_service
-from app.domains.benchmark.services import BenchmarkRunService
 from app.domains.identity.routers.dependencies import require_permission
 from app.domains.identity.schemas import User
 
@@ -35,6 +31,8 @@ from app.domains.execution.schemas import (
 )
 from app.domains.execution.services import ExecutionService
 from app.domains.execution.routers.dependencies import get_execution_service
+from app.domains.workflow_job.dependencies import get_workflow_job_service
+from app.domains.workflow_job.service import WorkflowJobService
 
 
 router = APIRouter()
@@ -191,19 +189,6 @@ def list_device_action_logs_by_task(
     return service.list_device_action_logs_by_task(task_id)
 
 
-async def _resume_approved_workflow(
-    operation_device_id: str,
-    workflow: NetworkAutomationWorkflow,
-    benchmark_service: BenchmarkRunService,
-) -> None:
-    """Resume and finalize a benchmark only after the final Agent response."""
-
-    state = await workflow.resume_after_approval(operation_device_id)
-    task = state.get("task")
-    if task is not None:
-        benchmark_service.complete_for_task(task, state.get("response"))
-
-
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,
@@ -327,15 +312,10 @@ def list_operation_approvals(
 async def decide_operation_device_approval(
     approval_id: str,
     payload: OperationDeviceApprovalDecision,
-    background_tasks: BackgroundTasks,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
-    workflow: Annotated[
-        NetworkAutomationWorkflow,
-        Depends(get_network_automation_workflow),
-    ],
-    benchmark_service: Annotated[
-        BenchmarkRunService,
-        Depends(get_benchmark_run_service),
+    workflow_jobs: Annotated[
+        WorkflowJobService,
+        Depends(get_workflow_job_service),
     ],
     user: Annotated[User, Depends(require_permission("Task Management", "Approve"))],
 ) -> OperationDeviceApprovalResponse:
@@ -364,10 +344,8 @@ async def decide_operation_device_approval(
         operation_id=operation.id,
         event_data={"approval_id": approval.id, "decided_by": user.id},
     )
-    background_tasks.add_task(
-        _resume_approved_workflow,
+    await run_in_threadpool(
+        workflow_jobs.enqueue_approval,
         approval.operation_device_id,
-        workflow,
-        benchmark_service,
     )
     return approval

@@ -23,6 +23,13 @@ class MessageRepository:
         with self._sessions.begin() as session:
             session.add(MessageModel(**message.model_dump()))
 
+    def get_by_id(self, message_id: str) -> Message | None:
+        """Lấy Message theo primary key để workflow worker dựng lại input."""
+
+        with self._sessions() as session:
+            model = session.get(MessageModel, message_id)
+            return Message.model_validate(model, from_attributes=True) if model else None
+
 
     def get_all_by_conversation_id(self, conversation_id: str) -> list[Message]:
         """Lấy lịch sử message của một conversation theo thứ tự thời gian."""

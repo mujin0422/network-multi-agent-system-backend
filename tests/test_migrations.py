@@ -18,6 +18,7 @@ def test_migrations_start_with_project_baseline() -> None:
         "0009",
         "0010",
         "0011",
+        "0012",
     ]
     assert migrations[0].name == "initial_schema"
     assert migrations[0].sql.startswith(migrate.CANONICAL_SCHEMA_DIRECTIVE)
@@ -36,6 +37,7 @@ def test_canonical_schema_is_safe_for_transactional_bootstrap() -> None:
     assert "reply_to_message_id VARCHAR(64)" in schema
     assert "message_type message_type NOT NULL" in schema
     assert "CREATE TABLE audit_logs" in schema
+    assert "CREATE TABLE workflow_jobs" in schema
     assert "scenario_key VARCHAR(100) NOT NULL UNIQUE" in schema
 
 
