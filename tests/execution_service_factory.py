@@ -35,6 +35,16 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
         get_all_by_operation_id=method(
             "get_all_operation_devices_by_operation_id", lambda _id: []
         ),
+        get_all_by_operation_ids=method(
+            "get_all_operation_devices_by_operation_ids",
+            lambda ids: [
+                item
+                for operation_id in ids
+                for item in method(
+                    "get_all_operation_devices_by_operation_id", lambda _id: []
+                )(operation_id)
+            ],
+        ),
         get_by_id=method("get_operation_device_by_id"),
         save_operation_device=method(
             "save_operation_device",
@@ -44,6 +54,16 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
     dependencies = SimpleNamespace(
         get_all_by_operation_id=method(
             "get_all_dependencies_by_operation_id", lambda _id: []
+        ),
+        get_all_by_operation_ids=method(
+            "get_all_dependencies_by_operation_ids",
+            lambda ids: [
+                item
+                for operation_id in ids
+                for item in method(
+                    "get_all_dependencies_by_operation_id", lambda _id: []
+                )(operation_id)
+            ],
         ),
         save=method(
             "save_operation_dependencies",
@@ -76,6 +96,16 @@ def build_execution_service_stub(repository: object) -> ExecutionService:
     approvals = SimpleNamespace(
         get_all_by_operation_id=method(
             "get_all_operation_approvals_by_operation_id", lambda _id: []
+        ),
+        get_all_by_operation_ids=method(
+            "get_all_operation_approvals_by_operation_ids",
+            lambda ids: [
+                item
+                for operation_id in ids
+                for item in method(
+                    "get_all_operation_approvals_by_operation_id", lambda _id: []
+                )(operation_id)
+            ],
         ),
         get_by_operation_device_id=method("get_approval_by_operation_device_id"),
         save_operation_device_approval=method("save_operation_device_approval"),

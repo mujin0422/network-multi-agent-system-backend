@@ -136,28 +136,15 @@ class ExecutionService:
         operation_ids = [operation.id for operation in task.operations]
         return TaskRecords(
             task=task,
-            operation_devices=[
-                mapping
-                for operation_id in operation_ids
-                for mapping in self._operation_devices.get_all_by_operation_id(
-                    operation_id
-                )
-            ],
-            dependencies=[
-                dependency
-                for operation_id in operation_ids
-                for dependency in self._dependencies.get_all_by_operation_id(
-                    operation_id
-                )
-            ],
+            operation_devices=self._operation_devices.get_all_by_operation_ids(
+                operation_ids
+            ),
+            dependencies=self._dependencies.get_all_by_operation_ids(operation_ids),
             executions=self._task_executions.get_all_by_task_id(task_id),
             activity_events=self._activities.get_all_by_task_id(task_id),
             approvals=[
                 to_approval_response(approval)
-                for operation_id in operation_ids
-                for approval in self._approvals.get_all_by_operation_id(
-                    operation_id
-                )
+                for approval in self._approvals.get_all_by_operation_ids(operation_ids)
             ],
         )
 

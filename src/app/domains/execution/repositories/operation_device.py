@@ -25,6 +25,28 @@ class OperationDeviceRepository:
                 for model in session.scalars(statement).all()
             ]
 
+    def get_all_by_operation_ids(
+        self,
+        operation_ids: list[str],
+    ) -> list[TaskOperationDevice]:
+        """Lấy device mapping của nhiều Operation bằng một truy vấn."""
+
+        if not operation_ids:
+            return []
+        statement = (
+            select(TaskOperationDeviceModel)
+            .where(TaskOperationDeviceModel.operation_id.in_(operation_ids))
+            .order_by(
+                TaskOperationDeviceModel.operation_id,
+                TaskOperationDeviceModel.id,
+            )
+        )
+        with self._sessions() as session:
+            return [
+                TaskOperationDevice.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]
+
 
     def save_operation_device(self, mapping: TaskOperationDevice) -> None:
         """Tạo hoặc cập nhật trạng thái thực thi trên một thiết bị."""

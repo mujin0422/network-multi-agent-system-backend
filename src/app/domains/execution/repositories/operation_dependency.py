@@ -25,6 +25,28 @@ class OperationDependencyRepository:
                 for model in session.scalars(statement).all()
             ]
 
+    def get_all_by_operation_ids(
+        self,
+        operation_ids: list[str],
+    ) -> list[OperationDependency]:
+        """Lấy dependency của nhiều Operation bằng một truy vấn."""
+
+        if not operation_ids:
+            return []
+        statement = (
+            select(OperationDependencyModel)
+            .where(OperationDependencyModel.operation_id.in_(operation_ids))
+            .order_by(
+                OperationDependencyModel.operation_id,
+                OperationDependencyModel.depends_on_operation_id,
+            )
+        )
+        with self._sessions() as session:
+            return [
+                OperationDependency.model_validate(model, from_attributes=True)
+                for model in session.scalars(statement).all()
+            ]
+
 
     def save(self, dependencies: list[OperationDependency]) -> None:
         """Lưu danh sách dependency trong một transaction."""

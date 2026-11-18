@@ -163,8 +163,23 @@ class TaskRecordsRepositoryStub(ApprovalRepositoryStub):
     def get_all_operation_devices_by_operation_id(self, operation_id: str):
         return []
 
+    def get_all_operation_devices_by_operation_ids(self, operation_ids: list[str]):
+        self.batch_device_ids = operation_ids
+        return []
+
     def get_all_dependencies_by_operation_id(self, operation_id: str):
         return []
+
+    def get_all_dependencies_by_operation_ids(self, operation_ids: list[str]):
+        self.batch_dependency_ids = operation_ids
+        return []
+
+    def get_all_operation_approvals_by_operation_ids(
+        self,
+        operation_ids: list[str],
+    ):
+        self.batch_approval_ids = operation_ids
+        return [self.approval]
 
     def get_all_task_executions_by_task_id(self, task_id: str):
         return []
@@ -192,6 +207,9 @@ def test_task_records_include_operation_timeline_and_safe_approvals() -> None:
     assert records.operation_devices == []
     assert records.dependencies == []
     assert records.executions == []
+    assert repository.batch_device_ids == [repository.operation.id]
+    assert repository.batch_dependency_ids == [repository.operation.id]
+    assert repository.batch_approval_ids == [repository.operation.id]
 
 
 def test_task_scoped_logs_require_valid_task() -> None:
