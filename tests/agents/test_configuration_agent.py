@@ -20,6 +20,11 @@ class FakeConfigurationModel:
         )
 
 
+class FailingConfigurationModel:
+    async def ainvoke(self, _messages):
+        raise AssertionError("Không được gọi LLM khi proposal đã có command")
+
+
 def test_configuration_agent_generates_and_normalizes_write_commands() -> None:
     plan = ExecutionPlanCreate.model_validate(
         {
@@ -72,3 +77,33 @@ def test_configuration_agent_generates_and_normalizes_write_commands() -> None:
     assert result.operations[0].operation_parameters == {
         "commands": ["interface FastEthernet0/0", "no shutdown"]
     }
+
+
+def test_configuration_agent_preserves_commands_loaded_from_saved_proposal() -> None:
+    plan = ExecutionPlanCreate.model_validate(
+        {
+            "task_type": "CONFIGURATION",
+            "operations": [
+                {
+                    "operation_intent": "APPLY_PROPOSED_CONFIGURATION_P1",
+                    "operation_parameters": {
+                        "commands": ["interface FastEthernet4/0", "mpls ip"],
+                        "proposal_source_message_id": "mesg-1",
+                    },
+                    "devices": [
+                        {
+                            "device_id": "devc-1",
+                            "device_role": "TARGET",
+                            "access_mode": "WRITE",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    result = asyncio.run(
+        ConfigurationAgent(FailingConfigurationModel()).generate(plan, [], {})
+    )
+
+    assert result == plan

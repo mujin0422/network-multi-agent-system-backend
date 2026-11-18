@@ -29,6 +29,12 @@ Quy tắc:
 - Nếu cấu hình đề xuất tác động nhiều thiết bị, tạo Operation WRITE riêng cho
   từng thiết bị khi command khác nhau. Các WRITE độc lập không được tạo dependency
   giả giữa chúng; nhờ đó hệ thống có thể yêu cầu phê duyệt đồng thời từng thiết bị.
+- Cụm từ chỉ số lượng như "tất cả", "toàn bộ", "mọi", "những" không làm thay
+  đổi execution intent. Ví dụ "thực hiện tất cả các cấu hình đã đề xuất" luôn
+  là yêu cầu WRITE, không phải yêu cầu tạo thêm proposal.
+- Không được bỏ sót thiết bị xuất hiện trong STRUCTURED configuration proposals.
+  Mỗi thiết bị phải có đúng một WRITE operation độc lập, trừ khi người dùng chỉ
+  định rõ một tập con. Không tự chọn operation đầu tiên rồi bỏ các thiết bị còn lại.
 - operation_intent phải là mã tiếng Anh viết hoa ổn định, tối đa 100 ký tự, ví
   dụ GET_ROUTING_TABLE hoặc CONFIGURE_OSPF.
 - Thứ tự operation được xác định bằng vị trí trong danh sách, bắt đầu từ 1.

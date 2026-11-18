@@ -344,6 +344,15 @@ def test_previous_configuration_proposals_become_write_when_execution_is_request
         )
         is False
     )
+    assert (
+        PlannerAgent.is_configuration_proposal(
+            "Thực hiện tất cả các cấu hình mà bạn đã đề xuất."
+        )
+        is False
+    )
+    assert PlannerAgent.is_execute_saved_proposals(
+        "Thực hiện toàn bộ những cấu hình đã đề xuất trước đó."
+    )
 
 
 def test_planner_accepts_read_plan_when_user_only_views_configuration() -> None:
@@ -772,6 +781,90 @@ def test_planner_includes_recent_conversation_context_before_current_request() -
     assert "P1 chưa có default route." in prompt
     assert '"sender": "USER"' in prompt
     assert "USER REQUEST:\nHãy kiểm tra lại thiết bị đó." in prompt
+
+
+def test_planner_builds_one_write_per_device_from_saved_proposals() -> None:
+    now = datetime.now(UTC)
+    base_device = Device(
+        id="devc-1",
+        credential_id=None,
+        brand_id="brnd-1",
+        category_id="catg-1",
+        hostname="P1",
+        host="192.0.2.1",
+        port=22,
+        device_type="cisco_ios",
+        location=None,
+        created_by="user-1",
+        last_updated_by="user-1",
+        created_at=now,
+        last_updated_at=now,
+    )
+    devices = [
+        base_device,
+        base_device.model_copy(
+            update={"id": "devc-2", "hostname": "P2", "host": "192.0.2.2"}
+        ),
+        base_device.model_copy(
+            update={"id": "devc-4", "hostname": "P4", "host": "192.0.2.4"}
+        ),
+    ]
+    history = [
+        Message(
+            id="mesg-proposal-1",
+            conversation_id="cons-1",
+            sender_by=MessageSender.AGENT,
+            message_type=MessageType.FINAL_RESPONSE,
+            message="Đề xuất P1 và P2",
+            structured_data={
+                "configuration_proposals": [
+                    {"device": "P1", "commands": ["interface FastEthernet4/0", "mpls ip"]},
+                    {"device": "P2", "commands": ["interface FastEthernet4/0", "mpls ip"]},
+                ]
+            },
+            created_at=now,
+        ),
+        Message(
+            id="mesg-proposal-2",
+            conversation_id="cons-1",
+            sender_by=MessageSender.AGENT,
+            message_type=MessageType.FINAL_RESPONSE,
+            message="Bổ sung P4 và cập nhật P1",
+            structured_data={
+                "configuration_proposals": [
+                    {"device": "P1", "commands": ["interface FastEthernet4/0", "no shutdown"]},
+                    {"device": "P4", "commands": ["interface FastEthernet0/0", "mpls ip"]},
+                ]
+            },
+            created_at=now,
+        ),
+    ]
+    model = CapturingChatModel()
+
+    plan = asyncio.run(
+        PlannerAgent(model).plan(
+            "Thực hiện tất cả các cấu hình mà bạn đã đề xuất.",
+            devices,
+            conversation_history=history,
+        )
+    )
+
+    assert model.messages == []
+    assert plan.task_type == TaskType.CONFIGURATION
+    assert len(plan.operations) == 3
+    assert {
+        operation.devices[0].device_id for operation in plan.operations
+    } == {"devc-1", "devc-2", "devc-4"}
+    p1 = next(
+        operation
+        for operation in plan.operations
+        if operation.devices[0].device_id == "devc-1"
+    )
+    assert p1.operation_parameters["commands"] == [
+        "interface FastEthernet4/0",
+        "no shutdown",
+    ]
+    assert all(not operation.dependencies for operation in plan.operations)
 
 
 def test_planner_normalizes_write_commands_before_approval() -> None:

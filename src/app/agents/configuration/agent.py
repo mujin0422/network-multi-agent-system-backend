@@ -44,6 +44,7 @@ class ConfigurationAgent:
             order
             for order, operation in enumerate(plan.operations, 1)
             if any(item.access_mode == AccessMode.WRITE for item in operation.devices)
+            and not self._has_commands(operation.operation_parameters)
         }
         if not write_orders:
             return plan
@@ -103,6 +104,17 @@ class ConfigurationAgent:
                 f"Configuration Agent không phản hồi trong {self.timeout_seconds} giây"
             ) from exc
         raise RuntimeError("Configuration Agent không thể sinh command")
+
+    @staticmethod
+    def _has_commands(parameters: dict[str, Any]) -> bool:
+        """Giữ nguyên CLI proposal đã lưu thay vì yêu cầu LLM sinh lại."""
+
+        raw = parameters.get("commands", parameters.get("command"))
+        if isinstance(raw, str):
+            return bool(raw.strip())
+        return isinstance(raw, list) and any(
+            isinstance(command, str) and command.strip() for command in raw
+        )
 
     @staticmethod
     def _merge(

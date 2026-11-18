@@ -10,9 +10,17 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from app.agents.planner.prompts import PLANNER_SYSTEM_PROMPT
+from app.agents.analyst.schemas import ConfigurationProposal
 from app.diagnostics import select_playbooks
 from app.domains.conversation.schemas import Message
-from app.domains.execution.schemas import ExecutionPlanCreate, TaskType
+from app.domains.execution.schemas import (
+    AccessMode,
+    DeviceRole,
+    ExecutionPlanCreate,
+    PlannedDevice,
+    PlannedOperation,
+    TaskType,
+)
 from app.domains.inventory.schemas import Device
 from app.tools.network.commands import normalize_config_commands
 
@@ -69,11 +77,31 @@ class PlannerAgent:
                 "sender": item.sender_by.value,
                 "message_type": item.message_type.value,
                 "content": item.message,
+                "structured_data": item.structured_data,
             }
             for item in conversation_history
         ]
+        saved_proposals = self._collect_saved_configuration_proposals(
+            conversation_history
+        )
 
-        # Bước 3: Tạo prompt gồm yêu cầu, inventory, topology, playbook và schema.
+        # Bước 3: Yêu cầu thực thi proposal đã lưu được dựng xác định, không
+        # giao cho LLM đoán lại thiết bị hoặc làm mất một phần cấu hình.
+        if self.is_execute_saved_proposals(user_message):
+            if not saved_proposals:
+                raise ValueError(
+                    "Không tìm thấy configuration proposal có cấu trúc trong "
+                    "ngữ cảnh hội thoại để thực thi"
+                )
+            saved_plan = self._build_saved_proposal_plan(saved_proposals, devices)
+            self._validate_saved_proposal_coverage(
+                saved_plan,
+                saved_proposals,
+                devices,
+            )
+            return saved_plan
+
+        # Bước 4: Tạo prompt gồm yêu cầu, inventory, topology, playbook và schema.
         prompt = (
             "RECENT CONVERSATION CONTEXT "
             "(oldest to newest; use only to resolve references in the current request):\n"
@@ -97,12 +125,12 @@ class PlannerAgent:
             HumanMessage(content=prompt),
         ]
         try:
-            # Bước 4: Gọi LLM trong giới hạn timeout và số lần validation retry.
+            # Bước 5: Gọi LLM trong giới hạn timeout và số lần validation retry.
             async with asyncio.timeout(self.timeout_seconds):
                 for retry_number in range(self.max_validation_retries + 1):
                     result = await self._planner.ainvoke(messages)
                     try:
-                        # Bước 5: Bóc JSON và kiểm tra kế hoạch bằng schema nghiệp vụ.
+                        # Bước 6: Bóc JSON và kiểm tra kế hoạch bằng schema nghiệp vụ.
                         plan = self._parse_plan(
                             result,
                             default_task_type=(
@@ -115,7 +143,7 @@ class PlannerAgent:
                         if retry_number == self.max_validation_retries:
                             raise
 
-                        # Bước 6: Gửi lỗi validation cho LLM sửa mà không mất ngữ cảnh.
+                        # Bước 7: Gửi lỗi validation cho LLM sửa mà không mất ngữ cảnh.
                         messages.append(
                             HumanMessage(
                                 content=self._build_correction_prompt(result, exc),
@@ -268,7 +296,7 @@ class PlannerAgent:
             r"\bnên\s+cấu\s+hình\s+(?:như\s+)?thế\s+nào\b",
         )
         explicit_execution_patterns = (
-            r"\bthực\s+hiện\s+(?:việc\s+)?(?:các?\s+)?(?:cấu\s+hình|thay\s+đổi|lệnh)\b",
+            r"\bthực\s+hiện\s+(?:việc\s+)?(?:(?:tất\s+cả|toàn\s+bộ|mọi|những|các?)\s+)*(?:cấu\s+hình|thay\s+đổi|lệnh)\b",
             r"\bthực\s+thi\s+(?:các?\s+)?(?:cấu\s+hình|lệnh)\b",
             r"\báp\s+dụng\s+(?:các?\s+)?(?:cấu\s+hình|thay\s+đổi|lệnh)\b",
             r"\btriển\s+khai\s+(?:các?\s+)?(?:cấu\s+hình|thay\s+đổi)\b",
@@ -281,6 +309,125 @@ class PlannerAgent:
             re.search(pattern, normalized_message)
             for pattern in explicit_execution_patterns
         )
+
+    @staticmethod
+    def is_execute_saved_proposals(user_message: str) -> bool:
+        """Nhận diện yêu cầu áp dụng các proposal đã có trong hội thoại."""
+
+        normalized = user_message.casefold().strip()
+        execution = re.search(
+            r"\b(?:thực\s+hiện|thực\s+thi|áp\s+dụng|triển\s+khai)\s+"
+            r"(?:(?:tất\s+cả|toàn\s+bộ|mọi|những|các?)\s+)*"
+            r"(?:cấu\s+hình|lệnh|thay\s+đổi)\b",
+            normalized,
+        )
+        references_saved = re.search(
+            r"\b(?:đã\s+)?(?:đề\s+xuất|khuyến\s+nghị)|\b(?:ở|bên)\s+trên\b|\btrước\s+đó\b",
+            normalized,
+        )
+        short_follow_up = re.fullmatch(
+            r"(?:hãy\s+)?cấu\s+hình\s+cho\s+tôi[.!]?",
+            normalized,
+        )
+        return bool((execution and references_saved) or short_follow_up)
+
+    @staticmethod
+    def _collect_saved_configuration_proposals(
+        conversation_history: list[Message],
+    ) -> list[tuple[str, ConfigurationProposal]]:
+        """Gộp proposal theo thiết bị, ưu tiên bản mới nhất trong ngữ cảnh."""
+
+        by_device: dict[str, tuple[str, ConfigurationProposal]] = {}
+        for message in conversation_history:
+            payload = message.structured_data or {}
+            raw_proposals = payload.get("configuration_proposals", [])
+            if not isinstance(raw_proposals, list):
+                continue
+            for raw in raw_proposals:
+                try:
+                    proposal = ConfigurationProposal.model_validate(raw)
+                except (ValidationError, TypeError):
+                    continue
+                by_device[proposal.device.casefold()] = (message.id, proposal)
+        return list(by_device.values())
+
+    @staticmethod
+    def _build_saved_proposal_plan(
+        saved_proposals: list[tuple[str, ConfigurationProposal]],
+        devices: list[Device],
+    ) -> ExecutionPlanCreate:
+        """Chuyển mỗi proposal đã lưu thành đúng một WRITE operation độc lập."""
+
+        device_lookup = {
+            key.casefold(): device
+            for device in devices
+            for key in (device.id, device.hostname)
+        }
+        operations: list[PlannedOperation] = []
+        unresolved: list[str] = []
+        for source_message_id, proposal in saved_proposals:
+            device = device_lookup.get(proposal.device.casefold())
+            if device is None:
+                unresolved.append(proposal.device)
+                continue
+            suffix = re.sub(r"[^A-Z0-9]+", "_", device.hostname.upper()).strip("_")
+            operations.append(
+                PlannedOperation(
+                    operation_intent=f"APPLY_PROPOSED_CONFIGURATION_{suffix}"[:100],
+                    operation_parameters={
+                        "commands": normalize_config_commands(proposal.commands),
+                        "proposal_source_message_id": source_message_id,
+                        "proposal_rationale": proposal.rationale,
+                    },
+                    devices=[
+                        PlannedDevice(
+                            device_id=device.id,
+                            device_role=DeviceRole.TARGET,
+                            access_mode=AccessMode.WRITE,
+                        )
+                    ],
+                    dependencies=[],
+                )
+            )
+        if unresolved:
+            raise ValueError(
+                "Không thể ánh xạ thiết bị trong configuration proposal: "
+                + ", ".join(sorted(unresolved))
+            )
+        if len(operations) != len(saved_proposals):
+            raise ValueError("Kế hoạch chưa bao phủ toàn bộ configuration proposal")
+        return ExecutionPlanCreate(task_type=TaskType.CONFIGURATION, operations=operations)
+
+    @staticmethod
+    def _validate_saved_proposal_coverage(
+        plan: ExecutionPlanCreate,
+        saved_proposals: list[tuple[str, ConfigurationProposal]],
+        devices: list[Device],
+    ) -> None:
+        """Từ chối kế hoạch WRITE bỏ sót thiết bị có proposal đã lưu."""
+
+        device_lookup = {
+            key.casefold(): device.id
+            for device in devices
+            for key in (device.id, device.hostname)
+        }
+        expected = {
+            device_lookup[proposal.device.casefold()]
+            for _, proposal in saved_proposals
+            if proposal.device.casefold() in device_lookup
+        }
+        actual = {
+            device.device_id
+            for operation in plan.operations
+            for device in operation.devices
+            if device.access_mode == AccessMode.WRITE
+        }
+        missing = expected - actual
+        if missing:
+            raise ValueError(
+                "Kế hoạch WRITE bỏ sót thiết bị có configuration proposal: "
+                + ", ".join(sorted(missing))
+            )
 
     @staticmethod
     def _parse_plan(
