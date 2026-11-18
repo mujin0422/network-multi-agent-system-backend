@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.approval_timeout_worker import run_approval_timeout_worker
+from app.core.database import dispose_database_engines
 from app.core.exceptions.handlers import register_error_handlers
 from app.domains.audit.routers import router as audit_logs_router
 from app.domains.benchmark import router as benchmark_router
@@ -49,6 +50,7 @@ async def lifespan(_app: FastAPI):
             sweep_task.cancel()
             with suppress(asyncio.CancelledError):
                 await sweep_task
+        dispose_database_engines()
 
 
 app = FastAPI(
