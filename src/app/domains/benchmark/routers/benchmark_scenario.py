@@ -20,7 +20,7 @@ router = APIRouter(prefix="/scenarios")
 
 
 @router.get("", response_model=list[BenchmarkScenarioSummary])
-async def list_scenarios(
+def list_scenarios(
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
     ],
@@ -30,7 +30,7 @@ async def list_scenarios(
 
 
 @router.post("", response_model=BenchmarkScenarioSummary)
-async def create_scenario(
+def create_scenario(
     payload: BenchmarkScenario,
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
@@ -41,7 +41,7 @@ async def create_scenario(
 
 
 @router.get("/{scenario_id}", response_model=BenchmarkScenarioRecord)
-async def get_scenario(
+def get_scenario(
     scenario_id: str,
     service: Annotated[
         BenchmarkScenarioService, Depends(get_benchmark_scenario_service)
@@ -54,7 +54,7 @@ async def get_scenario(
 
 
 @router.patch("/{scenario_id}", response_model=BenchmarkScenarioSummary)
-async def update_scenario(
+def update_scenario(
     scenario_id: str,
     payload: BenchmarkScenarioUpdate,
     service: Annotated[

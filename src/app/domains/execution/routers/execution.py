@@ -6,6 +6,7 @@ from time import monotonic
 from typing import Annotated, AsyncIterator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
@@ -151,7 +152,7 @@ async def _stream_task_events(
 
 
 @device_action_logs_router.get("/", response_model=list[DeviceActionLog])
-async def list_device_action_logs(
+def list_device_action_logs(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
     limit: Annotated[int, Query(ge=1, le=1000)] = 500,
@@ -165,7 +166,7 @@ async def list_device_action_logs(
     "/by-task/{task_id}",
     response_model=list[DeviceActionLog],
 )
-async def list_device_action_logs_by_task(
+def list_device_action_logs_by_task(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Audit Log", "View"))],
@@ -189,7 +190,7 @@ async def _resume_approved_workflow(
 
 
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
-async def create_task(
+def create_task(
     payload: TaskCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
@@ -198,7 +199,7 @@ async def create_task(
 
 
 @router.get("/", response_model=list[Task])
-async def list_tasks(
+def list_tasks(
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> list[Task]:
@@ -234,7 +235,7 @@ async def stream_task_events_by_source_message(
 
 
 @router.get("/{task_id}", response_model=TaskDetail)
-async def get_task(
+def get_task(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -243,7 +244,7 @@ async def get_task(
 
 
 @router.get("/{task_id}/records", response_model=TaskRecords)
-async def get_task_records(
+def get_task_records(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -254,7 +255,7 @@ async def get_task_records(
 
 
 @router.get("/{task_id}/activity-events", response_model=list[TaskActivityEvent])
-async def list_task_activity_events(
+def list_task_activity_events(
     task_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -269,7 +270,7 @@ async def list_task_activity_events(
     response_model=Operation,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_operation(
+def create_operation(
     task_id: str,
     payload: OperationCreate,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
@@ -282,7 +283,7 @@ async def create_operation(
     "/{operation_id}/approvals",
     response_model=list[OperationDeviceApprovalResponse],
 )
-async def list_operation_approvals(
+def list_operation_approvals(
     operation_id: str,
     service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -313,14 +314,19 @@ async def decide_operation_device_approval(
 ) -> OperationDeviceApprovalResponse:
     """Phê duyệt hoặc từ chối một lần bằng User trong access token."""
 
-    approval = service.decide_operation_approval(
+    approval = await run_in_threadpool(
+        service.decide_operation_approval,
         approval_id,
         user_id=user.id,
         decision=payload.decision,
     )
-    mapping = service.get_operation_device(approval.operation_device_id)
-    operation = service.get_operation(mapping.operation_id)
-    service.record_activity(
+    mapping = await run_in_threadpool(
+        service.get_operation_device,
+        approval.operation_device_id,
+    )
+    operation = await run_in_threadpool(service.get_operation, mapping.operation_id)
+    await run_in_threadpool(
+        service.record_activity,
         operation.task_id,
         ActivityActorType.ORCHESTRATOR,
         (

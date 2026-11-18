@@ -19,7 +19,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Thêm hãng thiết bị",
 )
-async def create_brand(
+def create_brand(
     payload: BrandCreate,
     service: Annotated[BrandService, Depends(get_brand_service)],
 ) -> Brand:
@@ -30,7 +30,7 @@ async def create_brand(
 
 # READ — Lấy danh sách hãng thiết bị và các driver được hỗ trợ.
 @router.get("/", response_model=list[Brand], summary="Lấy danh sách hãng thiết bị")
-async def list_brands(
+def list_brands(
     service: Annotated[BrandService, Depends(get_brand_service)],
 ) -> list[Brand]:
     """Trả danh sách brand dùng khi tạo hoặc cập nhật device."""
@@ -44,7 +44,7 @@ async def list_brands(
     response_model=Brand,
     summary="Lấy hãng thiết bị theo ID",
 )
-async def get_brand(
+def get_brand(
     brand_id: str,
     service: Annotated[BrandService, Depends(get_brand_service)],
 ) -> Brand:
@@ -59,7 +59,7 @@ async def get_brand(
     response_model=Brand,
     summary="Cập nhật hãng thiết bị",
 )
-async def update_brand(
+def update_brand(
     brand_id: str,
     payload: BrandUpdate,
     service: Annotated[BrandService, Depends(get_brand_service)],

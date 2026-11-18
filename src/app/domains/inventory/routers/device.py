@@ -18,7 +18,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Thêm thiết bị",
 )
-async def create_device(
+def create_device(
     payload: DeviceCreate,
     service: Annotated[DeviceService, Depends(get_device_service)],
 ) -> Device:
@@ -29,7 +29,7 @@ async def create_device(
 
 # READ — Lọc và lấy danh sách thiết bị theo từng trang.
 @router.get("/", response_model=DevicePage, summary="Lấy danh sách thiết bị")
-async def list_devices(
+def list_devices(
     service: Annotated[DeviceService, Depends(get_device_service)],
     page: Annotated[int, Query(ge=1, description="Số trang, bắt đầu từ 1.")] = 1,
     page_size: Annotated[
@@ -62,7 +62,7 @@ async def list_devices(
     response_model=Device,
     summary="Lấy thiết bị theo hostname",
 )
-async def get_device_by_hostname(
+def get_device_by_hostname(
     hostname: str,
     service: Annotated[DeviceService, Depends(get_device_service)],
 ) -> Device:
@@ -77,7 +77,7 @@ async def get_device_by_hostname(
     response_model=Device,
     summary="Lấy chi tiết thiết bị",
 )
-async def get_device(
+def get_device(
     device_id: str,
     service: Annotated[DeviceService, Depends(get_device_service)],
 ) -> Device:
@@ -92,7 +92,7 @@ async def get_device(
     response_model=Device,
     summary="Cập nhật thiết bị",
 )
-async def update_device(
+def update_device(
     device_id: str,
     payload: DeviceUpdate,
     service: Annotated[DeviceService, Depends(get_device_service)],

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/runs")
 
 
 @router.post("", response_model=BenchmarkRun)
-async def start_run(
+def start_run(
     payload: BenchmarkStartRequest,
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     user: Annotated[User, Depends(require_permission("Task Management", "Add"))],
@@ -25,7 +25,7 @@ async def start_run(
 
 
 @router.get("", response_model=list[BenchmarkRun])
-async def list_runs(
+def list_runs(
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
     limit: int = 50,
@@ -34,7 +34,7 @@ async def list_runs(
 
 
 @router.get("/summary", response_model=BenchmarkRunSummary)
-async def get_run_summary(
+def get_run_summary(
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
 ) -> BenchmarkRunSummary:
@@ -43,7 +43,7 @@ async def get_run_summary(
 
 
 @router.get("/page", response_model=BenchmarkRunPage)
-async def get_run_page(
+def get_run_page(
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
     page: Annotated[int, Query(ge=1)] = 1,
@@ -55,7 +55,7 @@ async def get_run_page(
 
 
 @router.get("/{run_id}", response_model=BenchmarkRun)
-async def get_run(
+def get_run(
     run_id: str,
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
@@ -64,7 +64,7 @@ async def get_run(
 
 
 @router.post("/{run_id}/cleanup", response_model=BenchmarkRun)
-async def cleanup_run(
+def cleanup_run(
     run_id: str,
     service: Annotated[BenchmarkRunService, Depends(get_benchmark_run_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "Edit"))],

@@ -5,6 +5,7 @@ from typing import Annotated
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi.concurrency import run_in_threadpool
 
 from app.agents.dependencies import get_network_automation_workflow
 from app.agents.workflow import NetworkAutomationWorkflow
@@ -129,10 +130,11 @@ async def start_conversation(
     """Tạo Conversation, lưu Message đầu tiên, sinh title và chạy AI workflow."""
 
     # Bước 1: Transaction ngắn tạo Conversation và USER_REQUEST đầu tiên.
-    started = service.start(user.id, payload)
+    started = await run_in_threadpool(service.start, user.id, payload)
 
     if payload.benchmark_run_id is not None:
-        benchmark_service.bind_message(
+        await run_in_threadpool(
+            benchmark_service.bind_message,
             payload.benchmark_run_id,
             started.conversation,
             started.message,
@@ -163,7 +165,7 @@ async def start_conversation(
     response_model=ConversationPage,
     summary="Lấy danh sách conversation",
 )
-async def list_conversations(
+def list_conversations(
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
     user_id: Annotated[
@@ -184,7 +186,7 @@ async def list_conversations(
     response_model=ConversationDetail,
     summary="Lấy chi tiết conversation theo mã",
 )
-async def get_conversation(
+def get_conversation(
     conversation_id: str,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
@@ -197,7 +199,7 @@ async def get_conversation(
     response_model=Conversation,
     summary="Đổi tiêu đề conversation",
 )
-async def rename_conversation(
+def rename_conversation(
     conversation_id: str,
     payload: ConversationTitleUpdate,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
@@ -214,7 +216,7 @@ async def rename_conversation(
     response_model=MessagePage,
     summary="Lấy danh sách message theo conversation",
 )
-async def list_messages(
+def list_messages(
     conversation_id: str,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
     _user: Annotated[User, Depends(require_permission("Chatbot", "View"))],
@@ -253,10 +255,14 @@ async def create_message(
     """
 
     # Bước 1: Xác nhận conversation tồn tại và lấy đủ user_id cần để tạo Task.
-    conversation = service.get(conversation_id)
+    conversation = await run_in_threadpool(service.get, conversation_id)
 
     # Bước 2: Lưu message trước. Nhờ vậy Task luôn có source_message_id hợp lệ & lịch sử hội thoại vẫn còn nếu bước gọi LLM gặp lỗi.
-    message = service.create_message(conversation_id, payload)
+    message = await run_in_threadpool(
+        service.create_message,
+        conversation_id,
+        payload,
+    )
 
     # Bước 3: (CHECK) Chỉ USER message kích hoạt Planner. Message của ASSISTANT/SYSTEM được lưu như lịch sử nhưng không tạo task mới, tránh lặp vô hạn.
     if message.sender_by == MessageSender.USER:

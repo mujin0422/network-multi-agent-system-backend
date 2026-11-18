@@ -18,7 +18,7 @@ router = APIRouter()
     response_model=list[Category],
     summary="Lấy danh sách loại thiết bị",
 )
-async def list_categories(
+def list_categories(
     service: Annotated[CategoryService, Depends(get_category_service)],
 ) -> list[Category]:
     """Trả danh sách Category dùng khi tạo hoặc cập nhật Device."""

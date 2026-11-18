@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[TaskEvaluationSummary])
-async def list_evaluations(
+def list_evaluations(
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],
     evaluation_service: Annotated[
         TaskEvaluationService,
@@ -30,7 +30,7 @@ async def list_evaluations(
 
 
 @router.get("/tasks/{task_id}", response_model=TaskEvaluationDetail | None)
-async def get_task_evaluation(
+def get_task_evaluation(
     task_id: str,
     execution_service: Annotated[ExecutionService, Depends(get_execution_service)],
     _user: Annotated[User, Depends(require_permission("Task Management", "View"))],

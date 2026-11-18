@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import get_settings
@@ -95,7 +96,10 @@ async def get_current_identity(
 ) -> tuple[User, str]:
     if credentials is None:
         raise AuthenticationError("Cần đăng nhập để thực hiện thao tác này")
-    user, session_id = service.authenticate(credentials.credentials)
+    user, session_id = await run_in_threadpool(
+        service.authenticate,
+        credentials.credentials,
+    )
     return user, str(session_id)
 
 
@@ -105,6 +109,11 @@ def require_permission(function: str, action: str):
         service: Annotated[IdentityService, Depends(get_identity_service)],
     ) -> User:
         user, _ = identity
-        service.require_permission(user, function, action)
+        await run_in_threadpool(
+            service.require_permission,
+            user,
+            function,
+            action,
+        )
         return user
     return dependency

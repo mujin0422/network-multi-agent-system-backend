@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[AuditLog], summary="Lấy danh sách audit log")
-async def list_audit_logs(
+def list_audit_logs(
     service: Annotated[AuditLogService, Depends(get_audit_log_service)],
     _: Annotated[User, Depends(require_permission("Audit Log", "View"))],
     actor_user_id: Annotated[str | None, Query(max_length=64)] = None,
@@ -48,7 +48,7 @@ async def list_audit_logs(
     response_model=AuditLog,
     summary="Lấy chi tiết audit log",
 )
-async def get_audit_log(
+def get_audit_log(
     audit_log_id: UUID,
     service: Annotated[AuditLogService, Depends(get_audit_log_service)],
     _: Annotated[User, Depends(require_permission("Audit Log", "View"))],
