@@ -4,7 +4,7 @@
 
 **Trường:** Đại học Sài Gòn — Chuyên ngành Kỹ thuật máy tính  
 **Nhóm sinh viên:** Phạm Đăng Minh Khang; Phạm Đình Duy Thái; Triệu Phú Quân  
-**Phạm vi đối chiếu:** mã nguồn nhánh develop của backend và frontend, tài liệu đề cương giữa kỳ và bằng chứng kiểm thử được tổng hợp đến ngày 17/11/2026.
+**Phạm vi đối chiếu:** mã nguồn nhánh `develop` của backend (commit `5e9f0815a0`, 18/11/2026) và frontend (commit `d96e94f197`, 19/11/2026). Dữ liệu benchmark lịch sử trong Chương 4 chưa được chạy lại trên các commit này.
 
 ### TÓM TẮT ĐỀ TÀI
 
@@ -569,7 +569,7 @@ Yêu cầu phi chức năng xác định các đặc tính chất lượng cần
 
 4. **Độ tin cậy và xử lý lỗi (Reliability and Fault Handling)** <br> Hệ thống phải phát hiện và ghi nhận lỗi gọi LLM, structured output không hợp lệ, lỗi kết nối thiết bị và lỗi CLI. Timeout, retry và schema validation được áp dụng tại các vị trí phù hợp. Khi một Operation thất bại, dependency được xử lý theo điều kiện đã xác định. Benchmark cleanup có retry và bước xác minh để tránh ghi nhận môi trường đã khôi phục khi trạng thái thiết bị chưa đúng.
 
-5. **Hiệu năng (Performance)** <br> Hệ thống cần kiểm soát timeout của LLM và thiết bị, đồng thời tách những thao tác mạng đồng bộ khỏi luồng xử lý bất đồng bộ khi cần thiết. Thời gian hoạt động của AI workflow được ghi nhận riêng với thời gian chờ phê duyệt của người dùng. Dashboard và các bảng dữ liệu sử dụng phân trang hoặc giới hạn phạm vi truy vấn để tránh tải toàn bộ lịch sử trong một lần.
+5. **Hiệu năng (Performance)** <br> Hệ thống cần kiểm soát timeout của LLM và thiết bị, đồng thời tách những thao tác mạng đồng bộ khỏi luồng xử lý bất đồng bộ khi cần thiết. Thời gian hoạt động của AI workflow được ghi nhận riêng với thời gian chờ phê duyệt của người dùng. Backend hỗ trợ API phân trang và summary phía server, nhưng Dashboard hiện còn tải toàn bộ các trang Task/Evaluation/Run phục vụ một số biểu đồ. Server-side aggregation cho các biểu đồ này là mục tiêu tối ưu khi dữ liệu tăng.
 
 6. **Khả năng quan sát và truy vết (Observability and Traceability)** <br> Các sự kiện quan trọng trong vòng đời Task phải được ghi nhận thông qua Activity Event, Execution, Device Action Log và Audit Log. Benchmark Run phải liên kết được với Scenario snapshot, Conversation, Task và Evaluation. Dữ liệu cần hỗ trợ truy xuất quá trình lập kế hoạch, thực thi, phê duyệt, phân tích và cleanup.
 
@@ -628,85 +628,76 @@ Backend FastAPI cung cấp API cho các dịch vụ cốt lõi đã triển khai
 
 Thành phần Multi-Agent sử dụng LangGraph và Orchestrator để phối hợp Planner Agent, Configuration Agent, Network Agent và Analyst Agent. Planner, Configuration và Analyst tương tác với NVIDIA AI Endpoint thông qua lớp tích hợp LLM. Workflow kiểm tra GNS3 Server thông qua lớp tích hợp GNS3, trong khi Network Agent sử dụng lớp tích hợp thiết bị dựa trên Netmiko hoặc Nornir để thực thi lệnh. Benchmark Service cũng sử dụng lớp tích hợp thiết bị để kiểm tra baseline, tiêm lỗi, xác minh và cleanup. Các kết nối đến thiết bị được thực hiện qua SSH hoặc Telnet trong phạm vi inventory và credential đã quản lý.
 
-Backend, PostgreSQL và công cụ quản trị cơ sở dữ liệu được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend hiện được vận hành như ứng dụng riêng và kết nối đến backend qua REST API và SSE. Redis, Message Queue và WebSocket không được đưa vào kiến trúc vì chưa được sử dụng trong phiên bản hệ thống hiện tại.
+FastAPI API, Workflow Worker riêng, PostgreSQL và pgAdmin được triển khai bằng Docker Compose trong môi trường phát triển và thực nghiệm. API lưu yêu cầu và đưa Workflow Job vào hàng đợi bền vững trên PostgreSQL; Worker nhận job và chạy LangGraph ngoài vòng đời request HTTP. Frontend chạy riêng và kết nối qua REST API và SSE. Phiên bản hiện tại không sử dụng Redis, message broker ngoài PostgreSQL hoặc WebSocket.
 
 ```mermaid
 flowchart TB
-    ACTOR["Người dùng hệ thống<br/>Super Administrator · System Administrator<br/>Network Engineer · Network Operator"]
-
+    ACTOR["Người dùng<br/>Super Administrator · System Administrator<br/>Network Engineer · Network Operator"]
     subgraph SYSTEM["HỆ THỐNG NETWORK MULTI-AGENT"]
         subgraph PRESENTATION["Lớp trình bày"]
             FE["Web Application<br/>React · TypeScript"]
         end
-
         subgraph API_LAYER["Lớp API"]
-            API["API Layer<br/>FastAPI REST API"]
+            API["FastAPI<br/>REST API · SSE"]
         end
-
-        subgraph CORE["Lớp dịch vụ nghiệp vụ cốt lõi"]
-            IDENTITY["Identity & Access<br/>Authentication · Session · RBAC"]
-            INVENTORY["Inventory & Credential"]
-            OPERATIONS["Conversation & Task Execution"]
-            BENCHMARK["Benchmark & Evaluation"]
+        subgraph CORE["Dịch vụ nghiệp vụ"]
+            IDENTITY["Identity · Session · RBAC"]
+            INVENTORY["Inventory · Credential"]
+            EXEC_DOMAIN["Conversation · Task Execution"]
+            BENCHMARK["Benchmark · Evaluation"]
             AUDIT["Audit Log"]
         end
-
-        subgraph AI["Lớp AI và điều phối"]
-            ORCHESTRATION["LangGraph<br/>Planning · Configuration · Execution · Analysis Orchestrator"]
-            AGENTS["Planner · Configuration · Network · Analyst Agent"]
+        subgraph AI["Lớp điều phối và AI"]
+            WORKER["Workflow Worker<br/>Claim · Retry · Recover"]
+            GRAPH["LangGraph<br/>Planning · Configuration · Execution · Analysis"]
+            AGENTS["Planner · Configuration · Network · Analyst"]
         end
-
         subgraph INTEGRATION["Lớp tích hợp"]
             LLMINT["LLM Integration"]
             GNS3INT["GNS3 Integration"]
-            NETINT["Network Device Integration<br/>Netmiko · Nornir"]
+            NETINT["NetworkTool<br/>Netmiko · Nornir"]
         end
-
         subgraph DATA["Lớp lưu trữ"]
-            PERSISTENCE["Persistence Layer<br/>SQLAlchemy"]
-            DB[("PostgreSQL")]
+            PERSISTENCE["SQLAlchemy · Repository"]
+            DB[("PostgreSQL<br/>Business State · Workflow Jobs · Task Activity")]
         end
-
-        subgraph INFRASTRUCTURE["Hạ tầng triển khai"]
-            DEPLOY["Docker Compose<br/>FastAPI · PostgreSQL · pgAdmin"]
-        end
-
-        FE -->|HTTP / REST và SSE| API
-        API --> IDENTITY
-        API --> INVENTORY
-        API --> OPERATIONS
-        API --> BENCHMARK
-        API --> AUDIT
-        API -->|Khởi chạy tác vụ AI| ORCHESTRATION
-
-        ORCHESTRATION --> AGENTS
-        ORCHESTRATION -->|Đọc và cập nhật trạng thái| OPERATIONS
-        ORCHESTRATION -->|Lấy ngữ cảnh thiết bị| INVENTORY
-        AGENTS -->|Planner, Configuration và Analyst| LLMINT
-        ORCHESTRATION -->|Kiểm tra môi trường| GNS3INT
-        AGENTS -->|Network Agent| NETINT
-        BENCHMARK -->|Tiêm lỗi, xác minh, cleanup| NETINT
-
-        IDENTITY --> PERSISTENCE
-        INVENTORY --> PERSISTENCE
-        OPERATIONS --> PERSISTENCE
-        BENCHMARK --> PERSISTENCE
-        AUDIT --> PERSISTENCE
-        PERSISTENCE -->|SQL| DB
-
-        DEPLOY -.-> API
-        DEPLOY -.-> DB
+        DEPLOY["Docker Compose<br/>API · Workflow Worker · DB · pgAdmin"]
     end
-
     subgraph EXTERNAL["Dịch vụ và môi trường bên ngoài"]
         LLM["NVIDIA AI Endpoint"]
         GNS3["GNS3 Server / API"]
-        DEV["Thiết bị mạng trong GNS3"]
+        DEV["Thiết bị mạng GNS3"]
     end
-
     ACTOR --> FE
-    LLMINT <-->|HTTPS / API| LLM
-    GNS3INT <-->|HTTP / REST| GNS3
+    FE <-->|REST / SSE| API
+    API --> IDENTITY
+    API --> INVENTORY
+    API --> EXEC_DOMAIN
+    API --> BENCHMARK
+    API --> AUDIT
+    API -->|"Enqueue Message / Approval Job"| DB
+    DB -->|"Claim job · Retry"| WORKER
+    WORKER --> GRAPH
+    GRAPH --> AGENTS
+    GRAPH --> EXEC_DOMAIN
+    GRAPH --> INVENTORY
+    GRAPH --> GNS3INT
+    AGENTS --> LLMINT
+    AGENTS --> NETINT
+    BENCHMARK -->|"Precondition · Injection · Cleanup"| NETINT
+    IDENTITY --> PERSISTENCE
+    INVENTORY --> PERSISTENCE
+    EXEC_DOMAIN --> PERSISTENCE
+    BENCHMARK --> PERSISTENCE
+    AUDIT --> PERSISTENCE
+    GRAPH --> PERSISTENCE
+    PERSISTENCE <-->|SQL| DB
+    DB -->|"Activity: LISTEN / NOTIFY"| API
+    DEPLOY -.-> API
+    DEPLOY -.-> WORKER
+    DEPLOY -.-> DB
+    LLMINT <-->|HTTPS| LLM
+    GNS3INT <-->|REST| GNS3
     NETINT <-->|SSH / Telnet| DEV
 ```
 
@@ -718,7 +709,7 @@ Kiến trúc hệ thống gồm các thành phần chức năng được tổ ch
 
 **Lớp trình bày (Presentation Layer).** Web Application được xây dựng bằng React và TypeScript, cung cấp giao diện đăng nhập, Dashboard, hội thoại với AI, theo dõi Task, phê duyệt thay đổi cấu hình, quản lý thiết bị và credential, quản lý Benchmark Scenario và Benchmark Run, xem Evaluation, Audit Log, người dùng và quyền truy cập. Frontend chịu trách nhiệm hiển thị dữ liệu và tiếp nhận thao tác của người dùng, nhưng không trực tiếp thực hiện nghiệp vụ, truy vấn PostgreSQL hoặc kết nối thiết bị mạng.
 
-**Lớp API (API Layer).** FastAPI cung cấp các REST API và endpoint SSE dưới tiền tố `/api/v1`, tiếp nhận yêu cầu HTTP từ frontend, kiểm tra cấu trúc dữ liệu đầu vào và chuyển yêu cầu đến thành phần xử lý phù hợp. API Layer không chứa nghiệp vụ xác thực hoặc phân quyền; các router sử dụng Identity Service để xác thực phiên và kiểm tra permission trước khi gọi Core Domain Services. Đối với yêu cầu hội thoại hoặc tiếp tục Task sau phê duyệt, API Layer đồng thời kích hoạt Multi-Agent Workflow; endpoint SSE phát lại Task Activity đã lưu và truyền sự kiện mới cho frontend.
+**Lớp API (API Layer).** FastAPI cung cấp các REST API và endpoint SSE dưới tiền tố `/api/v1`, tiếp nhận yêu cầu HTTP từ frontend, kiểm tra cấu trúc dữ liệu đầu vào và chuyển yêu cầu đến thành phần xử lý phù hợp. API Layer không chứa nghiệp vụ xác thực hoặc phân quyền; các router sử dụng Identity Service để xác thực phiên và kiểm tra permission trước khi gọi Core Domain Services. Đối với yêu cầu hội thoại hoặc tiếp tục Task sau phê duyệt, API Layer ghi Workflow Job vào PostgreSQL; Workflow Worker thực thi Multi-Agent Workflow bất đồng bộ. Endpoint SSE phát lại Task Activity đã lưu và truyền sự kiện mới cho frontend.
 
 **Các dịch vụ nghiệp vụ cốt lõi (Core Domain Services).** Các nghiệp vụ của hệ thống được phân chia theo domain:
 
@@ -740,7 +731,7 @@ Domain Service chịu trách nhiệm thực hiện quy tắc nghiệp vụ và p
 
 **Lớp lưu trữ (Persistence Layer).** Repository và SQLAlchemy đảm nhiệm ánh xạ, truy vấn và cập nhật dữ liệu trong PostgreSQL. Cơ sở dữ liệu lưu người dùng, session, quyền truy cập, inventory, credential, conversation, task, operation, approval, execution, benchmark, evaluation và audit. PostgreSQL là nguồn dữ liệu chuẩn đối với trạng thái nghiệp vụ của hệ thống.
 
-**Hạ tầng triển khai.** Backend, PostgreSQL và pgAdmin được tổ chức bằng Docker Compose trong môi trường phát triển và thực nghiệm. Frontend được vận hành như một ứng dụng riêng và kết nối đến backend qua REST API và SSE. NVIDIA AI Endpoint, GNS3 Server và các thiết bị mạng trong GNS3 nằm ngoài ranh giới ứng dụng nhưng được truy cập thông qua các lớp tích hợp tương ứng.
+**Hạ tầng triển khai.** Docker Compose vận hành FastAPI API, Workflow Worker, PostgreSQL, dịch vụ migration và pgAdmin. Worker lấy job, retry và phục hồi job bị gián đoạn bằng trạng thái PostgreSQL, thay cho việc chạy workflow trong request HTTP. Frontend chạy riêng qua REST/SSE; NVIDIA AI Endpoint và GNS3 Server nằm ngoài ranh giới ứng dụng.
 
 Mối quan hệ giữa các thành phần được thiết kế theo nguyên tắc giới hạn trách nhiệm. Planner Agent không nhận credential và không chạy CLI; Network Agent không dùng LLM để tự lựa chọn mục tiêu hoặc diễn giải kết quả; Analyst Agent không kết nối và không thay đổi cấu hình thiết bị. Các thao tác WRITE phải được kiểm soát bởi Execution Service và Approval Gate trước khi Network Agent thực thi. Sự phân tách này làm giảm phạm vi ảnh hưởng khi một thành phần tạo kết quả không hợp lệ và hỗ trợ kiểm tra toàn bộ quá trình xử lý.
 
@@ -748,7 +739,7 @@ Mối quan hệ giữa các thành phần được thiết kế theo nguyên t�
 
 Frontend và backend trao đổi dữ liệu bằng REST API và SSE trên nền HTTP. Sau khi đăng nhập, frontend gửi access token trong các yêu cầu đến API, bao gồm yêu cầu mở SSE bằng `fetch` để sử dụng được Bearer token. Router sử dụng Identity Service để kiểm tra tính hợp lệ của access token, trạng thái session, trạng thái tài khoản và permission tương ứng với chức năng được yêu cầu. Chỉ khi các điều kiện này được thỏa mãn, yêu cầu mới được chuyển đến Domain Service. Giao diện nhận Task Activity theo sequence qua SSE, tải lại dữ liệu hội thoại chi tiết sau các sự kiện cần thiết và sử dụng polling làm cơ chế dự phòng khi stream lỗi liên tiếp. Phiên bản hiện tại không sử dụng WebSocket hoặc Message Queue.
 
-Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message trước khi API kích hoạt LangGraph Workflow. Node `plan` sử dụng Planning Orchestrator để lấy tối đa năm Message ngay trước yêu cầu hiện tại từ PostgreSQL, sắp xếp theo thời gian và chuyển chúng cùng yêu cầu mới, inventory công khai và topology context cho Planner Agent. Lịch sử gần chỉ dùng để phân giải các tham chiếu như “thiết bị đó” hoặc “tiếp tục bước trước”; message hiện tại vẫn là yêu cầu điều khiển chính. Structured output được kiểm tra bằng schema rồi lưu tạm trong LangGraph state dưới dạng `PlanningDraft`, chưa tạo Operation. Nếu kế hoạch chỉ có READ, Planning Orchestrator lưu kế hoạch và workflow đi thẳng đến `execute`. Nếu có WRITE, conditional edge chuyển state sang node `configure`; Configuration Orchestrator gọi Configuration Agent, chuẩn hóa CLI và đối chiếu interface với inventory GNS3. Kế hoạch hoàn chỉnh chỉ được chuyển thành Task Operation, Operation Dependency và Operation Device sau khi node phù hợp hoàn tất validation.
+Đối với yêu cầu xử lý bằng AI, Conversation Service lưu Conversation và Message, sau đó API enqueue Workflow Job trong PostgreSQL; Worker claim job và gọi LangGraph ngoài request HTTP. Node `plan` sử dụng Planning Orchestrator để lấy tối đa năm Message ngay trước yêu cầu hiện tại từ PostgreSQL, sắp xếp theo thời gian và chuyển chúng cùng yêu cầu mới, inventory công khai và topology context cho Planner Agent. Lịch sử gần chỉ dùng để phân giải các tham chiếu như “thiết bị đó” hoặc “tiếp tục bước trước”; message hiện tại vẫn là yêu cầu điều khiển chính. Structured output được kiểm tra bằng schema rồi lưu tạm trong LangGraph state dưới dạng `PlanningDraft`, chưa tạo Operation. Nếu kế hoạch chỉ có READ, Planning Orchestrator lưu kế hoạch và workflow đi thẳng đến `execute`. Nếu có WRITE, conditional edge chuyển state sang node `configure`; Configuration Orchestrator gọi Configuration Agent, chuẩn hóa CLI và đối chiếu interface với inventory GNS3. Kế hoạch hoàn chỉnh chỉ được chuyển thành Task Operation, Operation Dependency và Operation Device sau khi node phù hợp hoàn tất validation.
 
 Trong quá trình thực thi, Execution Orchestrator đọc lại Task, Operation, dependency, mapping thiết bị và Approval từ Execution Service. Với Operation READ, Network Agent có thể gọi NetworkTool để thu thập trạng thái. Với Operation WRITE, workflow chỉ tiếp tục khi Approval Gate xác nhận nội dung đã được phê duyệt và vẫn khớp với command snapshot. NetworkTool lấy thông tin kết nối thông qua Inventory Service và Device Connection Provider, sau đó gửi lệnh đến thiết bị bằng SSH hoặc Telnet. Output của thiết bị được chuẩn hóa, lưu thành Execution và Device Action Log, rồi chuyển cho Analyst Agent làm bằng chứng phân tích.
 
@@ -760,7 +751,7 @@ PostgreSQL được sử dụng làm nguồn dữ liệu chuẩn đối với v�
 
 LangGraph state chỉ chứa dữ liệu chuyển tiếp cần thiết giữa các node trong một lượt xử lý, chẳng hạn Conversation, Message, `PlanningDraft`, Task, Execution Result, Analysis Result, vòng điều tra và mức độ bao phủ evidence. State này không được sử dụng như nguồn dữ liệu cạnh tranh với PostgreSQL. Trước mỗi giai đoạn quan trọng, Orchestrator đọc lại trạng thái nghiệp vụ đã lưu để hạn chế việc thực thi dựa trên dữ liệu cũ.
 
-Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Operation, Approval và command snapshot trong PostgreSQL rồi kết thúc lượt workflow hiện tại. Sau khi người dùng đưa ra quyết định, API tải lại Task và khởi chạy workflow tiếp tục từ giai đoạn thực thi. Nhờ đó, hệ thống không phải duy trì một tiến trình LangGraph hoặc kết nối HTTP liên tục trong toàn bộ thời gian chờ phê duyệt, đồng thời vẫn bảo đảm tính tuần tự, khả năng truy vết và tính nhất quán của nội dung đã được chấp thuận.
+Khi một Task WRITE dừng để chờ phê duyệt, hệ thống lưu Task, Operation, Approval và command snapshot trong PostgreSQL rồi kết thúc lượt workflow hiện tại. Sau khi người dùng đưa ra quyết định, API enqueue job `APPROVAL`; Workflow Worker tải lại Task từ PostgreSQL và tiếp tục từ nhánh `approval → execute`, không lập kế hoạch hoặc sinh CLI lại. Nhờ đó, hệ thống không phải duy trì một tiến trình LangGraph hoặc kết nối HTTP liên tục trong toàn bộ thời gian chờ phê duyệt, đồng thời vẫn bảo đảm tính tuần tự, khả năng truy vết và tính nhất quán của nội dung đã được chấp thuận.
 
 ## 3.5. Thiết kế kiến trúc Multi-Agent
 
@@ -1367,7 +1358,7 @@ Backend được phát triển bằng FastAPI và tổ chức theo domain. Route
 
 Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và hệ component shadcn; sử dụng các thư viện bảng, form, trạng thái và giao tiếp HTTP phù hợp. Các feature hiện có gồm Login/Profile, Dashboard, Chatbot/Conversation, Tasks, Devices, Credentials, Device Catalog, Users, Roles/Access Control, Audit Logs, Benchmark Scenarios, Benchmark Runs và Evaluations. Giao diện chat hỗ trợ danh sách hội thoại, activity timeline, hiển thị yêu cầu approval và mở chi tiết Task; trang Benchmark hỗ trợ nhập action/check/Ground Truth và xem kết quả chạy.
 
-Trang Evaluations hiển thị lịch sử đánh giá, GOAL/RCA, Remediation/Safety, Latency và Interaction Turns, cùng các kết quả có cấu trúc của v4 gồm RCA F1, Precision, Recall, Localization F1, Fault Type F1 và Detection. Trang tổng quan TSR trình bày tỷ lệ, số mẫu hợp lệ và phân loại run. Phiên bản evaluator được hiển thị nhằm phân biệt cách chấm từ khóa cũ với bộ chấm v4.
+Trang Evaluations hiển thị lịch sử đánh giá, GOAL/RCA, Remediation/Safety, Latency và Interaction Turns, cùng các kết quả có cấu trúc của v4 gồm RCA F1, Precision, Recall, Localization F1, Fault Type F1 và Detection. Dashboard dùng `GET /benchmarks/runs/summary` làm nguồn chuẩn cho TSR toàn bộ lịch sử. Khi lọc theo ngày bắt đầu Benchmark Run, frontend phân loại tập Run theo cùng quy tắc backend và tra kết quả `GOAL` từ Evaluation liên kết, không dùng `BenchmarkRun.evaluation_result` để tính TSR vì trường này hiện lưu kết quả **RCA**, không phải GOAL. GOAL Pass Rate, RCA Pass Rate và RCA F1 được hiển thị riêng với mẫu số tương ứng. Phiên bản evaluator giúp phân biệt chấm từ khóa lịch sử và chấm RCA có cấu trúc.
 
 ### 3.8.3. Tích hợp LLM và các công cụ mạng
 
@@ -1375,7 +1366,7 @@ Planner Agent và Analyst Agent gọi LLM qua NVIDIA AI Endpoint; phản hồi �
 
 ### 3.8.4. Triển khai và cấu hình môi trường
 
-Backend, PostgreSQL, migration và pgAdmin được tổ chức bằng Docker Compose. Cấu hình kết nối cơ sở dữ liệu, khóa xác thực, LLM provider và network backend được quản lý qua biến môi trường. Frontend chạy bằng Vite trong quá trình phát triển và kết nối REST API bằng access token. GNS3 Server hoạt động như môi trường thực nghiệm bên ngoài các dịch vụ nghiệp vụ.
+FastAPI API, Workflow Worker, PostgreSQL, migration và pgAdmin được tổ chức bằng Docker Compose. Cấu hình kết nối cơ sở dữ liệu, khóa xác thực, LLM provider và network backend được quản lý qua biến môi trường. Frontend chạy bằng Vite trong quá trình phát triển và kết nối REST API bằng access token. GNS3 Server hoạt động như môi trường thực nghiệm bên ngoài các dịch vụ nghiệp vụ.
 
 ### 3.8.5. Giao diện các nhóm API
 
@@ -1409,11 +1400,25 @@ Ground Truth được lưu ở snapshot của lần chạy để việc cập nh
 
 ### 3.9.4. Quy tắc tính toán các chỉ số đánh giá
 
-Tỷ lệ hoàn thành nhiệm vụ được tính trên các lượt có GOAL PASS hoặc GOAL FAIL hợp lệ:
+Cần phân biệt **GOAL Pass Rate trên các Run đã được chấm** với **Task Success Rate (TSR) của API tổng hợp**. Hai chỉ số có mẫu số khác nhau khi workflow thất bại trước khi Evaluation được lưu.
+
+**GOAL Pass Rate (Run đã được chấm):**
 
 $$
-TSR=\frac{N_{pass}}{N_{pass}+N_{fail}}\times100\%
+GOALPassRate=\frac{N_{\mathrm{GOAL\ PASS}}}{N_{\mathrm{GOAL\ PASS}}+N_{\mathrm{GOAL\ FAIL}}}\times100\%.
 $$
+
+Chỉ các Evaluation có GOAL PASS hoặc GOAL FAIL được đưa vào mẫu số này. Báo cáo cũng trình bày tỷ lệ `GOAL PASS / tổng số Run` để không che giấu các lượt chưa được chấm.
+
+**TSR theo API `GET /benchmarks/runs/summary`:**
+
+$$
+TSR_{\mathrm{API}}=\frac{N_{\mathrm{passed}}}{N_{\mathrm{passed}}+N_{\mathrm{failed}}}\times100\%.
+$$
+
+Quy tắc `classify_run` ở `src/app/domains/benchmark/utils/summary.py` xác định: `passed` là Run `COMPLETED/CLEANED` có Evaluation GOAL PASS; `failed` là Run `COMPLETED/CLEANED` có GOAL FAIL, hoặc Run `FAILED` sau khi Agent Chat bắt đầu, hoặc Run đã hoàn tất có `source_message_id` và `error_message` nhưng chưa lưu GOAL. `not_started`, `in_progress`, `setup_failed` và `unscored` không thuộc mẫu số. Cleanup không làm thay đổi kết quả GOAL. Khi không có Run hợp lệ, API trả `success_rate=null` thay vì 0%.
+
+`BenchmarkRun.evaluation_result` hiện lưu RCA, không phải GOAL. Dashboard toàn bộ lịch sử lấy thống kê từ API summary; Dashboard lọc ngày dùng kết quả GOAL của Evaluation và cùng quy tắc phân loại Run. Khi công bố tỷ lệ cần ghi số Run tổng, số được chấm, số thất bại khi thực thi và mẫu số thực tế.
 
 Với RCA, gọi $P$ là tập cặp tài nguyên–loại lỗi dự đoán và $G$ là Ground Truth:
 
@@ -1621,13 +1626,13 @@ RCA yêu cầu khớp đồng thời tài nguyên và loại lỗi. Localization
 
 Detection Score bằng 1 khi Agent nhận biết đúng trạng thái bất thường. Do toàn bộ scenario trong tập hiện tại đều được tạo bằng cách tiêm lỗi, Ground Truth `is_anomaly` là true. Vì chưa có mẫu negative với mạng khỏe, chỉ số này không được diễn giải là Detection Accuracy trên một dataset cân bằng.
 
-Một Run đạt `GOAL PASS` khi Agent đồng thời nhận biết bất thường và tập nguyên nhân dự đoán exact-match Ground Truth. Task Success Rate được tính như sau:
+Một Run đạt `GOAL PASS` khi Agent đồng thời nhận biết bất thường và tập nguyên nhân dự đoán exact-match Ground Truth. **GOAL Pass Rate trên các Run đã được chấm** được tính như sau:
 
 ```text
-TSR = số Run GOAL PASS / số Run có kết quả GOAL hợp lệ
+GOAL Pass Rate = số Run GOAL PASS / số Run có kết quả GOAL hợp lệ
 ```
 
-Run lỗi ở bước chuẩn bị môi trường không được xem là thất bại chẩn đoán của Agent. Run đã chạy Agent nhưng không tạo được Evaluation phải được báo cáo riêng là chưa được chấm, không tự động quy về điểm 0.
+Run lỗi ở bước chuẩn bị môi trường không được xem là thất bại chẩn đoán của Agent. Run đã chạy Agent nhưng chưa có Evaluation cần được báo cáo riêng: nếu Run chuyển `FAILED` sau khi bắt đầu Chat, API tính vào `failed`; nếu Run hoàn tất nhưng thiếu GOAL và không có lỗi dứt điểm, API xếp `unscored` và loại khỏi mẫu số. Vì vậy GOAL Pass Rate của các Run được chấm có thể khác TSR của API; cần trình bày cả hai kèm số mẫu.
 
 ### 4.4.3. Latency và Interaction Turns
 
