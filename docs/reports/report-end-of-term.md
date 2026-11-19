@@ -676,7 +676,7 @@ flowchart TB
     API --> BENCHMARK
     API --> AUDIT
     API -->|"Enqueue Message / Approval Job"| DB
-    DB -->|"Claim job · Retry"| WORKER
+    DB <-->|"Claim · Complete · Retry"| WORKER
     WORKER --> GRAPH
     GRAPH --> AGENTS
     GRAPH --> EXEC_DOMAIN
@@ -690,7 +690,6 @@ flowchart TB
     EXEC_DOMAIN --> PERSISTENCE
     BENCHMARK --> PERSISTENCE
     AUDIT --> PERSISTENCE
-    GRAPH --> PERSISTENCE
     PERSISTENCE <-->|SQL| DB
     DB -->|"Activity: LISTEN / NOTIFY"| API
     DEPLOY -.-> API
@@ -1698,7 +1697,7 @@ Run duy nhất không đạt là scenario `CE-1B incorrect uplink IPv4 address` 
 
 ### 4.5.4. Trả lời RQ3 – Tác động của bằng chứng và điều tra bổ sung
 
-Từ ngày 28/10, workflow có khả năng quay lại node investigation khi Analyst xác định thiếu bằng chứng. Ngày 30/10 bổ sung diagnostic playbook và Evidence Coverage Gate; ngày 31/10 bổ sung Causal Evidence Gate; ngày 01/11 hoàn thiện matcher MPLS và OSPF. Sau các thay đổi này, số PASS tăng rõ nhất ở nhóm MPLS và OSPF area mismatch.
+Từ ngày 28/10, workflow có khả năng quay lại node investigation khi Analyst xác định thiếu bằng chứng. Ngày 30/10 bổ sung diagnostic playbook và Evidence Coverage Gate; ngày 31/10 bổ sung Causal Evidence Gate; ngày 01/11 hoàn thiện matcher MPLS và OSPF. Trong các cohort sau thay đổi, số PASS được báo cáo tăng ở nhóm MPLS và OSPF area mismatch; đây là quan sát mô tả, không phải phép so sánh đối chứng.
 
 Evidence Gate giúp ngăn finalize khi còn thiếu loại bằng chứng bắt buộc, nhưng coverage cao không bảo đảm RCA đúng. Coverage phản ánh hệ thống đã thu thập đủ nhóm dữ liệu; Analyst hoặc matcher vẫn phải suy luận đúng quan hệ nhân quả từ nội dung. Trường hợp wrong IP còn thất bại ngày 02/11 là minh chứng cho giới hạn này.
 
@@ -1718,8 +1717,8 @@ Bảng 4.6 tóm tắt thay đổi chính gắn với từng cohort. Ngày trong 
 | 28/10 | Thêm vòng `analyze → investigate → analyze`, confidence và evidence gap | PASS tăng lên 14; Detection và Localization cải thiện |
 | 29/10 | Dùng evaluator v5, taxonomy lỗi và cleanup có hậu kiểm | Giảm lỗi vận hành nhưng độ chính xác gần như không đổi |
 | 30/10 | Thêm diagnostic playbook, Evidence Coverage Gate, parser Planner và sửa scenario P3 không hợp lệ | PASS tăng lên 20; latency và turns giảm đáng kể |
-| 31/10 | Thêm Causal Evidence Gate và parser/matcher theo giao thức | PASS tăng lên 23; giảm false positive nhưng còn bỏ sót MPLS/OSPF |
-| 01/11 | Hoàn thiện matcher MPLS, OSPF area mismatch, candidate recovery và thực thi investigation READ | PASS tăng lên 29; latency tăng do thu thập evidence thực sự |
+| 31/10 | Thêm Causal Evidence Gate và parser/matcher theo giao thức | PASS tăng lên 23; mức giảm false positive chưa được kiểm định riêng |
+| 01/11 | Hoàn thiện matcher MPLS, OSPF area mismatch, candidate recovery và thực thi investigation READ | PASS tăng lên 29; latency tăng đồng thời với investigation |
 | 02/11 | Điều chỉnh điều phối và xử lý trường hợp chẩn đoán còn thiếu | PASS tăng lên 31; chỉ còn một scenario wrong IP thất bại |
 
 Xu hướng tăng không hoàn toàn đơn điệu ở mọi metric. Ngày 29/10, RCA F1 giảm nhẹ so với 28/10 do thay evaluator và taxonomy. Ngày 01/11, độ chính xác tăng mạnh nhưng latency cũng tăng. Vì nhiều thay đổi được triển khai giữa hai cohort, kết quả không cho phép tách riêng mức đóng góp của từng thay đổi. Thiết kế ablation test là cần thiết nếu muốn xác định tác động độc lập của playbook, Evidence Gate hoặc matcher.
@@ -1752,7 +1751,7 @@ Các cơ chế an toàn đã triển khai gồm RBAC, session authentication, m�
 
 Đây là bằng chứng về thiết kế và kiểm thử chức năng, chưa phải Safety Score thực nghiệm. Metric `SAFETY` hiện ở trạng thái `NOT_APPLICABLE` vì chưa có bộ scenario đối kháng và scorer độc lập để xác định tỷ lệ lệnh nguy hiểm bị chặn. Do đó báo cáo không công bố một tỷ lệ an toàn định lượng.
 
-**Bảng 4.6b. Ma trận kiểm thử Approval Gate đối với Operation WRITE**
+**Bảng 4.7. Ma trận kiểm thử Approval Gate đối với Operation WRITE**
 
 | Điều kiện | Unit test hiện có/được bổ sung | Kỳ vọng |
 | --- | --- | --- |
@@ -1777,7 +1776,7 @@ Hai cohort đầu mỗi cohort có 31/32 Run CLEANED tại thời điểm truy v
 
 Kết quả ngày 02/11 chứng minh tính khả thi của hệ thống trong việc chẩn đoán có cấu trúc trên topology GNS3: 31 trong 32 scenario được xác định đúng cả vị trí và loại lỗi. Việc sử dụng structured diagnosis giúp đánh giá nghiêm ngặt hơn so với tìm từ khóa, vì dự đoán thừa, sai interface hoặc sai loại lỗi đều làm giảm Precision, Recall hoặc F1.
 
-Sự cải thiện từ 34,38% PASS/Run lên 96,88% gắn với việc chuyển từ phản hồi một lượt sang điều tra dựa trên playbook và bằng chứng. Tuy nhiên, kết quả cũng cho thấy việc thu thập đủ evidence chưa giải quyết hoàn toàn các lỗi cần đối chiếu quan hệ giữa nhiều thiết bị, điển hình là wrong IP address.
+Sự cải thiện từ 34,38% PASS/Run lên 96,88% xuất hiện cùng thời kỳ bổ sung điều tra dựa trên playbook và bằng chứng; chưa thể quy riêng mức cải thiện cho những cơ chế này. Tuy nhiên, kết quả cũng cho thấy việc thu thập đủ evidence chưa giải quyết hoàn toàn các lỗi cần đối chiếu quan hệ giữa nhiều thiết bị, điển hình là wrong IP address.
 
 ### 4.8.2. Các nguy cơ ảnh hưởng độ tin cậy
 
@@ -1813,7 +1812,7 @@ Benchmark Scenario/version
 → Task Evaluation Metrics
 ```
 
-Bảng 4.7 chỉ ra vị trí mã nguồn và dữ liệu dùng để kiểm chứng.
+Bảng 4.8 chỉ ra vị trí mã nguồn và dữ liệu dùng để kiểm chứng.
 
 | Nội dung | Vị trí kiểm chứng |
 | --- | --- |
