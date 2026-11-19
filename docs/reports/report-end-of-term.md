@@ -984,7 +984,7 @@ Quy trình bắt đầu khi node `plan` nhận `Conversation` và `Message` củ
 
 Planning Orchestrator tiếp tục lấy danh sách thiết bị khả dụng từ Inventory Service, danh sách interface và quan hệ topology từ GNS3 Provider, cùng tối đa năm message trước đó trong cùng conversation. Các dữ liệu này chỉ được dùng làm ngữ cảnh đầu vào cho Planner Agent, không tạo thêm bản sao inventory hoặc topology trong domain Execution. Planner Agent nhận yêu cầu, inventory công khai, topology, lịch sử hội thoại, diagnostic playbook phù hợp và JSON Schema của `ExecutionPlanCreate`. Agent xác định `task_type`, phân rã mục tiêu thành các Operation, gán thiết bị, chỉ định `access_mode` và thiết lập dependency. Operation READ phải chứa `command` hoặc `commands`; Operation WRITE chỉ mô tả mục tiêu và ràng buộc trong `configuration_requirements`. Planner Agent không nhận credential và không trực tiếp sinh CLI WRITE.
 
-Kết quả Planner trả về được kiểm tra theo structured schema, thứ tự Operation, dependency, `device_id` và tên interface. Khi kế hoạch hợp lệ, activity `PLAN_GENERATED` được lưu kèm số lượng Operation. Tuy nhiên, tại thời điểm này hệ thống chưa tạo bản ghi Operation. Kế hoạch cùng Task, inventory và ánh xạ interface chỉ được đóng gói thành `PlanningDraft` trong workflow state. `PlanningDraft` là dữ liệu chuyển tiếp trong bộ nhớ giữa các node LangGraph, không phải bảng và không được lưu xuống PostgreSQL. Cách tổ chức này ngăn việc lưu một Operation WRITE chưa có CLI hoàn chỉnh.
+Kết quả Planner trả về được kiểm tra theo structured schema, thứ tự Operation, dependency, `device_id` và tên interface. Sau khi Planner Agent sinh kế hoạch có cấu trúc, Planning Orchestrator ghi activity `PLAN_GENERATED` kèm số lượng Operation, rồi tiếp tục kiểm tra `device_id` và tên interface. Nếu kiểm tra sau đó thất bại, Task được đánh dấu `FAILED`; sự kiện `PLAN_GENERATED` chỉ phản ánh việc sinh kế hoạch, không chứng nhận toàn bộ kế hoạch đã hợp lệ. Tại thời điểm này hệ thống chưa tạo bản ghi Operation. Kế hoạch cùng Task, inventory và ánh xạ interface chỉ được đóng gói thành `PlanningDraft` trong workflow state. `PlanningDraft` là dữ liệu chuyển tiếp trong bộ nhớ giữa các node LangGraph, không phải bảng và không được lưu xuống PostgreSQL. Cách tổ chức này ngăn việc lưu một Operation WRITE chưa có CLI hoàn chỉnh.
 
 Conditional edge sau node `plan` kiểm tra thuộc tính `requires_configuration` của `PlanningDraft`. Nếu toàn bộ ánh xạ thiết bị đều có quyền READ, workflow không đi qua Configuration Agent mà gọi ngay `persist_plan`. Tên gọi “lưu kế hoạch READ” ở đây không chỉ có nghĩa là lưu Task. Trong một lần vật hóa kế hoạch, hệ thống thực hiện các thay đổi sau:
 
@@ -1040,7 +1040,7 @@ flowchart TD
     R --> E
 ```
 
-_Hình 3.5. Quy trình lập kế hoạch và sinh cấu hình có điều kiện._
+_Hình 3.5. Sơ đồ hoạt động lập kế hoạch và sinh cấu hình có điều kiện._
 
 ### 3.6.3. Quy trình thực thi DAG và tổng hợp trạng thái
 
@@ -1092,7 +1092,7 @@ flowchart TD
     D7 -->|Không| D2
 ```
 
-_Hình 3.6. Quy trình thực thi DAG, kiểm soát mapping và tổng hợp trạng thái._
+_Hình 3.6. Sơ đồ hoạt động thực thi DAG và tổng hợp trạng thái Task._
 
 ### 3.6.4. Quy trình chẩn đoán sự cố và phân tích nguyên nhân gốc
 
@@ -1108,17 +1108,18 @@ Node `investigate` tạo thêm các Operation READ và Device Mapping thuộc Ta
 
 ```mermaid
 flowchart TD
-    S([Bắt đầu]) --> A["Analysis Orchestrator đọc Task và tính Evidence Coverage"]
-    A --> D1{"Task đang RUNNING?"}
+    S([Bắt đầu]) --> A["Analysis Orchestrator đọc trạng thái Task"]
+    A --> A1["Analysis Orchestrator tính Evidence Coverage từ Execution Results"]
+    A1 --> D1{"Task đang RUNNING?"}
     D1 -->|Có| B["Analysis Orchestrator trả kết quả rỗng để chờ Approval"]
     B --> E([Kết thúc])
-    D1 -->|Không| D2{"Task đã bị REJECTED?"}
+    D1 -->|Không| F["Analysis Orchestrator ghi ANALYSIS_STARTED"]
+    F --> D2{"Task đã bị REJECTED?"}
     D2 -->|Có| C["Analysis Orchestrator tạo kết luận từ chối"]
     C --> C1["Analysis Orchestrator ghi ANALYSIS_COMPLETED"]
     C1 --> Z["LangGraph chuyển AnalysisResult sang node finalize"]
     Z --> E
-    D2 -->|Không| F["Analysis Orchestrator ghi ANALYSIS_STARTED"]
-    F --> G["Analyst Agent phân tích Execution Results và Diagnostic Evidence"]
+    D2 -->|Không| G["Analyst Agent phân tích Execution Results và Diagnostic Evidence"]
     G --> D3{"Có ứng viên nguyên nhân cần hậu kiểm?"}
     D3 -->|Có| H["Causal Evidence Gate đối chiếu nguyên nhân với bằng chứng và topology"]
     H --> I["Analysis Orchestrator cập nhật root_causes, suspected_causes và evidence_gaps"]
@@ -1141,7 +1142,7 @@ flowchart TD
     Q1 --> A
 ```
 
-_Hình 3.7. Quy trình chẩn đoán và thu thập bổ sung bằng chứng._
+_Hình 3.7. Sơ đồ hoạt động chẩn đoán và thu thập bằng chứng bổ sung._
 
 ### 3.6.5. Quy trình phê duyệt và kiểm soát thực thi
 
@@ -1202,7 +1203,7 @@ flowchart TD
     Q --> A
 ```
 
-_Hình 3.8. Activity Diagram của quy trình Approval Gate._
+_Hình 3.8. Sơ đồ hoạt động phê duyệt và tiếp tục thực thi cấu hình._
 
 ### 3.6.6. Quy trình kết luận, phản hồi và ghi nhận nhật ký
 
@@ -1235,7 +1236,7 @@ flowchart TD
     I --> E
 ```
 
-_Hình 3.9. Quy trình tạo phản hồi cuối, lưu kết quả phân tích và kết thúc SSE._
+_Hình 3.9. Sơ đồ hoạt động tạo phản hồi, cập nhật Benchmark Run và phát sự kiện SSE._
 
 ### 3.6.7. Quy trình Benchmark Run và khôi phục môi trường
 
