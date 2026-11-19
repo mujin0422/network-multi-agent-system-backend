@@ -1001,41 +1001,36 @@ Sau khi Configuration Agent trả kết quả, Configuration Orchestrator đối
 Nếu Planner Agent timeout, trả JSON sai schema, tham chiếu thiết bị hoặc interface không tồn tại, Task được cập nhật sang `FAILED` và activity `TASK_FAILED` được ghi với stage `PLANNING`. Nếu lỗi xảy ra trong quá trình sinh hoặc kiểm tra cấu hình, Task cũng được chuyển sang `FAILED`, nhưng activity lưu stage `CONFIGURATION`. Trong cả hai trường hợp, các Operation chưa được vật hóa, approval chưa được tạo và không có lệnh nào được gửi đến thiết bị. Nếu lỗi xảy ra khi ghi kế hoạch, stage được lưu là `PLAN_PERSISTENCE`, giúp phân biệt lỗi dữ liệu với lỗi của Planner hoặc Configuration Agent.
 
 ```mermaid
-stateDiagram-v2
-    state "USER_REQUEST đã lưu" as A
-    state "Planning Orchestrator tạo Task" as B
-    state "Planner Agent tạo ExecutionPlanCreate" as C
-    state "Plan và inventory hợp lệ?" as D
-    state D <<choice>>
-    state "Task FAILED tại PLANNING" as X
-    state "PlanningDraft" as E
-    state "Có mapping WRITE?" as F
-    state F <<choice>>
-    state "Cập nhật Task; lưu Operation, dependency và device mapping READ" as I
-    state "Configuration Agent sinh CLI WRITE" as G
-    state "Schema, operation và interface hợp lệ?" as H
-    state H <<choice>>
-    state "Task FAILED tại CONFIGURATION" as Y
-    state "Cập nhật Task; lưu Operation, dependency và device mapping WRITE" as J
-    state "Chuyển sang node execute" as K
-
-    [*] --> A
-    A --> B
-    B --> C
-    C --> D
-    D --> X: Không
-    D --> E: Có
-    E --> F
-    F --> I: Không
-    F --> G: Có
-    G --> H
-    H --> Y: Không
-    H --> J: Có
-    I --> K
-    J --> K
-    X --> [*]
-    Y --> [*]
-    K --> [*]
+flowchart TD
+    S([Bắt đầu]) --> A["Planning Orchestrator kiểm tra Conversation và Message"]
+    A --> D1{"Conversation và Message hợp lệ?"}
+    D1 -->|Không| A0["Planning Orchestrator từ chối yêu cầu không hợp lệ"]
+    A0 --> E([Kết thúc])
+    D1 -->|Có| B["Execution Service tạo Task PENDING"]
+    B --> C["Planning Orchestrator ghi MESSAGE_RECEIVED và TASK_CREATED"]
+    C --> D["Planning Orchestrator lấy Inventory, topology và lịch sử hội thoại"]
+    D --> F["Planner Agent sinh ExecutionPlanCreate"]
+    F --> G["Planning Orchestrator ghi PLAN_GENERATED và kiểm tra device ID, interface"]
+    G --> D2{"Kế hoạch hợp lệ?"}
+    D2 -->|Không| H["Planning Orchestrator cập nhật Task FAILED và ghi TASK_FAILED tại PLANNING"]
+    H --> E
+    D2 -->|Có| I["Planning Orchestrator tạo PlanningDraft trong LangGraph State"]
+    I --> D3{"Kế hoạch có Mapping WRITE?"}
+    D3 -->|Không| M["Execution Service cập nhật Task và lưu Operation, Dependency, Device Mapping"]
+    D3 -->|Có| J["Configuration Orchestrator ghi CONFIGURATION_STARTED"]
+    J --> K["Configuration Agent sinh CLI cho Operation WRITE"]
+    K --> L["Configuration Orchestrator kiểm tra CLI và interface hợp lệ"]
+    L --> D4{"CLI hợp lệ?"}
+    D4 -->|Không| N["Configuration Orchestrator cập nhật Task FAILED và ghi TASK_FAILED tại CONFIGURATION"]
+    N --> E
+    D4 -->|Có| O["Configuration Orchestrator ghi CONFIGURATION_COMPLETED"]
+    O --> M
+    M --> D5{"Lưu kế hoạch thành công?"}
+    D5 -->|Không| P["Planning Orchestrator cập nhật Task FAILED và ghi TASK_FAILED tại PLAN_PERSISTENCE"]
+    P --> E
+    D5 -->|Có| Q["Planning Orchestrator ghi OPERATIONS_CREATED, DEPENDENCIES_CREATED, DEVICES_ASSIGNED"]
+    Q --> R["LangGraph chuyển Task sang node execute"]
+    R --> E
 ```
 
 _Hình 3.5. Quy trình lập kế hoạch và sinh cấu hình có điều kiện._
@@ -1053,67 +1048,38 @@ Sau khi các mapping kết thúc, trạng thái Operation được tổng hợp 
 Execution Orchestrator luôn đọc lại trạng thái Task trước các bước quan trọng. Task đã kết thúc không bị khởi động lại bởi callback phê duyệt đến muộn; Operation đã hoàn tất không được thực thi lại khi resume. Đối với vòng điều tra bổ sung, Orchestrator chỉ chạy các Operation READ mới được nối vào Task, giữ nguyên kết quả của kế hoạch ban đầu.
 
 ```mermaid
-stateDiagram-v2
-    state "Node execute nhận Task đã lưu" as A
-    state "Task đã kết thúc?" as B
-    state B <<choice>>
-    state "Không thực thi lại" as Z
-    state "Chuyển Task sang RUNNING" as C
-    state "Lấy Operation tiếp theo theo display_order" as D
-    state "Dependency đã thỏa mãn?" as E
-    state E <<choice>>
-    state "Đánh dấu Operation SKIPPED" as F
-    state "Lấy các TaskOperationDevice" as G
-    state "Access mode" as H
-    state H <<choice>>
-    state "Approval hợp lệ và hash khớp?" as I
-    state I <<choice>>
-    state "Cho phép thực thi" as J
-    state "Chuyển WAITING_APPROVAL" as W
-    state "Ghi APPROVAL_REQUESTED" as X
-    state "Tạm dừng lượt workflow" as Y
-    state "Đánh dấu mapping REJECTED" as R
-    state "Đánh dấu mapping FAILED" as S
-    state "MappingExecutor gọi Network Agent" as K
-    state "Lưu TaskExecution và DeviceActionLog" as L
-    state "Tổng hợp mapping thành trạng thái Operation" as M
-    state "Còn Operation?" as N
-    state N <<choice>>
-    state "Tổng hợp trạng thái các Operation" as O
-    state "Chốt trạng thái Task" as P
-    state "Chuyển sang node analyze" as Q
-
-    [*] --> A
-    A --> B
-    B --> Z: Có
-    B --> C: Không
-    C --> D
-    D --> E
-    E --> F: Không
-    F --> N
-    E --> G: Có
-    G --> H
-    H --> J: READ
-    H --> I: WRITE
-    I --> W: Chưa có quyết định
-    W --> X
-    X --> Y
-    I --> R: REJECTED hoặc EXPIRED
-    I --> S: Snapshot hoặc hash sai
-    I --> J: APPROVED
-    J --> K
-    K --> L
-    L --> M
-    R --> M
-    S --> M
-    M --> N
-    N --> D: Có
-    N --> O: Không
-    O --> P
-    P --> Q
-    Z --> [*]
-    Y --> [*]
-    Q --> [*]
+flowchart TD
+    S([Bắt đầu]) --> A["Execution Orchestrator đọc trạng thái Task"]
+    A --> D1{"Task đã kết thúc?"}
+    D1 -->|Có| B["Execution Orchestrator bỏ qua Task đã kết thúc"]
+    B --> E([Kết thúc])
+    D1 -->|Không| C["Execution Orchestrator cập nhật Task RUNNING và ghi EXECUTION_STARTED"]
+    C --> D2{"Còn Operation cần xử lý?"}
+    D2 -->|Không| T["Execution Orchestrator cập nhật trạng thái Task và ghi TASK_COMPLETED hoặc TASK_FAILED"]
+    T --> U["LangGraph chuyển kết quả sang node analyze"]
+    U --> E
+    D2 -->|Có| F["Execution Orchestrator lấy Operation theo display_order"]
+    F --> D3{"Operation đã kết thúc?"}
+    D3 -->|Có| D2
+    D3 -->|Không| D4{"Dependency đã thỏa mãn?"}
+    D4 -->|Không| G["Execution Orchestrator cập nhật Operation và Device Mapping SKIPPED"]
+    G --> D2
+    D4 -->|Có| H["Execution Orchestrator lấy các Device Mapping"]
+    H --> I["Approval Gate kiểm tra quyền thực thi của từng Mapping"]
+    I --> D5{"Mapping đủ điều kiện thực thi?"}
+    D5 -->|Có| J["MappingExecutor cập nhật Mapping RUNNING và tạo TaskExecution RUNNING"]
+    J --> K["Network Agent thực thi lệnh bằng NetworkTool"]
+    K --> L["MappingExecutor cập nhật Mapping và TaskExecution với kết quả, thời gian, output"]
+    L --> M["MappingExecutor lưu DeviceActionLog và ghi COMMAND_EXECUTED"]
+    M --> D6{"Còn Mapping cần kiểm tra?"}
+    D5 -->|Không| N["Approval Gate giữ hoặc cập nhật trạng thái Mapping theo Approval"]
+    N --> D6
+    D6 -->|Có| I
+    D6 -->|Không| O["Execution Orchestrator tổng hợp và cập nhật trạng thái Operation"]
+    O --> D7{"Operation đang WAITING_APPROVAL?"}
+    D7 -->|Có| P["Execution Orchestrator giữ Task RUNNING và ghi APPROVAL_REQUESTED"]
+    P --> U
+    D7 -->|Không| D2
 ```
 
 _Hình 3.6. Quy trình thực thi DAG, kiểm soát mapping và tổng hợp trạng thái._
@@ -1131,35 +1097,34 @@ Nếu evidence bắt buộc còn thiếu hoặc Analyst yêu cầu thêm dữ li
 Node `investigate` thực thi kế hoạch bổ sung rồi quay lại `analyze`. Vòng lặp dừng khi evidence hoàn chỉnh, root cause đã được xác nhận, không còn phép kiểm tra mới hoặc đạt `AGENT_MAX_INVESTIGATION_ROUNDS`. Khi dừng, hệ thống ghi Evidence Coverage, evidence còn thiếu và lý do dừng vào activity. Nếu LLM timeout hoặc structured output không hợp lệ sau retry, Analysis Orchestrator tạo phản hồi dự phòng, không tạo root cause giả và đánh dấu cần thêm dữ liệu.
 
 ```mermaid
-stateDiagram-v2
-    state "Thu thập bằng chứng ban đầu" as A
-    state "Analyst phân tích" as B
-    state "Đủ required evidence?" as C
-    state C <<choice>>
-    state "Causal Evidence Gate" as D
-    state "Root cause được xác nhận?" as E
-    state E <<choice>>
-    state "Finalize kết luận" as F
-    state "Ghi nhận suspected hoặc unknown" as G
-    state "Còn vòng điều tra?" as H
-    state H <<choice>>
-    state "Tạo Operation READ bổ sung" as I
-    state "Thu thập từ thiết bị hoặc peer" as J
-
-    [*] --> A
-    A --> B
-    B --> C
-    C --> D: Có
-    D --> E
-    E --> F: Có
-    E --> G: Không
-    C --> H: Không
-    H --> I: Có
+flowchart TD
+    S([Bắt đầu]) --> A["Analysis Orchestrator đọc Task và tính Evidence Coverage"]
+    A --> D1{"Task đang RUNNING?"}
+    D1 -->|Có| B["Analysis Orchestrator trả kết quả rỗng để chờ Approval"]
+    B --> E([Kết thúc])
+    D1 -->|Không| D2{"Task đã bị REJECTED?"}
+    D2 -->|Có| C["Analysis Orchestrator tạo kết luận từ chối và ghi ANALYSIS_COMPLETED"]
+    C --> Z["LangGraph chuyển AnalysisResult sang node finalize"]
+    Z --> E
+    D2 -->|Không| F["Analysis Orchestrator ghi ANALYSIS_STARTED"]
+    F --> G["Analyst Agent phân tích Execution Results và Diagnostic Evidence"]
+    G --> D3{"Có ứng viên nguyên nhân cần hậu kiểm?"}
+    D3 -->|Có| H["Causal Evidence Gate đối chiếu nguyên nhân với bằng chứng và topology"]
+    H --> I["Analysis Orchestrator cập nhật root_causes, suspected_causes và evidence_gaps"]
+    D3 -->|Không| J["Analysis Orchestrator tổng hợp AnalysisResult và lỗi thực thi"]
     I --> J
-    J --> B
-    H --> G: Không
-    G --> F
-    F --> [*]
+    J --> K["Analysis Orchestrator ghi ANALYSIS_COMPLETED và diagnosis_submission"]
+    K --> D4{"Cần điều tra thêm và còn lượt hợp lệ?"}
+    D4 -->|Không| Z
+    D4 -->|Có| L["Analysis Orchestrator tạo kế hoạch điều tra READ-only"]
+    L --> D5{"Có Operation READ bổ sung?"}
+    D5 -->|Không| M["LangGraph cập nhật evidence_stop_reason NO_ADDITIONAL_CHECKS"]
+    M --> A
+    D5 -->|Có| N["Execution Service cập nhật Task và lưu Operation, Dependency, Device Mapping điều tra"]
+    N --> O["Execution Orchestrator ghi EXECUTION_STARTED cho lượt điều tra"]
+    O --> P["Network Agent thực thi READ và lưu TaskExecution, DeviceActionLog"]
+    P --> Q["LangGraph cộng dồn Execution Results và cập nhật investigation_round"]
+    Q --> A
 ```
 
 _Hình 3.7. Quy trình chẩn đoán và thu thập bổ sung bằng chứng._
@@ -1175,67 +1140,47 @@ Sau mọi quyết định, backend khởi chạy `resume_after_approval` trong B
 Nếu Task thuộc Benchmark Run, việc resume chỉ hoàn tất Evaluation khi lượt chạy `entry_mode=approval` đã tạo Message `FINAL_RESPONSE`. Một phản hồi yêu cầu phê duyệt không được xem là kết quả benchmark cuối cùng.
 
 ```mermaid
-stateDiagram-v2
-    state "Approval Gate nhận mapping WRITE" as A
-    state "Đã có approval?" as B
-    state B <<choice>>
-    state "Tạo snapshot, SHA-256 hash và thời hạn" as C
-    state "Chuyển mapping sang WAITING_APPROVAL" as D
-    state "Ghi activity APPROVAL_REQUESTED" as E
-    state "Tạm dừng lượt workflow hiện tại" as F
-    state "Frontend hiển thị yêu cầu phê duyệt" as G
-    state "Trạng thái approval" as H
-    state H <<choice>>
-    state "Chuyển approval thành EXPIRED" as I
-    state "Đánh dấu mapping REJECTED" as J
-    state "Người dùng gửi quyết định" as K
-    state "Có permission Approve?" as L
-    state L <<choice>>
-    state "Từ chối yêu cầu API" as M
-    state "Lưu quyết định và người phê duyệt" as N
-    state "Ghi activity quyết định" as O
-    state "Khởi chạy workflow ở chế độ approval trong BackgroundTasks" as P
-    state "Tải lại Task và bắt đầu tại node execute" as Q
-    state "Tính lại hash từ mapping và commands" as R
-    state "Snapshot và hash còn khớp?" as S
-    state S <<choice>>
-    state "Đánh dấu mapping FAILED" as T
-    state "Cho phép Network Agent thực thi WRITE" as U
-    state "Lưu Execution, Device Action Log và trạng thái" as V
-    state "Tổng hợp lại trạng thái Operation và Task" as W
-    state "Tiếp tục workflow" as X
-
-    [*] --> A
-    A --> B
-    B --> C: Chưa có
-    C --> D
-    D --> E
-    E --> F
-    F --> G
-    B --> H: Đã có
-    H --> D: PENDING và còn hạn
-    H --> I: PENDING nhưng hết hạn
-    I --> J
-    H --> J: REJECTED hoặc EXPIRED
-    G --> K
-    K --> L
-    L --> M: Không
-    L --> N: Có
-    N --> O
-    O --> P
-    P --> Q
-    Q --> H
-    H --> R: APPROVED
-    R --> S
-    S --> T: Không
-    S --> U: Có
-    U --> V
-    J --> W
-    T --> W
-    V --> W
-    W --> X
-    M --> [*]
-    X --> [*]
+flowchart TD
+    S([Bắt đầu]) --> A["Approval Gate tra cứu Approval của Device Mapping WRITE"]
+    A --> D1{"Đã có Approval?"}
+    D1 -->|Không| B["Execution Service tạo Approval PENDING với Commands Snapshot, Hash và thời hạn"]
+    B --> C["Approval Gate cập nhật Mapping WAITING_APPROVAL"]
+    D1 -->|Có| D2{"Approval đang PENDING?"}
+    D2 -->|Có| D3{"Approval còn hạn?"}
+    D3 -->|Có| C
+    D3 -->|Không| D["Execution Service cập nhật Approval EXPIRED và Mapping REJECTED"]
+    D --> E([Kết thúc])
+    D2 -->|Không| D4{"Approval đã APPROVED?"}
+    D4 -->|Không| R["Approval Gate cập nhật Mapping REJECTED"]
+    R --> E
+    D4 -->|Có| D5{"Commands Snapshot và Request Hash khớp?"}
+    D5 -->|Không| T["Approval Gate cập nhật Mapping FAILED"]
+    T --> E
+    D5 -->|Có| U["Network Agent thực thi WRITE qua NetworkTool"]
+    U --> V["MappingExecutor cập nhật TaskExecution, Mapping và lưu DeviceActionLog"]
+    V --> W["Execution Orchestrator tổng hợp trạng thái Operation và Task"]
+    W --> E
+    C --> F["Execution Orchestrator ghi APPROVAL_REQUESTED và giữ Task RUNNING"]
+    F --> G["Analysis Orchestrator lưu Message APPROVAL_REQUEST"]
+    G --> H["Frontend hiển thị yêu cầu phê duyệt"]
+    H --> D6{"Người dùng đã gửi quyết định?"}
+    D6 -->|Không| D7{"Approval đã hết hạn?"}
+    D7 -->|Không| H
+    D7 -->|Có| I["Approval Timeout Worker cập nhật Approval và Task quá hạn"]
+    I --> E
+    D6 -->|Có| J["API kiểm tra token và quyền Task Management Approve"]
+    J --> D8{"Người dùng có quyền Approve?"}
+    D8 -->|Không| K["API từ chối yêu cầu quyết định"]
+    K --> E
+    D8 -->|Có| L["Execution Service kiểm tra hạn và cập nhật Approval với quyết định, người duyệt"]
+    L --> D9{"Quyết định hợp lệ và còn hạn?"}
+    D9 -->|Không| M["API trả lỗi Approval không hợp lệ hoặc hết hạn"]
+    M --> E
+    D9 -->|Có| N["Execution API ghi APPROVAL_APPROVED hoặc APPROVAL_REJECTED"]
+    N --> O["Workflow Job Service tạo Workflow Job APPROVAL trong PostgreSQL"]
+    O --> P["Workflow Worker nhận Workflow Job và tải lại Task"]
+    P --> Q["LangGraph tiếp tục từ START đến node execute"]
+    Q --> A
 ```
 
 _Hình 3.8. Activity Diagram của quy trình Approval Gate._
@@ -1249,31 +1194,25 @@ Hệ thống sử dụng nhiều nhóm bản ghi có mục đích khác nhau. `t
 Structured diagnosis được lưu trong activity `ANALYSIS_COMPLETED` trước khi evaluator đọc kết quả. Dữ liệu bao gồm `is_anomaly`, `root_causes`, `suspected_causes`, Evidence Coverage, lỗi thực thi và thông tin Causal Evidence Gate. Cách lưu này cho phép Benchmark Evaluator chấm submission do Agent tạo ra mà không phải suy diễn root cause từ văn bản phản hồi cuối và không làm rò rỉ Ground Truth vào quá trình chẩn đoán.
 
 ```mermaid
-stateDiagram-v2
-    state "Nhận Task và kết quả từ node analyze" as A
-    state "Có AnalysisResult?" as B
-    state B <<choice>>
-    state "Lưu Message APPROVAL_REQUEST" as C
-    state "Structured diagnosis đã được ghi trong ANALYSIS_COMPLETED" as H
-    state "Xác định stop reason của Evidence Gate" as D
-    state "Ghi EVIDENCE_COVERAGE_EVALUATED" as E
-    state "Định dạng AnalysisResult thành tiếng Việt" as F
-    state "Lưu Message FINAL_RESPONSE" as G
-    state "Ghi activity FINAL_RESPONSE_CREATED" as I
-    state "SSE phát sự kiện cuối và đóng stream" as J
-
-    [*] --> A
-    A --> B
-    B --> C: Không, Task đang chờ approval
-    C --> [*]
-    B --> H: Có
-    H --> D
-    D --> E
-    E --> F
-    F --> G
-    G --> I
-    I --> J
-    J --> [*]
+flowchart TD
+    S([Bắt đầu]) --> A["LangGraph chuyển Task và AnalysisResult đến node finalize"]
+    A --> D1{"Có AnalysisResult?"}
+    D1 -->|Không| B["Analysis Orchestrator lưu Message APPROVAL_REQUEST"]
+    B --> E([Kết thúc])
+    D1 -->|Có| D2{"Có Evidence Coverage?"}
+    D2 -->|Có| C["Analysis Orchestrator ghi EVIDENCE_COVERAGE_EVALUATED và lý do dừng"]
+    D2 -->|Không| D["Analysis Orchestrator định dạng AnalysisResult thành phản hồi"]
+    C --> D
+    D --> F["Conversation Service lưu Message FINAL_RESPONSE và structured_data nếu có"]
+    F --> G["Execution Service ghi FINAL_RESPONSE_CREATED liên kết Message và Task"]
+    G --> H["API SSE phát FINAL_RESPONSE_CREATED và đóng stream"]
+    H --> E
+    G --> D3{"Task thuộc Benchmark Run đang RUNNING?"}
+    D3 -->|Không| I["Workflow Worker hoàn tất Workflow Job"]
+    D3 -->|Có| J["Benchmark Run Service lưu Evaluation và Evaluation Metrics"]
+    J --> K["Benchmark Run Service cập nhật Benchmark Run COMPLETED, Evaluation ID và kết quả RCA"]
+    K --> I
+    I --> E
 ```
 
 _Hình 3.9. Quy trình tạo phản hồi cuối, lưu kết quả phân tích và kết thúc SSE._
