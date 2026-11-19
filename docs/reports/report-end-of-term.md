@@ -1527,6 +1527,20 @@ Planner Agent và Analyst Agent sử dụng LLM được cấu hình qua NVIDIA 
 
 Tên model được quản lý bằng biến môi trường và phải được ghi kèm metadata khi tái lập thực nghiệm. Các cohort trong báo cáo được chạy trên cùng pipeline ứng dụng, nhưng mã nguồn đã được cải tiến theo từng ngày logic như trình bày tại Mục 4.6.
 
+**Bảng 4.3a. Metadata cần đóng băng để tái lập các cohort**
+
+| Trường | Điều xác nhận được từ mã nguồn | Trạng thái của dữ liệu thực nghiệm lịch sử |
+| --- | --- | --- |
+| Tên model NVIDIA thực tế | Planner, Configuration và Analyst cùng đọc `settings.nvidia_model` / `NVIDIA_MODEL` bằng `ChatNVIDIA`; `.env.example` chỉ có giá trị placeholder | **Chưa được xác nhận** trong metadata Run hoặc repository; cần lấy từ manifest/log của thời điểm chạy |
+| Tham số inference | `temperature=0`, `enable_thinking=False`, `parallel_tool_calls=False` trong `src/app/agents/dependencies.py` | Là cấu hình của code đang đối chiếu; không chứng minh các cohort lịch sử có cùng cấu hình |
+| Prompt version | Prompt tại `planner/prompts.py`, `configuration/prompts.py`, `analyst/prompts.py` | Chưa có prompt hash hoặc prompt version gắn với từng Run; cần lấy SHA của từng file theo commit chạy |
+| Git commit theo cohort | Commit đối chiếu báo cáo: backend `5e9f0815a0`, frontend `d96e94f197` | **Không phải** commit đã được xác nhận chạy các cohort ngày logic 27/10–02/11; cần đối chiếu lịch sử triển khai |
+| Evaluator version | Báo cáo có v4/v5; `build_benchmark_evaluation` hiện lưu `db-benchmark-v5` | Ghi evaluator version theo từng Run, không gộp rubric khác nhau để suy luận tác động |
+| Network backend | `NETWORK_BACKEND=netmiko` là mặc định, Nornir là lựa chọn khác | Adapter dùng trong từng cohort, phiên bản Cisco IOS/image và cấu hình node chưa được lưu kèm Run |
+| Môi trường | Docker Compose, FastAPI, LangGraph, PostgreSQL, GNS3 | CPU/RAM/OS, phiên bản Python, dependency lock, GNS3/IOS và điều kiện tải thực tế chưa được đóng băng |
+
+Bảng 4.3a phân biệt **giá trị code có thể kiểm tra** với **giá trị đã được ghi nhận thực sự khi thực nghiệm**. Không điền tên model, prompt SHA, commit lịch sử hoặc cấu hình phần cứng bằng suy đoán. Trước khi tái công bố số liệu, cần tạo manifest cho mỗi cohort gồm thời điểm chạy thật, ngày logic, model ID, prompt SHA, backend commit, evaluator, topology/image, adapter, hardware và các tham số suy luận. Manifest không chứa khóa API hoặc credential.
+
 ## 4.3. Thiết kế kịch bản và quy trình thực nghiệm
 
 ### 4.3.1. Cấu trúc Benchmark Scenario
@@ -1596,6 +1610,8 @@ Các scenario được chạy tuần tự; giữa hai lượt có khoảng coold
 
 Các cohort được gắn ngày logic bằng cơ chế backfill. Ngày logic phục vụ việc so sánh và hiển thị thống kê; nó không phải thời điểm commit hoặc thời gian đồng hồ thực của tiến trình. Khi diễn giải kết quả phải đối chiếu đồng thời ngày logic, evaluator version và thay đổi mã nguồn tương ứng.
 
+**Giới hạn ngữ cảnh đầu vào.** Một số `initial_message` trong seed nêu sẵn thiết bị, interface hoặc giao thức nghi vấn (chẳng hạn yêu cầu chẩn đoán MPLS/LDP tại một interface). Agent không được cung cấp trực tiếp tập Ground Truth `(resource_id, fault_type)`, nhưng gợi ý làm hẹp không gian tìm kiếm. Vì vậy kết quả hiện tại phản ánh **chẩn đoán có ngữ cảnh ban đầu**, chưa thể hiện khả năng tự phát hiện/định vị sự cố hoàn toàn không gợi ý. Đánh giá tiếp theo cần thêm cặp prompt có gợi ý và không gợi ý trên cùng trạng thái lỗi, Ground Truth và evaluator, tránh gộp hai mức khó vào cùng một tỷ lệ mà không phân nhóm.
+
 ## 4.4. Tiêu chí và phương pháp đánh giá
 
 ### 4.4.1. Biểu diễn kết luận có cấu trúc
@@ -1654,7 +1670,7 @@ Interaction Turns là số lần gọi công cụ có bản ghi trong `task_exec
 
 ### 4.5.1. Kết quả tổng hợp theo cohort
 
-Bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026 tạo ra tổng cộng 224 Benchmark Run. Mỗi cohort gồm cùng 32 scenario active. Bảng 4.5 được tổng hợp trực tiếp từ `benchmark_runs`, `task_evaluations` và `task_evaluation_metrics`.
+Bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026 tạo ra tổng cộng 224 Benchmark Run. Mỗi cohort gồm cùng 32 scenario active. Bảng 4.5 thể hiện số liệu đã tổng hợp từ `benchmark_runs`, `task_evaluations` và `task_evaluation_metrics` trên môi trường thực nghiệm của nhóm. Chưa có bản xuất kết quả thô và script tổng hợp được lưu kèm repo để người đọc kiểm chứng độc lập; không xem bảng này là kết quả chạy lại trên commit đối chiếu. `PASS/Run` lấy toàn bộ 32 Run làm mẫu số, còn `PASS/được chấm` chỉ lấy Evaluation có GOAL hợp lệ; cả hai đều cần phân biệt với TSR API khi có lỗi thực thi chưa chấm.
 
 | Ngày logic | Run | Được chấm | GOAL PASS | PASS/Run | PASS/được chấm | RCA F1 TB | Localization F1 TB | Fault Type F1 TB | Detection TB | Latency TB (s) | Trung vị (s) | Turns TB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1666,13 +1682,13 @@ Bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026 tạo ra tổ
 | 01/11 | 32 | 32 | 29 | 90,63% | 90,63% | 0,9063 | 0,9063 | 0,9063 | 0,9375 | 42,44 | 35,49 | 4,38 |
 | 02/11 | 32 | 32 | **31** | **96,88%** | **96,88%** | **0,9688** | **0,9688** | **0,9688** | **0,9688** | 35,95 | 32,82 | 4,69 |
 
-Kết quả cho thấy tỷ lệ GOAL PASS tăng từ 11/32 ở baseline ngày 27/10 lên 31/32 ngày 02/11, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. RCA F1 trung bình tăng từ 0,4444 lên 0,9688. Đồng thời, Interaction Turns trung bình giảm từ 6,40 xuống 4,69. Những thay đổi này cho thấy pipeline sau cải tiến thu thập và sử dụng bằng chứng hiệu quả hơn, dù chưa đủ để kết luận mức tăng hoàn toàn do một thay đổi riêng lẻ.
+Kết quả cho thấy tỷ lệ GOAL PASS tăng từ 11/32 ở baseline ngày 27/10 lên 31/32 ngày 02/11, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. RCA F1 trung bình tăng từ 0,4444 lên 0,9688. Đồng thời, Interaction Turns trung bình giảm từ 6,40 xuống 4,69. Xu hướng đồng thời về GOAL PASS, RCA F1 và Interaction Turns phù hợp với giả thuyết pipeline sau cải tiến xử lý bằng chứng tốt hơn, nhưng đây chỉ là **quan sát theo cohort**, không xác lập quan hệ nhân quả vì nhiều thành phần và cả evaluator đã thay đổi giữa các cohort.
 
 ### 4.5.2. Trả lời RQ1 – Khả năng hoàn thành nhiệm vụ
 
 Ở cohort ngày 02/11, toàn bộ 32 Run đều tạo được Evaluation; 31 Run đạt GOAL PASS và một Run GOAL FAIL. TSR của cohort là 96,88%. So với ngày 27/10, số Run được chấm tăng từ 30 lên 32 và số GOAL PASS tăng từ 11 lên 31.
 
-Kết quả này chứng minh hệ thống có thể hoàn thành pipeline end-to-end trên phần lớn scenario thuộc tập thử nghiệm: tạo lỗi, thu thập dữ liệu, kết luận có cấu trúc, chấm điểm và cleanup. Tuy nhiên, TSR này chỉ áp dụng cho cohort, topology và evaluator đã nêu; không phải tỷ lệ thành công chung cho mọi nhiệm vụ quản trị mạng.
+Kết quả này là bằng chứng về tính khả thi của pipeline end-to-end trên phần lớn scenario chẩn đoán có ngữ cảnh trong tập thử nghiệm: tạo lỗi, thu thập dữ liệu, kết luận có cấu trúc, chấm điểm và cleanup. Tuy nhiên, TSR này chỉ áp dụng cho cohort, topology và evaluator đã nêu; không phải tỷ lệ thành công chung cho mọi nhiệm vụ quản trị mạng.
 
 ### 4.5.3. Trả lời RQ2 – Chất lượng chẩn đoán
 
@@ -1690,7 +1706,7 @@ Evidence Gate giúp ngăn finalize khi còn thiếu loại bằng chứng bắt 
 
 Active Latency trung bình thấp nhất được ghi nhận ngày 30/10 là 27,44 giây; trung vị thấp nhất ngày 31/10 là 24,37 giây. Khi investigation được thực thi đầy đủ vào ngày 01/11, RCA F1 tăng nhưng latency trung bình tăng lên 42,44 giây. Ngày 02/11, latency giảm còn 35,95 giây trong khi RCA F1 tiếp tục tăng lên 0,9688.
 
-Kết quả phản ánh đánh đổi giữa lượng bằng chứng và thời gian xử lý. Việc bổ sung kiểm tra có mục tiêu làm tăng một số lượt tool, nhưng có thể giảm các lệnh dư thừa và hạn chế vòng điều tra không cần thiết. Interaction Turns ngày 02/11 là 4,69, thấp hơn baseline 6,40 nhưng cao hơn 4,19 của ngày 31/10.
+Kết quả gợi ý một sự đánh đổi giữa lượng bằng chứng và thời gian xử lý trên các cohort đã ghi nhận; muốn kết luận cơ chế nào tạo ra đánh đổi cần chạy ablation trong cùng điều kiện. Việc bổ sung kiểm tra có mục tiêu làm tăng một số lượt tool, nhưng có thể giảm các lệnh dư thừa và hạn chế vòng điều tra không cần thiết. Interaction Turns ngày 02/11 là 4,69, thấp hơn baseline 6,40 nhưng cao hơn 4,19 của ngày 31/10.
 
 ## 4.6. Phân tích quá trình cải tiến
 
@@ -1708,6 +1724,20 @@ Bảng 4.6 tóm tắt thay đổi chính gắn với từng cohort. Ngày trong 
 
 Xu hướng tăng không hoàn toàn đơn điệu ở mọi metric. Ngày 29/10, RCA F1 giảm nhẹ so với 28/10 do thay evaluator và taxonomy. Ngày 01/11, độ chính xác tăng mạnh nhưng latency cũng tăng. Vì nhiều thay đổi được triển khai giữa hai cohort, kết quả không cho phép tách riêng mức đóng góp của từng thay đổi. Thiết kế ablation test là cần thiết nếu muốn xác định tác động độc lập của playbook, Evidence Gate hoặc matcher.
 
+### 4.6.1. Thiết kế ablation để kiểm chứng đóng góp từng cơ chế
+
+Bảng 4.6a là **giao thức thực nghiệm đề xuất, chưa phải kết quả ablation đã được thực thi**. Mục tiêu là đo đóng góp độc lập của cơ chế điều tra và hậu kiểm bằng chứng, thay vì quy nguyên nhân từ các cohort thay đổi nhiều yếu tố.
+
+| Biến thể | Chỉ thay đổi so với cấu hình đầy đủ | Kết quả cần đo |
+| --- | --- | --- |
+| A0 — Full | Giữ investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và protocol matcher | Baseline kiểm soát |
+| A1 — No investigation | Tắt vòng READ bổ sung | GOAL, RCA F1, Interaction Turns, Latency |
+| A2 — No coverage gate | Tắt quyết định điều tra dựa trên Evidence Coverage | GOAL, RCA F1, Coverage |
+| A3 — No causal gate | Không dùng hậu kiểm nhân quả trước khi chốt RCA | Precision, False Positive, GOAL |
+| A4 — No matcher | Không dùng matcher MPLS/OSPF chuyên biệt | F1 theo nhóm lỗi, Latency |
+
+Các biến thể **chưa có feature flag tương ứng trong phiên bản code hiện tại**; khi thực hiện phải tạo cấu hình/nhánh thực nghiệm có thể tái lập và kiểm tra rằng chỉ một thành phần khác biệt. Giữ cố định scenario IDs và snapshot, topology, model, prompt, evaluator, tham số timeout và nền commit, chạy tối thiểu 3–5 lượt cho mỗi scenario/biến thể theo thứ tự hoán đổi. Mỗi lượt cần precondition, injection, fault verification, cleanup hậu kiểm. Công bố số Run hợp lệ, lỗi setup, GOAL Pass Rate, TSR API, macro RCA F1, latency/turns, độ lệch chuẩn và khoảng tin cậy. Cho đến khi có các run này, RQ3 chỉ được trả lời ở mức **tương quan mô tả**, không được trình bày như kết quả ablation.
+
 ## 4.7. Đánh giá cấu hình, khắc phục và an toàn
 
 ### 4.7.1. Khả năng cấu hình và khắc phục
@@ -1721,6 +1751,19 @@ Cleanup của Benchmark Engine chỉ phục hồi lỗi do kịch bản tiêm v�
 Các cơ chế an toàn đã triển khai gồm RBAC, session authentication, mã hóa credential, giới hạn thiết bị trong inventory, validation interface, phân tách Planner và Configuration Agent, Approval Gate cho WRITE, command hash, thời hạn phê duyệt, Activity Log, Device Action Log và Audit Log.
 
 Đây là bằng chứng về thiết kế và kiểm thử chức năng, chưa phải Safety Score thực nghiệm. Metric `SAFETY` hiện ở trạng thái `NOT_APPLICABLE` vì chưa có bộ scenario đối kháng và scorer độc lập để xác định tỷ lệ lệnh nguy hiểm bị chặn. Do đó báo cáo không công bố một tỷ lệ an toàn định lượng.
+
+**Bảng 4.6b. Ma trận kiểm thử Approval Gate đối với Operation WRITE**
+
+| Điều kiện | Unit test hiện có/được bổ sung | Kỳ vọng |
+| --- | --- | --- |
+| Chưa có approval | `test_write_mapping_waits_without_approved_request` | Không gọi NetworkTool, yêu cầu phê duyệt |
+| APPROVED, snapshot và hash đúng | `test_write_mapping_runs_only_when_snapshot_and_hash_match` | Chỉ thực thi command đã duyệt |
+| REJECTED hoặc EXPIRED | `test_write_mapping_denied_or_expired_approval_never_reaches_network_tool` | Chặn WRITE, mapping REJECTED |
+| Commands khác snapshot | `test_write_mapping_rejects_changed_commands_after_approval` | Chặn WRITE, mapping FAILED |
+| Hash bị sửa nhưng commands giữ nguyên | `test_write_mapping_rejects_tampered_hash_with_unchanged_commands` | Chặn WRITE, mapping FAILED |
+| Quyết định đến sau hạn | `test_expired_approval_cannot_be_decided` | Không cho quyết định trên approval đã hết hạn |
+
+Các bài test thuộc `tests/agents/test_execution_orchestrator.py` và `tests/domains/test_execution_activity_approval.py`. Bảng mô tả các **trường hợp kiểm thử được viết trong mã nguồn**, không phải kết quả chạy PASS trên commit báo cáo. Khi nộp cần kèm output `pytest` thực chạy, kiểm thử tích hợp phân quyền/HTTP và tập thử nghiệm hành vi nguy hiểm độc lập. Không dùng các unit test này để suy ra Safety Rate hoặc Remediation Success Rate định lượng.
 
 ### 4.7.3. Cleanup và tính toàn vẹn môi trường
 
@@ -1740,10 +1783,10 @@ Sự cải thiện từ 34,38% PASS/Run lên 96,88% gắn với việc chuyển 
 
 Các hạn chế chính gồm:
 
-- Mỗi scenario chỉ được chạy một lần trong mỗi cohort; chưa có trung bình và độ lệch chuẩn trên nhiều lần lặp cùng phiên bản.
+- Mỗi scenario chỉ được chạy một lần trong mỗi cohort; chưa có trung bình và độ lệch chuẩn trên nhiều lần lặp cùng phiên bản, chưa chạy các biến thể ablation A0–A4.
 - Các cohort sử dụng nhiều phiên bản evaluator và mã nguồn khác nhau, nên không thể xem đây là thí nghiệm kiểm soát chỉ thay đổi một biến.
 - Toàn bộ scenario đều chứa sự cố; chưa có negative case để đo false positive trên mạng khỏe.
-- Tập thử nghiệm chỉ dùng một topology và một họ thiết bị Cisco IOS.
+- Tập thử nghiệm chỉ dùng một topology và một họ thiết bị Cisco IOS; một số `initial_message` cung cấp sẵn thiết bị/interface hoặc giao thức nghi vấn nên kết quả là chẩn đoán có ngữ cảnh, không phải zero-hint discovery.
 - Ground Truth do người xây dựng scenario định nghĩa và cần được chuyên gia mạng rà soát độc lập.
 - LLM và dịch vụ mạng bên ngoài có thể gây biến thiên về kết quả và latency.
 - Metadata phần cứng, model version, prompt version và commit SHA chưa được đóng băng đầy đủ trong từng Run.
@@ -1849,7 +1892,7 @@ Thực nghiệm gồm bảy cohort đầy đủ từ ngày logic 27/10 đến 02
 
 **Đối với RQ2 – chất lượng chẩn đoán:** RCA F1, Localization F1 và Fault Type F1 trung bình ngày 02/11 đều đạt 0,9688; Detection trung bình đạt 0,9688. Điều này cho thấy 31 scenario được xác định đúng cả tài nguyên và loại lỗi. Scenario còn thất bại thuộc nhóm `wrong_ip_address`, cho thấy việc suy luận lỗi địa chỉ giữa hai đầu liên kết vẫn cần bằng chứng topology và subnet chặt chẽ hơn.
 
-**Đối với RQ3 – tác động của cơ chế bằng chứng:** kết quả tăng rõ sau khi bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và các matcher chuyên biệt cho MPLS/OSPF. Các cơ chế này giúp Agent không finalize quá sớm và giảm kết luận không có bằng chứng. Tuy nhiên, coverage đầy đủ không bảo đảm suy luận đúng nội dung; Evidence Gate là điều kiện kiểm soát dữ liệu đầu vào chứ không thay thế khả năng RCA của Analyst.
+**Đối với RQ3 – tác động của cơ chế bằng chứng:** kết quả tăng theo các cohort đồng thời với quá trình bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và matcher MPLS/OSPF. Các cơ chế này được thiết kế để ngăn finalize khi thiếu bằng chứng, nhưng dữ liệu cohort hiện chưa đo được đóng góp riêng của từng thành phần. Tuy nhiên, coverage đầy đủ không bảo đảm suy luận đúng nội dung; Evidence Gate là điều kiện kiểm soát dữ liệu đầu vào chứ không thay thế khả năng RCA của Analyst.
 
 **Đối với RQ4 – chi phí thực thi:** active latency trung bình ngày 02/11 là 35,95 giây, trung vị 32,82 giây và Interaction Turns trung bình 4,69. So với baseline 6,40 tool calls, số lượt tương tác giảm dù chất lượng chẩn đoán tăng. Kết quả cũng cho thấy đánh đổi giữa độ chính xác và thời gian: khi investigation được thực thi đầy đủ ngày 01/11, latency tăng do hệ thống thu thập thêm bằng chứng.
 
@@ -1959,9 +2002,9 @@ Các thực nghiệm tiếp theo cần sử dụng nhiều topology, nhiều ven
 
 Hệ thống không chỉ dừng ở giao diện hội thoại mà còn xây dựng các domain nghiệp vụ cho Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Dữ liệu được lưu có cấu trúc cho phép truy vết từ yêu cầu đến kết quả, trong khi Benchmark Engine cung cấp quy trình tiêm lỗi, xác minh, đánh giá và cleanup trên topology GNS3.
 
-Kết quả thực nghiệm tốt nhất đạt 31/32 GOAL PASS, tương đương 96,88%, với RCA F1 trung bình 0,9688 trên cohort ngày 02/11/2026. So với baseline, kết quả cho thấy playbook, investigation loop và Evidence Gate có vai trò tích cực trong việc nâng cao chất lượng chẩn đoán. Tuy nhiên, do số lần lặp, phạm vi topology và điều kiện đánh giá còn giới hạn, kết quả chỉ chứng minh tính khả thi và hiệu quả trong môi trường thử nghiệm của đề tài.
+Kết quả thực nghiệm tốt nhất đạt 31/32 GOAL PASS, tương đương 96,88%, với RCA F1 trung bình 0,9688 trên cohort ngày 02/11/2026. So với baseline, GOAL PASS tăng cùng thời điểm bổ sung playbook, investigation loop và Evidence Gate; chưa có ablation giữ các yếu tố khác cố định để xác nhận quan hệ nhân quả. Tuy nhiên, do số lần lặp, phạm vi topology và điều kiện đánh giá còn giới hạn, kết quả chỉ chứng minh tính khả thi và hiệu quả trong môi trường thử nghiệm của đề tài.
 
-Nhìn chung, đề tài đã đạt mục tiêu xây dựng nguyên mẫu Multi-Agent hỗ trợ cấu hình và xử lý sự cố mạng có kiểm soát, có khả năng giải thích và có cơ chế đánh giá. Kết quả tạo nền tảng cho các nghiên cứu tiếp theo về closed-loop remediation, quản trị mạng dựa trên bằng chứng và triển khai AI Agent an toàn trong môi trường mạng quy mô lớn hơn.
+Nhìn chung, đề tài xây dựng được nguyên mẫu Multi-Agent hỗ trợ cấu hình và chẩn đoán sự cố mạng có kiểm soát, có cơ chế đánh giá; kết quả được xác nhận trong phạm vi các kịch bản chẩn đoán có ngữ cảnh, chưa chứng minh closed-loop remediation hoặc Safety Rate định lượng. Kết quả tạo nền tảng cho các nghiên cứu tiếp theo về closed-loop remediation, quản trị mạng dựa trên bằng chứng và triển khai AI Agent an toàn trong môi trường mạng quy mô lớn hơn.
 
 ---
 
@@ -2078,4 +2121,4 @@ Trình tự này cho phép đối chiếu dự đoán với nhãn kịch bản v
 
 ---
 
-_Ngày đối chiếu đề cương, mã nguồn và bằng chứng nhóm cung cấp: 03/11/2026._
+_Các bằng chứng kiểm thử cụ thể của Phụ lục C được nhóm cung cấp ngày 03/11/2026; mã nguồn `develop` được đối chiếu bổ sung tại commit ngày 18–19/11/2026 như phần đầu báo cáo. Chưa chạy lại toàn bộ benchmark và test suite cho những commit mới._
