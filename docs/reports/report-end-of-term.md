@@ -2057,38 +2057,24 @@ Nhìn chung, đề tài xây dựng được nguyên mẫu Multi-Agent hỗ tr�
 
 # PHỤ LỤC A. BẢNG ĐỐI CHIẾU MÃ NGUỒN ĐÃ TRIỂN KHAI
 
-Bảng dưới đây đối chiếu các nhận định về kiến trúc, điều phối và đánh giá với mã nguồn triển khai. Các đường dẫn không có tiền tố repository thuộc backend; đường dẫn ghi **Frontend** thuộc repository `network-multi-agent-system-frontend`. Đối chiếu áp dụng cho nhánh `feature/align-research-report-and-benchmark-tsr` của hai repository, được tạo từ `develop` ngày 19/11/2026.
-
-| Thành phần | File/đường dẫn | Vai trò xác minh |
-| --- | --- | --- |
-| Kiến trúc LangGraph | `src/app/agents/workflow.py` | Graph xử lý Message, Approval, Plan, Execute, Analyze, Investigation và Finalize |
-| Workflow Worker | `src/app/domains/workflow_job/worker.py` | Worker riêng nhận Workflow Job, thực thi workflow và xử lý retry |
-| Dịch vụ hàng đợi Workflow | `src/app/domains/workflow_job/` | Quản lý trạng thái job bền vững bằng PostgreSQL, hỗ trợ claim và phục hồi |
-| API enqueue Message | `src/app/domains/conversation/routers/conversation.py` | Lưu Conversation/Message và enqueue job; không chạy LangGraph trực tiếp trong request HTTP |
-| API enqueue Approval | `src/app/domains/execution/routers/execution.py` | Ghi quyết định Approval và enqueue job tiếp tục workflow |
-| Triển khai Worker | `docker-compose.yml` | Khai báo dịch vụ `workflow-worker` bên cạnh API và PostgreSQL |
-| Planner Agent | `src/app/agents/planner/` | Sinh và kiểm tra kế hoạch thực thi |
-| Execution Orchestrator và Approval Gate | `src/app/agents/orchestrator/execution.py`, `src/app/agents/orchestrator/execution_runtime/approval.py` | Kiểm tra phụ thuộc Operation, duyệt WRITE, Commands Snapshot và Request Hash |
-| Network Agent / NetworkTool | `src/app/agents/network/`, `src/app/tools/network/` | Thực thi lệnh thiết bị bằng Netmiko/Nornir; tách công cụ mạng khỏi LLM |
-| Analyst Agent | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải bằng chứng và kết luận RCA có cấu trúc |
-| Identity/RBAC | `src/app/domains/identity/` | User, Session, Token, Role và Permission |
-| Inventory | `src/app/domains/inventory/` | Device, Credential và danh mục thiết bị |
-| Conversation | `src/app/domains/conversation/` | Conversation, Message và lịch sử hội thoại |
-| Execution và Task Activity | `src/app/domains/execution/` | Task, Operation, Approval, Activity, Device Action Log và SSE |
-| Audit | `src/app/domains/audit/` | Audit Log và truy vấn theo bộ lọc |
-| Benchmark | `src/app/domains/benchmark/` | Scenario, Run, injection, verification và cleanup |
-| RCA scorer | `src/app/domains/benchmark/utils/structured_rca.py` | So khớp cặp resource–fault type, tính Precision/Recall/F1 |
-| TSR API | `src/app/domains/benchmark/utils/summary.py` | Phân loại Run thành passed, failed, in_progress, not_started, setup_failed, unscored; tính mẫu số TSR |
-| Benchmark Run và Evaluation | `src/app/domains/benchmark/services/benchmark_run.py`, `src/app/domains/evaluation/` | Liên kết Run–Evaluation; `evaluation_result` của Run lưu RCA, không thay thế kết quả GOAL |
-| Active Latency | `src/app/domains/benchmark/utils/active_runtime.py` | Tính thời gian xử lý loại trừ khoảng chờ phê duyệt |
-| Dashboard TSR — Frontend | `src/features/dashboard/hooks/use-dashboard-data.ts` | Sử dụng summary API cho toàn lịch sử; xử lý bộ lọc ngày |
-| Phân loại TSR — Frontend | `src/features/dashboard/utils/benchmark-tsr.util.ts` | Sử dụng `Evaluation.results.GOAL` và cùng quy tắc phân loại Run với backend |
-| Kiểm thử TSR — Frontend | `tests/benchmark-tsr.test.mjs` | Các trường hợp RCA khác GOAL, lỗi thực thi, lỗi setup và mẫu số rỗng |
-| Kiểm thử Approval Gate | `tests/agents/test_execution_orchestrator.py`, `tests/domains/test_execution_activity_approval.py` | Trường hợp WRITE chờ duyệt, được duyệt, bị từ chối/hết hạn hoặc Commands Snapshot/Hash sai |
-| Migration | `migrations/versions/`, `scripts/migrate.py` | Kiểm soát phiên bản lược đồ cơ sở dữ liệu |
-| Các giao diện Frontend | `src/features/` (Frontend) | Chat, Task, Devices, Benchmark, Evaluation và các chức năng quản trị |
-
-**Phạm vi xác minh:** bảng này dựa trên đối chiếu mã nguồn và đường đi thực thi, không đồng nghĩa với việc đã chạy kiểm thử tích hợp hoặc benchmark mới. Phép đo, kết quả test và thông tin cấu hình thực nghiệm theo từng cohort cần được xác nhận riêng trong Chương 4 và Phụ lục C.
+| Thành phần             | File/đường dẫn                                                       | Vai trò xác minh                                 |
+| ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
+| LangGraph              | `src/app/agents/workflow.py`                                         | Graph thống nhất với entry route theo state      |
+| Planner Agent          | `src/app/agents/planner/`                                            | Sinh và validate execution plan                  |
+| Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/`     | Điều phối Task/Operation/Approval                |
+| Network Agent          | `src/app/agents/network/`, `src/app/tools/network/`                  | Kết nối và thực thi qua Netmiko/Nornir           |
+| Analyst Agent          | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải kết quả, ghi diagnosis_submission      |
+| Identity/RBAC          | `src/app/domains/identity/`                                          | User, session, token, roles/permissions          |
+| Inventory              | `src/app/domains/inventory/`                                         | Brand, category, device, credential/provider     |
+| Conversation           | `src/app/domains/conversation/`                                      | Message, conversation, title                     |
+| Execution              | `src/app/domains/execution/`                                         | Task, dependency, approval, activity, action log |
+| Audit                  | `src/app/domains/audit/`                                             | Audit Log và bộ lọc                              |
+| Benchmark              | `src/app/domains/benchmark/`                                         | Scenario/Run, injection, verification, cleanup   |
+| RCA scorer             | `src/app/domains/benchmark/utils/structured_rca.py`                  | Tính precision, recall, F1 theo NIKA 0.2         |
+| Evaluation             | `src/app/domains/evaluation/`                                        | Metric, result/evidence và API lịch sử           |
+| TSR/Latency            | `src/app/domains/benchmark/utils/summary.py`, `active_runtime.py`    | Tổng hợp run và thời gian workflow               |
+| Migration              | `migrations/versions/`, `scripts/migrate.py`                         | Kiểm soát schema theo version                    |
+| Frontend               | Repository `network-multi-agent-system-frontend/src/features/`       | UI Chat, Tasks, Devices, Benchmark, Evaluation   |
 
 # PHỤ LỤC B. API VÀ QUY TRÌNH TRUY VẾT
 
