@@ -931,52 +931,54 @@ Các sơ đồ hoạt động trong các mục 3.6.2–3.6.6 sử dụng hình c
 
 ### 3.6.1. Quy trình tiếp nhận và phân tích yêu cầu
 
-Quy trình bắt đầu khi người dùng đã được xác thực gửi một yêu cầu ngôn ngữ tự nhiên từ giao diện Chat. Với yêu cầu đầu tiên, Conversation Service tạo `Conversation` và lưu `Message` loại `USER_REQUEST` trong một transaction ngắn. Với hội thoại đã tồn tại, Service kiểm tra Conversation rồi lưu Message mới. Message phải được ghi thành công trước khi kích hoạt AI workflow để Task luôn có `source_message_id` hợp lệ và lịch sử yêu cầu vẫn được bảo toàn nếu LLM hoặc thiết bị mạng phát sinh lỗi.
+Khi người dùng gửi yêu cầu từ Web Application, FastAPI kiểm tra thông tin xác thực và quyền truy cập, sau đó chuyển yêu cầu đến Conversation Service. Nếu chưa có hội thoại, hệ thống tạo `Conversation` và lưu `Message` loại `USER_REQUEST`; nếu hội thoại đã tồn tại, hệ thống kiểm tra hội thoại và lưu Message mới. Thông tin này được ghi vào PostgreSQL trước khi xử lý bằng AI để bảo toàn lịch sử và liên kết yêu cầu với Task phát sinh sau đó.
 
-API trả Message đã lưu cho frontend ngay sau bước ghi dữ liệu, còn `NetworkAutomationWorkflow.run_message` được đưa vào `BackgroundTasks`. Cách tổ chức này tách thời gian phản hồi HTTP khỏi thời gian Planner, thiết bị mạng và Analyst xử lý. Chỉ Message do người dùng gửi mới kích hoạt workflow; Message của Agent hoặc System chỉ được lưu làm lịch sử và không tạo Task mới, qua đó ngăn vòng lặp hội thoại ngoài ý muốn. Đối với Message đầu tiên, tiêu đề Conversation được sinh sau workflow để tránh gọi đồng thời hai yêu cầu LLM trên cùng một lượt xử lý.
+Sau khi lưu Message, API tạo một `Workflow Job` loại `MESSAGE` trong PostgreSQL rồi trả dữ liệu Message cho frontend mà không chờ LangGraph hoàn thành. Workflow Worker nhận job, đọc lại Conversation và Message để khởi chạy LangGraph. Với yêu cầu mới, workflow kiểm tra khả năng truy cập GNS3, sau đó chuyển sang lập kế hoạch. Planning Orchestrator tạo Task và ghi Task Activity thông qua Execution Service; các bước cấu hình, thực thi và phân tích tiếp theo được điều phối theo kết quả của kế hoạch. Khi workflow kết thúc, Worker cập nhật trạng thái job. Message không phải của người dùng không tạo job xử lý AI mới.
 
-Sau khi gửi Message, frontend mở kết nối SSE theo `source_message_id`. Backend liên kết Message với Task khi Task được tạo, phát lại các `TaskActivityEvent` có sequence lớn hơn cursor của client và tiếp tục gửi sự kiện mới. Cơ chế `Last-Event-ID` hoặc `after_sequence` cho phép tiếp tục từ vị trí đã nhận khi kết nối lại. Frontend tải lại dữ liệu hội thoại sau những activity cần thiết; nếu SSE lỗi liên tiếp, client chuyển sang polling dự phòng. SSE chỉ truyền dấu vết tiến trình đã lưu, không phải nguồn dữ liệu chuẩn thay thế PostgreSQL.
-
-Trong graph xử lý Message mới, node `check_gns3` kiểm tra khả năng truy cập GNS3 Server trước khi tạo kế hoạch. Node `plan` sau đó yêu cầu Planning Orchestrator tạo Task, ghi các activity `MESSAGE_RECEIVED` và `TASK_CREATED`, lấy inventory cùng topology, rồi gọi Planner Agent. Nếu một lỗi xuất hiện trong giai đoạn lập kế hoạch hoặc validation, Task được chuyển sang `FAILED`, activity chứa giai đoạn và thông báo lỗi được lưu để frontend có thể hiển thị nguyên nhân thay vì giữ tiến trình ở trạng thái đang xử lý.
+Song song với quá trình thực thi, frontend mở kết nối Server-Sent Events (SSE) theo `source_message_id`. API đọc các Task Activity đã lưu theo sequence và gửi sự kiện mới tới frontend; khi kết nối lại, frontend có thể cung cấp `Last-Event-ID` hoặc `after_sequence` để tiếp tục nhận sự kiện. Frontend tải lại dữ liệu hội thoại khi cần và sử dụng polling dự phòng khi SSE gặp lỗi liên tiếp. **Hình 3.4** minh họa tương tác tổng quát giữa giao diện, API, dịch vụ nghiệp vụ, PostgreSQL, Workflow Worker và LangGraph; nội dung chi tiết của từng giai đoạn được trình bày trong các mục tiếp theo.
 
 ```mermaid
 sequenceDiagram
-    actor User as Người dùng
-    participant FE as Frontend
-    participant API as Conversation API
-    participant CS as Conversation Service
-    participant WF as LangGraph Workflow
-    participant PO as Planning Orchestrator
-    participant ES as Execution Service
-    participant SSE as SSE Endpoint
+    autonumber
+    actor U as Người dùng
+    participant FE as Web Application
+    participant API as FastAPI
+    participant DS as Domain Services
     participant DB as PostgreSQL
+    participant WK as Workflow Worker
+    participant LG as LangGraph
 
-    User->>FE: Gửi yêu cầu ngôn ngữ tự nhiên
-    FE->>API: POST Conversation/Message
-    API->>CS: Tạo Conversation và lưu USER_REQUEST
-    CS->>DB: Ghi dữ liệu thông qua Repository
-    DB-->>CS: Conversation và Message
-    CS-->>API: Message đã lưu
-    API-->>FE: Trả Message có ID dùng làm source_message_id
+    U->>FE: Gửi yêu cầu ngôn ngữ tự nhiên
+    FE->>API: Gửi Message và access token
+    API->>DS: Xác thực quyền và yêu cầu lưu Message
+    DS->>DB: Tạo Conversation nếu cần và lưu USER_REQUEST
+    DB-->>DS: Trả Conversation và Message
+    DS-->>API: Trả dữ liệu Message
+    API->>DS: Yêu cầu tạo Workflow Job MESSAGE
+    DS->>DB: Lưu Workflow Job
+    API-->>FE: Trả Message và source_message_id
 
-    API-->>WF: Chạy run_message trong BackgroundTasks
-    FE->>SSE: Mở stream theo source_message_id
-
-    WF->>PO: Thực hiện node plan
-    PO->>ES: Tạo Task và ghi Activity
-    ES->>DB: Lưu Task và TaskActivityEvent
-
-    loop Khi workflow còn hoạt động
-        SSE->>ES: Lấy event sau sequence hiện tại
-        ES->>DB: Truy vấn TaskActivityEvent qua Repository
-        DB-->>ES: Danh sách event mới
-        ES-->>SSE: TaskStreamEvent
-        SSE-->>FE: SSE task_activity
-        FE->>API: Tải lại Conversation hoặc Task khi cần
+    par Worker xử lý yêu cầu
+        WK->>DB: Nhận Workflow Job
+        DB-->>WK: Trả job và ID tham chiếu
+        WK->>LG: Khởi chạy workflow cho Message
+        LG->>LG: Kiểm tra GNS3 và điều phối các node
+        LG->>DS: Tạo Task và ghi Task Activity
+        DS->>DB: Lưu Task và Task Activity
+        LG-->>WK: Trả kết quả lượt workflow
+        WK->>DB: Cập nhật trạng thái Workflow Job
+    and Frontend nhận tiến trình
+        FE->>API: Mở SSE theo source_message_id
+        loop Khi có Activity Event
+            API->>DB: Đọc Activity sau sequence hiện tại
+            DB-->>API: Trả Task Activity đã lưu
+            API-->>FE: Phát SSE task_activity
+        end
     end
+    FE-->>U: Hiển thị tiến trình và phản hồi
 ```
 
-_Hình 3.4. Quy trình tiếp nhận Message, xử lý nền và cập nhật tiến trình qua SSE._
+_Hình 3.4. Sơ đồ tuần tự tổng quát tiếp nhận yêu cầu và cập nhật tiến trình xử lý._
 
 ### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
 
