@@ -1087,8 +1087,9 @@ flowchart TD
     D6 -->|Có| I
     D6 -->|Không| O["Execution Orchestrator tổng hợp và cập nhật trạng thái Operation"]
     O --> D7{"Operation đang WAITING_APPROVAL?"}
-    D7 -->|Có| P["Execution Orchestrator giữ Task RUNNING và ghi APPROVAL_REQUESTED"]
-    P --> U
+    D7 -->|Có| P["Execution Orchestrator ghi APPROVAL_REQUESTED"]
+    P --> P1["Execution Orchestrator cập nhật Task RUNNING để chờ Approval"]
+    P1 --> U
     D7 -->|Không| D2
 ```
 
