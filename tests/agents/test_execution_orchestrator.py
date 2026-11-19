@@ -485,3 +485,78 @@ def test_write_mapping_rejects_changed_commands_after_approval() -> None:
         OperationDeviceStatus.FAILED
     )
     assert "không khớp snapshot" in service.mappings[operation.id].error_message
+
+
+def test_write_mapping_denied_or_expired_approval_never_reaches_network_tool() -> None:
+    """Neither a rejected nor an expired WRITE approval may send a command."""
+
+    for approval_status in (ApprovalStatus.REJECTED, ApprovalStatus.EXPIRED):
+        task = build_task().model_copy(
+            update={"operations": [build_task().operations[0]]}
+        )
+        operation = task.operations[0]
+        service = StubExecutionService(task.operations)
+        mapping = service.mappings[operation.id].model_copy(
+            update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+        )
+        service.mappings[operation.id] = mapping
+        commands = [operation.operation_parameters["command"]]
+        now = datetime.now(UTC)
+        service.approvals[mapping.id] = OperationDeviceApproval(
+            id="aprv-denied",
+            operation_device_id=mapping.id,
+            approval_status=approval_status,
+            risk_level=RiskLevel.HIGH,
+            requested_by="orchestrator",
+            reason="Write requires approval",
+            commands_snapshot=commands,
+            request_hash=build_approval_request_hash(mapping.id, commands),
+            requested_at=now,
+            created_at=now,
+        )
+        agent = StubNetworkAgent()
+
+        asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+        assert agent.calls == []
+        assert service.mappings[operation.id].operation_device_status == (
+            OperationDeviceStatus.REJECTED
+        )
+        assert "không được phê duyệt" in service.mappings[operation.id].error_message
+
+
+def test_write_mapping_rejects_tampered_hash_with_unchanged_commands() -> None:
+    """An approved command snapshot alone is insufficient if its hash is invalid."""
+
+    task = build_task().model_copy(update={"operations": [build_task().operations[0]]})
+    operation = task.operations[0]
+    service = StubExecutionService(task.operations)
+    mapping = service.mappings[operation.id].model_copy(
+        update={"device_role": DeviceRole.TARGET, "access_mode": AccessMode.WRITE}
+    )
+    service.mappings[operation.id] = mapping
+    commands = [operation.operation_parameters["command"]]
+    now = datetime.now(UTC)
+    service.approvals[mapping.id] = OperationDeviceApproval(
+        id="aprv-tampered",
+        operation_device_id=mapping.id,
+        approval_status=ApprovalStatus.APPROVED,
+        risk_level=RiskLevel.HIGH,
+        requested_by="orchestrator",
+        reason="Write requires approval",
+        commands_snapshot=commands,
+        request_hash="0" * 64,
+        decided_by="user-approver",
+        requested_at=now,
+        decided_at=now,
+        created_at=now,
+    )
+    agent = StubNetworkAgent()
+
+    asyncio.run(ExecutionOrchestrator(service, agent).execute_task(task))
+
+    assert agent.calls == []
+    assert service.mappings[operation.id].operation_device_status == (
+        OperationDeviceStatus.FAILED
+    )
+    assert "không khớp snapshot" in service.mappings[operation.id].error_message
