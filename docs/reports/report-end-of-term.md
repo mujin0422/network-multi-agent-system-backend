@@ -1394,21 +1394,21 @@ Các API nghiệp vụ sử dụng tiền tố `/api/v1`. Workflow Job được 
 
 ### 3.9.1. Thiết kế Benchmark Scenario và Ground Truth
 
-Hệ thống sử dụng Benchmark Scenario để mô tả điều kiện thử nghiệm, thao tác tiêm lỗi, tiêu chí xác minh và kết quả kỳ vọng. Mỗi Scenario gồm \`scenario_key\`, \`version\`, topology, \`initial_message\`, \`preconditions\`, \`injection\`, \`fault_verification\`, \`ground_truth\`, \`evaluation_required_terms\` và \`cleanup\`. Khi tạo Benchmark Run, hệ thống lưu \`scenario_snapshot\` để cố định phiên bản kịch bản và Ground Truth được dùng chấm điểm, tránh việc chỉnh sửa Scenario về sau làm thay đổi căn cứ đánh giá của Run đã có.
+Hệ thống sử dụng Benchmark Scenario để mô tả điều kiện thử nghiệm, thao tác tiêm lỗi, tiêu chí xác minh và kết quả kỳ vọng. Mỗi Scenario gồm `scenario_key`, `version`, topology, `initial_message`, `preconditions`, `injection`, `fault_verification`, `ground_truth`, `evaluation_required_terms` và `cleanup`. Khi tạo Benchmark Run, hệ thống lưu `scenario_snapshot` để cố định phiên bản kịch bản và Ground Truth được dùng chấm điểm, tránh việc chỉnh sửa Scenario về sau làm thay đổi căn cứ đánh giá của Run đã có.
 
-Đối với nhóm kịch bản chẩn đoán hiện tại, Ground Truth là tập nguyên nhân sự cố gồm thiết bị, interface (nếu có) và loại lỗi. Benchmark được thiết kế với sự cố đã được tiêm, do đó Ground Truth chấm RCA không rỗng và trạng thái bất thường kỳ vọng là \`is_anomaly = true\`. Kết quả dự đoán của Agent được lấy từ structured diagnosis đã ghi trước khi Evaluator truy cập Ground Truth; không sử dụng từ khóa của phản hồi cuối hoặc đáp án kịch bản để dựng dự đoán. Cách tổ chức này tham khảo định hướng benchmark sự cố mạng của NIKA nhưng không đồng nhất bộ kịch bản hay quy tắc chấm điểm của hệ thống với NIKA.
+Đối với nhóm kịch bản chẩn đoán hiện tại, Ground Truth là tập nguyên nhân sự cố gồm thiết bị, interface (nếu có) và loại lỗi. Benchmark được thiết kế với sự cố đã được tiêm, do đó Ground Truth chấm RCA không rỗng và trạng thái bất thường kỳ vọng là `is_anomaly = true`. Kết quả dự đoán của Agent được lấy từ structured diagnosis đã ghi trước khi Evaluator truy cập Ground Truth; không sử dụng từ khóa của phản hồi cuối hoặc đáp án kịch bản để dựng dự đoán. Cách tổ chức này tham khảo định hướng benchmark sự cố mạng của NIKA nhưng không đồng nhất bộ kịch bản hay quy tắc chấm điểm của hệ thống với NIKA.
 
 ### 3.9.2. Quy trình tiêm lỗi, kiểm thử và khôi phục môi trường
 
-Một lượt thực nghiệm bắt đầu bằng việc kiểm tra \`preconditions\` qua lệnh READ, thực hiện \`injection\` theo action có cấu trúc và kiểm tra \`fault_verification\` để xác nhận sự cố đã xuất hiện. Khi hoàn tất chuẩn bị, Benchmark Run chuyển sang \`READY\`; sau khi liên kết Message của người dùng, Run chuyển sang \`RUNNING\` để Workflow Worker xử lý. Chỉ khi có Message \`FINAL_RESPONSE\`, Benchmark Service mới tạo Evaluation và cập nhật Run thành \`COMPLETED\`. Trường hợp workflow chờ phê duyệt, Run vẫn ở trạng thái \`RUNNING\` cho đến khi tạo được phản hồi cuối.
+Một lượt thực nghiệm bắt đầu bằng việc kiểm tra `preconditions` qua lệnh READ, thực hiện `injection` theo action có cấu trúc và kiểm tra `fault_verification` để xác nhận sự cố đã xuất hiện. Khi hoàn tất chuẩn bị, Benchmark Run chuyển sang `READY`; sau khi liên kết Message của người dùng, Run chuyển sang `RUNNING` để Workflow Worker xử lý. Chỉ khi có Message `FINAL_RESPONSE`, Benchmark Service mới tạo Evaluation và cập nhật Run thành `COMPLETED`. Trường hợp workflow chờ phê duyệt, Run vẫn ở trạng thái `RUNNING` cho đến khi tạo được phản hồi cuối.
 
-Các action đã được hỗ trợ bao gồm thay đổi trạng thái interface, cấu hình OSPF/MPLS, địa chỉ IP, default route, ACL và trạng thái BGP neighbor. Các seed hiện có bao phủ nhiều nhóm sự cố, nhưng sự tồn tại của seed hoặc mã dựng command không đồng nghĩa tất cả Scenario đã được chạy thực nghiệm thành công. Khi chuẩn bị hoặc xác minh sự cố thất bại, Run được ghi nhận lỗi; nếu đã bắt đầu injection, hệ thống ưu tiên cleanup. Cleanup thực hiện các action khôi phục, thử lại có giới hạn và xác minh bằng lệnh READ. Nếu không xác nhận được trạng thái phục hồi, \`cleanup_required\` được giữ lại; lượt chạy đó không được mặc nhiên xem là một môi trường độc lập đã khôi phục.
+Các action đã được hỗ trợ bao gồm thay đổi trạng thái interface, cấu hình OSPF/MPLS, địa chỉ IP, default route, ACL và trạng thái BGP neighbor. Các seed hiện có bao phủ nhiều nhóm sự cố, nhưng sự tồn tại của seed hoặc mã dựng command không đồng nghĩa tất cả Scenario đã được chạy thực nghiệm thành công. Khi chuẩn bị hoặc xác minh sự cố thất bại, Run được ghi nhận lỗi; nếu đã bắt đầu injection, hệ thống ưu tiên cleanup. Cleanup thực hiện các action khôi phục, thử lại có giới hạn và xác minh bằng lệnh READ. Nếu không xác nhận được trạng thái phục hồi, `cleanup_required` được giữ lại; lượt chạy đó không được mặc nhiên xem là một môi trường độc lập đã khôi phục.
 
 ### 3.9.3. Thu thập dữ liệu và quy trình chấm điểm
 
-\`BenchmarkObservationRepository\` đọc kết luận có cấu trúc từ sự kiện \`ANALYSIS_COMPLETED\`, lấy dữ liệu Evidence Coverage, đếm các bản ghi thực thi công cụ và xác định khoảng chờ phê duyệt từ Task Activity. Kết quả phân tích dự phòng (\`used_fallback\`) không được sử dụng làm một structured RCA submission hợp lệ. Nếu submission thiếu hoặc không hợp lệ, Evaluator ghi nhận trạng thái tương ứng và chấm dự đoán RCA như tập rỗng; đối với các kịch bản có Ground Truth không rỗng, trường hợp này không đạt GOAL.
+`BenchmarkObservationRepository` đọc kết luận có cấu trúc từ sự kiện `ANALYSIS_COMPLETED`, lấy dữ liệu Evidence Coverage, đếm các bản ghi thực thi công cụ và xác định khoảng chờ phê duyệt từ Task Activity. Kết quả phân tích dự phòng (`used_fallback`) không được sử dụng làm một structured RCA submission hợp lệ. Nếu submission thiếu hoặc không hợp lệ, Evaluator ghi nhận trạng thái tương ứng và chấm dự đoán RCA như tập rỗng; đối với các kịch bản có Ground Truth không rỗng, trường hợp này không đạt GOAL.
 
-Bộ chấm điểm hiện hành là \`db-benchmark-v5\`, so sánh các tập cặp nguyên nhân đã chuẩn hóa và xuất các metric GOAL, RCA, REMEDIATION, SAFETY, LATENCY, INTERACTION_TURNS. Mỗi metric lưu kết quả cùng \`expected_value\`, \`actual_value\` và \`evidence\` trong PostgreSQL. Evaluation chỉ được tạo khi Run đang \`RUNNING\` và đã có \`FINAL_RESPONSE\`. Khi tổng hợp Task Success Rate, backend sử dụng truy vấn SQL trên toàn bộ lịch sử Benchmark Run, không suy ra tỷ lệ từ danh sách phân trang của giao diện.
+Bộ chấm điểm hiện hành là `db-benchmark-v5`, so sánh các tập cặp nguyên nhân đã chuẩn hóa và xuất các metric GOAL, RCA, REMEDIATION, SAFETY, LATENCY, INTERACTION_TURNS. Mỗi metric lưu kết quả cùng `expected_value`, `actual_value` và `evidence` trong PostgreSQL. Evaluation chỉ được tạo khi Run đang `RUNNING` và đã có `FINAL_RESPONSE`. Khi tổng hợp Task Success Rate, backend sử dụng truy vấn SQL trên toàn bộ lịch sử Benchmark Run, không suy ra tỷ lệ từ danh sách phân trang của giao diện.
 
 ### 3.9.4. Định nghĩa và công thức các chỉ số đánh giá
 
@@ -1420,7 +1420,7 @@ $$
 G_i,\ P_i \subseteq \{(\mathrm{resource\_id},\mathrm{fault\_type})\}.
 $$
 
-\`resource_id\` được chuẩn hóa theo dạng \`node/<device>\` khi nguyên nhân ở mức thiết bị, hoặc \`interface/<device>/<interface>\` khi nguyên nhân gắn với interface. Tên thiết bị và interface được chuẩn hóa không phân biệt chữ hoa/thường; \`fault_type\` được chuẩn hóa theo taxonomy và alias của evaluator. Các cặp trùng nhau chỉ được tính một lần do sử dụng cấu trúc tập hợp.
+`resource_id` được chuẩn hóa theo dạng `node/<device>` khi nguyên nhân ở mức thiết bị, hoặc `interface/<device>/<interface>` khi nguyên nhân gắn với interface. Tên thiết bị và interface được chuẩn hóa không phân biệt chữ hoa/thường; `fault_type` được chuẩn hóa theo taxonomy và alias của evaluator. Các cặp trùng nhau chỉ được tính một lần do sử dụng cấu trúc tập hợp.
 
 Số dự đoán đúng, dự đoán thừa và nguyên nhân bị bỏ sót được xác định như sau:
 
@@ -1443,7 +1443,7 @@ $$
 
 Khi mẫu số bằng 0, evaluator quy ước chỉ số tương ứng bằng 0. Trường hợp cả tập dự đoán và Ground Truth đều rỗng được hàm tính điểm tổng quát xử lý riêng, nhưng không thuộc phạm vi các Benchmark Scenario chẩn đoán hiện tại vì Ground Truth bắt buộc không rỗng. Precision phản ánh tỷ lệ dự đoán đúng trong các cặp đã dự đoán, Recall phản ánh tỷ lệ nguyên nhân thực tế được tìm thấy, còn F1 cân bằng hai chỉ số. Đây là các công thức chuẩn; việc áp dụng lên cặp tài nguyên–loại lỗi là **quy ước biểu diễn đơn vị đánh giá của hệ thống**.
 
-Bên cạnh RCA theo cặp, evaluator tính riêng Localization Precision/Recall/F1 trên tập \`resource_id\` và Fault Type Precision/Recall/F1 trên tập \`fault_type\`, bằng cùng công thức nhưng thay đổi đối tượng tập hợp. Hai phép đánh giá thành phần không bảo đảm cặp RCA đúng: một dự đoán có thể xác định đúng thiết bị và đúng tập loại lỗi nhưng ghép sai loại lỗi với thiết bị. Trường \`rca_accuracy\` và \`localization_accuracy\` trong dữ liệu tương thích hiện được gán cùng giá trị với Recall, vì vậy báo cáo **không diễn giải chúng như Classification Accuracy**.
+Bên cạnh RCA theo cặp, evaluator tính riêng Localization Precision/Recall/F1 trên tập `resource_id` và Fault Type Precision/Recall/F1 trên tập `fault_type`, bằng cùng công thức nhưng thay đổi đối tượng tập hợp. Hai phép đánh giá thành phần không bảo đảm cặp RCA đúng: một dự đoán có thể xác định đúng thiết bị và đúng tập loại lỗi nhưng ghép sai loại lỗi với thiết bị. Trường `rca_accuracy` và `localization_accuracy` trong dữ liệu tương thích hiện được gán cùng giá trị với Recall, vì vậy báo cáo **không diễn giải chúng như Classification Accuracy**.
 
 Do tập kịch bản hiện tại đều chứa sự cố, Detection Score được xác định theo:
 
@@ -1489,11 +1489,11 @@ Hai tỷ lệ trên chỉ sử dụng các Run **đã có kết quả được c
 
 **c) Task Success Rate (TSR) của API tổng hợp**
 
-Để không loại bỏ mọi lượt thất bại trước khi Evaluation được tạo, API \`GET /benchmarks/runs/summary\` áp dụng quy tắc phân loại trên toàn bộ Benchmark Run:
+Để không loại bỏ mọi lượt thất bại trước khi Evaluation được tạo, API `GET /benchmarks/runs/summary` áp dụng quy tắc phân loại trên toàn bộ Benchmark Run:
 
-- \`passed\`: Run \`COMPLETED\` hoặc \`CLEANED\` có Evaluation GOAL PASS.
-- \`failed\`: Run \`COMPLETED\` hoặc \`CLEANED\` có GOAL FAIL; Run \`FAILED\` sau khi đã bắt đầu Agent Chat; hoặc Run đã hoàn tất, có \`source_message_id\` và \`error_message\` nhưng không có GOAL.
-- \`not_started\`, \`in_progress\`, \`setup_failed\`, \`unscored\`: các trường hợp chưa bắt đầu, đang chạy, lỗi chuẩn bị môi trường hoặc không đủ kết quả để chấm; được báo cáo riêng và không thuộc mẫu số TSR.
+- `passed`: Run `COMPLETED` hoặc `CLEANED` có Evaluation GOAL PASS.
+- `failed`: Run `COMPLETED` hoặc `CLEANED` có GOAL FAIL; Run `FAILED` sau khi đã bắt đầu Agent Chat; hoặc Run đã hoàn tất, có `source_message_id` và `error_message` nhưng không có GOAL.
+- `not_started`, `in_progress`, `setup_failed`, `unscored`: các trường hợp chưa bắt đầu, đang chạy, lỗi chuẩn bị môi trường hoặc không đủ kết quả để chấm; được báo cáo riêng và không thuộc mẫu số TSR.
 
 Công thức được hệ thống triển khai là:
 
@@ -1503,11 +1503,11 @@ $$
 {N_{\mathrm{passed}}+N_{\mathrm{failed}}}\times100\%.
 $$
 
-Đặt \(N_{\mathrm{eligible}}=N_{\mathrm{passed}}+N_{\mathrm{failed}}\). Nếu \(N_{\mathrm{eligible}}=0\), API trả \`null\`, không trả 0%. Các Run còn \`RUNNING\` không được tính là thất bại; trạng thái \`CLEANED\` không làm thay đổi kết quả chẩn đoán đã chấm. \`BenchmarkRun.evaluation_result\` lưu kết quả RCA nên không được dùng làm GOAL khi tính TSR. Khi công bố TSR cần báo cáo đồng thời \(N_{\mathrm{eligible}}\), tổng số Run và số lượng từng nhóm bị loại khỏi mẫu số để tránh gây hiểu nhầm về tỷ lệ thành công.
+Đặt \(N_{\mathrm{eligible}}=N_{\mathrm{passed}}+N_{\mathrm{failed}}\). Nếu \(N_{\mathrm{eligible}}=0\), API trả `null`, không trả 0%. Các Run còn `RUNNING` không được tính là thất bại; trạng thái `CLEANED` không làm thay đổi kết quả chẩn đoán đã chấm. `BenchmarkRun.evaluation_result` lưu kết quả RCA nên không được dùng làm GOAL khi tính TSR. Khi công bố TSR cần báo cáo đồng thời \(N_{\mathrm{eligible}}\), tổng số Run và số lượng từng nhóm bị loại khỏi mẫu số để tránh gây hiểu nhầm về tỷ lệ thành công.
 
 **d) Active Latency và Interaction Turns**
 
-Active Latency đo thời gian từ khi Task được tạo đến khi Message \`FINAL_RESPONSE\` được tạo, sau khi loại trừ **hợp các khoảng chờ phê duyệt hợp lệ**:
+Active Latency đo thời gian từ khi Task được tạo đến khi Message `FINAL_RESPONSE` được tạo, sau khi loại trừ **hợp các khoảng chờ phê duyệt hợp lệ**:
 
 $$
 T_{\mathrm{active},i}
@@ -1515,28 +1515,28 @@ T_{\mathrm{active},i}
 -\sum_{k=1}^{m_i}\Delta t_{\mathrm{approval},ik}.
 $$
 
-Mỗi khoảng chờ bắt đầu tại sự kiện \`APPROVAL_REQUESTED\` và kết thúc tại sự kiện \`EXECUTION_STARTED\` tiếp theo khi workflow tiếp tục. Các khoảng trùng hoặc giao nhau được hợp nhất trước khi cộng, tránh trừ lặp thời gian. Khi thông tin chờ còn mở, sai thứ tự hoặc nằm ngoài khoảng đo, Latency được lưu là không xác định (\`null\`) thay vì suy đoán giá trị. Backend lưu \`active_duration_ms\`; khi trình bày bằng giây, chia giá trị này cho 1.000. Chỉ số bao gồm lập kế hoạch, thực thi công cụ mạng, phân tích và chi phí điều phối trong thời gian tồn tại của Task, **không phải thời gian suy luận riêng của LLM** và không bao gồm giai đoạn chuẩn bị tiêm lỗi GNS3 trước khi tạo Task.
+Mỗi khoảng chờ bắt đầu tại sự kiện `APPROVAL_REQUESTED` và kết thúc tại sự kiện `EXECUTION_STARTED` tiếp theo khi workflow tiếp tục. Các khoảng trùng hoặc giao nhau được hợp nhất trước khi cộng, tránh trừ lặp thời gian. Khi thông tin chờ còn mở, sai thứ tự hoặc nằm ngoài khoảng đo, Latency được lưu là không xác định (`null`) thay vì suy đoán giá trị. Backend lưu `active_duration_ms`; khi trình bày bằng giây, chia giá trị này cho 1.000. Chỉ số bao gồm lập kế hoạch, thực thi công cụ mạng, phân tích và chi phí điều phối trong thời gian tồn tại của Task, **không phải thời gian suy luận riêng của LLM** và không bao gồm giai đoạn chuẩn bị tiêm lỗi GNS3 trước khi tạo Task.
 
-Interaction Turns trong evaluator hiện tại được xác định bằng số bản ghi \`task_executions\` thuộc Task có \`tool_name\` khác \`NULL\`:
+Interaction Turns trong evaluator hiện tại được xác định bằng số bản ghi `task_executions` thuộc Task có `tool_name` khác `NULL`:
 
 $$
 \mathrm{InteractionTurns}_i
 =\#\{e\in\mathrm{TaskExecutions}_i\mid e.\mathrm{tool\_name}\neq\mathrm{NULL}\}.
 $$
 
-Đây là số lượt gọi công cụ được ghi nhận cho Task, không phải số câu lệnh CLI, số tin nhắn hội thoại hay số vòng suy luận nội bộ của LLM. Chỉ số không bao gồm thao tác injection hoặc cleanup do Benchmark Engine thực hiện ngoài Task. LATENCY và INTERACTION_TURNS là các đại lượng đo lường, được lưu với trạng thái \`UNKNOWN\` thay vì áp đặt một ngưỡng PASS/FAIL chưa được xác định.
+Đây là số lượt gọi công cụ được ghi nhận cho Task, không phải số câu lệnh CLI, số tin nhắn hội thoại hay số vòng suy luận nội bộ của LLM. Chỉ số không bao gồm thao tác injection hoặc cleanup do Benchmark Engine thực hiện ngoài Task. LATENCY và INTERACTION_TURNS là các đại lượng đo lường, được lưu với trạng thái `UNKNOWN` thay vì áp đặt một ngưỡng PASS/FAIL chưa được xác định.
 
 **e) Remediation và Safety**
 
-Trong evaluator hiện hành, REMEDIATION và SAFETY đều được ghi \`NOT_APPLICABLE\` với \`is_required = false\`; chưa có cơ chế chấm PASS/FAIL tự động cho hai tiêu chí này. Vì vậy, báo cáo không tính Remediation Pass Rate hoặc Safety Pass Rate từ dữ liệu hiện có. Khả năng yêu cầu phê duyệt và khôi phục môi trường thử nghiệm được kiểm tra thông qua Approval, trạng thái Cleanup và các nhật ký tương ứng; không đồng nhất những kiểm tra đó với metric Safety đã được chấm.
+Trong evaluator hiện hành, REMEDIATION và SAFETY đều được ghi `NOT_APPLICABLE` với `is_required = false`; chưa có cơ chế chấm PASS/FAIL tự động cho hai tiêu chí này. Vì vậy, báo cáo không tính Remediation Pass Rate hoặc Safety Pass Rate từ dữ liệu hiện có. Khả năng yêu cầu phê duyệt và khôi phục môi trường thử nghiệm được kiểm tra thông qua Approval, trạng thái Cleanup và các nhật ký tương ứng; không đồng nhất những kiểm tra đó với metric Safety đã được chấm.
 
 ### 3.9.5. Giới hạn của phương pháp đánh giá và khả năng tái lập
 
 Các công thức Precision, Recall và F1 là những thước đo thông dụng trong đánh giá mô hình; tuy nhiên, **tính hợp lệ khoa học của kết quả** còn phụ thuộc vào đơn vị chấm, Ground Truth, mẫu số, tập kịch bản và cách thu thập bằng chứng. Vì evaluator sử dụng so khớp chính xác các cặp đã chuẩn hóa, sai khác về định danh tài nguyên hoặc taxonomy có thể làm giảm điểm dù kết luận ngôn ngữ tự nhiên gần đúng. Đồng thời, các Scenario hiện tại chỉ chứa sự cố đã tiêm nên Detection Score chưa phản ánh khả năng phân biệt mạng bình thường với mạng có lỗi.
 
-Các kết quả giữa nhiều lượt chạy cần được phân nhóm theo \`evaluator_version\`, mô hình LLM, topology, tập Scenario và phiên bản workflow; không nên coi các cohort thay đổi đồng thời nhiều thành phần là bằng chứng về quan hệ nhân quả. Khi trình bày kết quả, cần ghi số Run tổng, Run đủ điều kiện, Run được chấm, lỗi setup, Run chưa có kết quả, phân bố GOAL/RCA, thời gian đo được và số mẫu Latency/Interaction Turns. Nếu chỉ có một lượt thử cho mỗi Scenario, kết luận nên giới hạn ở thống kê mô tả; chưa đủ cơ sở khẳng định khác biệt có ý nghĩa thống kê hoặc khả năng tổng quát hóa. Các công thức nêu trên định nghĩa cách chấm điểm của hệ thống và có thể tái tính từ dữ liệu lưu trữ, nhưng không tự chứng minh hiệu quả thực nghiệm nếu chưa có dữ liệu quan sát tương ứng.
+Các kết quả giữa nhiều lượt chạy cần được phân nhóm theo `evaluator_version`, mô hình LLM, topology, tập Scenario và phiên bản workflow; không nên coi các cohort thay đổi đồng thời nhiều thành phần là bằng chứng về quan hệ nhân quả. Khi trình bày kết quả, cần ghi số Run tổng, Run đủ điều kiện, Run được chấm, lỗi setup, Run chưa có kết quả, phân bố GOAL/RCA, thời gian đo được và số mẫu Latency/Interaction Turns. Nếu chỉ có một lượt thử cho mỗi Scenario, kết luận nên giới hạn ở thống kê mô tả; chưa đủ cơ sở khẳng định khác biệt có ý nghĩa thống kê hoặc khả năng tổng quát hóa. Các công thức nêu trên định nghĩa cách chấm điểm của hệ thống và có thể tái tính từ dữ liệu lưu trữ, nhưng không tự chứng minh hiệu quả thực nghiệm nếu chưa có dữ liệu quan sát tương ứng.
 
-Về cơ sở phương pháp, phép đo Precision/Recall/F1 tuân theo các định nghĩa chuẩn của [scikit-learn](https://scikit-learn.org/stable/modules/model_evaluation.html); việc đánh giá chẩn đoán dựa trên tài nguyên và loại lỗi được xây dựng theo hướng tham khảo [NIKA: A Network Arena for Benchmarking AI Agents on Network Troubleshooting](https://arxiv.org/abs/2512.16381). Phương pháp chấm cụ thể ở đây là triển khai \`db-benchmark-v5\` của hệ thống và không được xem là hoàn toàn tương đương với protocol đánh giá của NIKA.
+Về cơ sở phương pháp, phép đo Precision/Recall/F1 tuân theo các định nghĩa chuẩn của [scikit-learn](https://scikit-learn.org/stable/modules/model_evaluation.html); việc đánh giá chẩn đoán dựa trên tài nguyên và loại lỗi được xây dựng theo hướng tham khảo [NIKA: A Network Arena for Benchmarking AI Agents on Network Troubleshooting](https://arxiv.org/abs/2512.16381). Phương pháp chấm cụ thể ở đây là triển khai `db-benchmark-v5` của hệ thống và không được xem là hoàn toàn tương đương với protocol đánh giá của NIKA.
 
 ---
 
