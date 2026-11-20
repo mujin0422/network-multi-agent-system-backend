@@ -1269,34 +1269,72 @@ _Hình 3.10. Vòng đời Benchmark Run và điều kiện khôi phục môi tr�
 
 ### 3.7.1. Mô hình dữ liệu và sơ đồ ERD
 
-PostgreSQL quản lý dữ liệu theo các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Các thực thể được liên kết bằng khóa ngoại để truy vết từ yêu cầu người dùng đến Task, kế hoạch, lần thực thi, hành động trên thiết bị và kết quả đánh giá.
+PostgreSQL tổ chức dữ liệu thành 27 bảng thuộc các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation, Audit và Workflow Job. Hình 3.11 trình bày tên các bảng và các quan hệ khóa ngoại chủ yếu, không đi sâu vào thuộc tính. Riêng bảng `workflow_jobs` lưu ID tham chiếu trong `payload` JSONB và không có khóa ngoại trực tiếp đến các bảng nghiệp vụ; vì vậy bảng này được biểu diễn độc lập trong sơ đồ.
 
 ```mermaid
 erDiagram
-    USERS ||--o{ CONVERSATIONS : owns
+    %% Identity and access control
+    ROLES ||--o{ USERS : assigns
+    USERS o|--o{ ROLES : created_by
     USERS ||--o{ USER_SESSIONS : has
-    USERS }o--o{ ROLES : assigned
-    ROLES }o--o{ PERMISSIONS : grants
-    CREDENTIALS ||--o{ DEVICES : authenticates
+    MANAGEMENT_FUNCTIONS ||--o{ PERMISSIONS : defines
+    ACTIONS ||--o{ PERMISSIONS : defines
+    ROLES ||--o{ ROLE_PERMISSIONS : has
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : assigned
+
+    %% Inventory and credentials
+    USERS ||--o{ CREDENTIALS : created_by
+    USERS ||--o{ DEVICES : created_by
+    CREDENTIALS o|--o{ DEVICES : authenticates
     BRANDS ||--o{ DEVICES : classifies
     CATEGORIES ||--o{ DEVICES : groups
+
+    %% Conversation and request tracking
+    USERS ||--o{ CONVERSATIONS : owns
     CONVERSATIONS ||--o{ MESSAGES : contains
-    CONVERSATIONS ||--o{ TASKS : creates
+    MESSAGES o|--o{ MESSAGES : replies_to
+    USERS ||--o{ TASKS : requests
+    CONVERSATIONS ||--o{ TASKS : groups
+    MESSAGES ||--o| TASKS : source_message
+
+    %% Execution DAG, approvals, and evidence logs
     TASKS ||--o{ TASK_OPERATIONS : contains
-    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : depends
+    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : operation
+    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : depends_on
     TASK_OPERATIONS ||--o{ TASK_OPERATION_DEVICES : targets
     DEVICES ||--o{ TASK_OPERATION_DEVICES : assigned
+    TASK_OPERATION_DEVICES ||--o| OPERATION_DEVICE_APPROVALS : approval
+    USERS o|--o{ OPERATION_DEVICE_APPROVALS : decided_by
     TASKS ||--o{ TASK_EXECUTIONS : records
-    TASKS ||--o{ TASK_ACTIVITY_EVENTS : emits
-    TASKS ||--o{ DEVICE_ACTION_LOGS : logs
-    BENCHMARK_SCENARIOS ||--o{ BENCHMARK_RUNS : instantiates
-    BENCHMARK_RUNS }o--o| TASKS : evaluates
-    TASKS ||--o| TASK_EVALUATIONS : receives
-    TASK_EVALUATIONS ||--o{ TASK_EVALUATION_METRICS : contains
-    USERS ||--o{ AUDIT_LOGS : acts
+    TASK_OPERATIONS o|--o{ TASK_EXECUTIONS : operation
+    TASK_OPERATION_DEVICES o|--o{ TASK_EXECUTIONS : mapping
+    TASKS ||--o{ TASK_ACTIVITY_EVENTS : timeline
+    TASK_OPERATIONS o|--o{ TASK_ACTIVITY_EVENTS : operation
+    TASK_EXECUTIONS o|--o{ TASK_ACTIVITY_EVENTS : execution
+    TASKS ||--o{ DEVICE_ACTION_LOGS : records
+    TASK_OPERATIONS ||--o{ DEVICE_ACTION_LOGS : operation
+    TASK_OPERATION_DEVICES ||--o{ DEVICE_ACTION_LOGS : mapping
+    TASK_EXECUTIONS ||--o{ DEVICE_ACTION_LOGS : execution
+    DEVICES ||--o{ DEVICE_ACTION_LOGS : device
+    DEVICE_ACTION_LOGS o|--o{ DEVICE_ACTION_LOGS : rollback_of
+
+    %% Benchmark and evaluation
+    USERS o|--o{ BENCHMARK_SCENARIOS : created_by
+    BENCHMARK_SCENARIOS ||--o{ BENCHMARK_RUNS : instantiated
+    USERS ||--o{ BENCHMARK_RUNS : started_by
+    CONVERSATIONS o|--o{ BENCHMARK_RUNS : conversation
+    MESSAGES o|--o{ BENCHMARK_RUNS : source_message
+    TASKS o|--o{ BENCHMARK_RUNS : task
+    TASKS ||--o| TASK_EVALUATIONS : evaluated
+    TASK_EVALUATIONS ||--o{ TASK_EVALUATION_METRICS : metrics
+    TASK_EVALUATIONS o|--o{ BENCHMARK_RUNS : evaluation
+
+    %% Audit and asynchronous workflow queue
+    USERS o|--o{ AUDIT_LOGS : actor
+    WORKFLOW_JOBS
 ```
 
-_Hình 3.11. Sơ đồ quan hệ thực thể rút gọn của hệ thống._
+_Hình 3.11. Sơ đồ quan hệ giữa các bảng dữ liệu của hệ thống (chỉ thể hiện tên bảng)._
 
 ### 3.7.2. Quản lý thiết bị và thông tin kết nối
 
@@ -1304,105 +1342,201 @@ Inventory được chuẩn hóa thành Brand, Category, Credential và Device. T
 
 ### 3.7.3. Quản lý Task, Operation và Execution
 
-Task đại diện cho nhiệm vụ phát sinh từ yêu cầu người dùng. Mỗi Task chứa nhiều Operation; dependency biểu diễn điều kiện thực thi giữa các Operation; bảng ánh xạ Operation–Device quản lý vai trò, access mode và trạng thái trên từng thiết bị. Task Execution lưu từng lần thực thi, Device Action Log ghi lệnh và output, còn Task Activity Event ghi các sự kiện quan trọng trong vòng đời nhiệm vụ.
+Task đại diện cho yêu cầu xử lý của người dùng; mỗi Task chứa các Operation, dependency và ánh xạ Operation–Device theo quyền READ/WRITE. Bảng `operation_device_approvals` lưu yêu cầu và quyết định phê duyệt ở mức Device Mapping. `task_executions` lưu từng lần thực thi; `device_action_logs` ghi lệnh và kết quả theo thiết bị; `task_activity_events` ghi tiến trình xử lý. Bảng `workflow_jobs` quản lý hàng đợi MESSAGE/APPROVAL để Workflow Worker có thể xử lý hoặc tiếp tục Task mà không giữ yêu cầu HTTP.
 
 ### 3.7.4. Quản lý kết quả đánh giá và Audit Log
 
-Benchmark Scenario mô tả kịch bản, trạng thái ban đầu, injection, Ground Truth và cleanup; Benchmark Run đại diện cho một lần chạy độc lập. Task Evaluation và Evaluation Metric lưu điểm, giá trị mong đợi, giá trị thực tế và bằng chứng. Audit Log ghi các thao tác nghiệp vụ cần kiểm toán độc lập với phản hồi ngôn ngữ tự nhiên của Agent.
+Benchmark Scenario lưu định nghĩa kịch bản, trạng thái ban đầu, thao tác injection, Ground Truth và cleanup; Benchmark Run lưu thông tin từng lượt chạy và liên kết Task/Evaluation khi có kết quả. `task_evaluations` và `task_evaluation_metrics` lưu các tiêu chí đánh giá, giá trị kỳ vọng, giá trị thực tế và bằng chứng. `audit_logs` lưu dấu vết kiểm toán độc lập với phản hồi của Agent. Miền Identity dùng `users`, `roles`, `role_permissions`, `permissions`, `management_functions` và `actions` để quản lý phân quyền.
 
 ## 3.8. Xây dựng và triển khai hệ thống
 
 ### 3.8.1. Xây dựng Backend và API
 
-Backend được phát triển bằng FastAPI và tổ chức theo domain. Router tiếp nhận HTTP request và kiểm tra quyền; Service thực hiện logic nghiệp vụ; Repository truy xuất dữ liệu; Schema và Model định nghĩa hợp đồng dữ liệu. Các Agent không trực tiếp thao tác ORM hoặc cơ sở dữ liệu.
+Backend được phát triển bằng FastAPI và tổ chức theo các miền nghiệp vụ Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Router tiếp nhận yêu cầu HTTP, xác thực access token và kiểm tra permission; Domain Service thực hiện quy tắc nghiệp vụ, Repository thao tác với PostgreSQL, còn Schema và Model định nghĩa hợp đồng dữ liệu. Các Agent không trực tiếp truy cập Repository hoặc quản lý phiên kết nối cơ sở dữ liệu.
+
+Các yêu cầu xử lý AI được tiếp nhận qua Conversation API, lưu Message rồi tạo Workflow Job loại `MESSAGE`. Workflow Worker độc lập nhận job từ PostgreSQL và thực thi LangGraph, trong khi API cung cấp SSE để frontend theo dõi Task Activity. Đối với thao tác WRITE cần phê duyệt, API ghi quyết định và tạo job `APPROVAL` để Worker tiếp tục Task từ trạng thái đã lưu. Cơ chế này tách xử lý dài hạn khỏi vòng đời HTTP và hỗ trợ xử lý lại job khi có lỗi.
 
 ### 3.8.2. Xây dựng giao diện quản trị
 
-Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và hệ component shadcn; sử dụng các thư viện bảng, form, trạng thái và giao tiếp HTTP phù hợp. Các feature hiện có gồm Login/Profile, Dashboard, Chatbot/Conversation, Tasks, Devices, Credentials, Device Catalog, Users, Roles/Access Control, Audit Logs, Benchmark Scenarios, Benchmark Runs và Evaluations. Giao diện chat hỗ trợ danh sách hội thoại, activity timeline, hiển thị yêu cầu approval và mở chi tiết Task; trang Benchmark hỗ trợ nhập action/check/Ground Truth và xem kết quả chạy.
+Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và bộ component shadcn. Giao diện gồm các nhóm chức năng đăng nhập và hồ sơ người dùng, Dashboard, Chatbot/Conversation, Task, quản lý thiết bị và Credential, danh mục thiết bị, người dùng và vai trò, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation. Những màn hình quản trị sử dụng bảng dữ liệu, bộ lọc, phân trang và giao diện xem chi tiết phù hợp với từng nhóm nghiệp vụ.
 
-Trang Evaluations hiển thị lịch sử đánh giá, GOAL/RCA, Remediation/Safety, Latency và Interaction Turns, cùng các kết quả có cấu trúc của v4 gồm RCA F1, Precision, Recall, Localization F1, Fault Type F1 và Detection. Dashboard dùng `GET /benchmarks/runs/summary` làm nguồn chuẩn cho TSR toàn bộ lịch sử. Khi lọc theo ngày bắt đầu Benchmark Run, frontend phân loại tập Run theo cùng quy tắc backend và tra kết quả `GOAL` từ Evaluation liên kết, không dùng `BenchmarkRun.evaluation_result` để tính TSR vì trường này hiện lưu kết quả **RCA**, không phải GOAL. GOAL Pass Rate, RCA Pass Rate và RCA F1 được hiển thị riêng với mẫu số tương ứng. Phiên bản evaluator giúp phân biệt chấm từ khóa lịch sử và chấm RCA có cấu trúc.
+Giao diện Chat hỗ trợ gửi yêu cầu, xem lịch sử hội thoại, theo dõi Task Activity bằng SSE, tải lại dữ liệu khi cần và hiển thị yêu cầu phê duyệt cấu hình. Màn hình Benchmark hỗ trợ quản lý Scenario, khai báo action, check và Ground Truth, theo dõi từng Benchmark Run và kết quả Evaluation. Trang Evaluation trình bày các metric GOAL, RCA, REMEDIATION, SAFETY, LATENCY và INTERACTION_TURNS; phần chi tiết RCA có thể hiển thị Precision, Recall, F1, Localization F1, Fault Type F1 và Detection Score theo dữ liệu evaluator.
 
-### 3.8.3. Tích hợp LLM và các công cụ mạng
+Dashboard hiển thị các chỉ số Task và biểu đồ thống kê, đồng thời sử dụng `GET /benchmarks/runs/summary` làm nguồn tổng hợp chuẩn cho TSR khi không áp dụng bộ lọc thời gian. Với khoảng ngày Benchmark Run do người dùng lựa chọn, frontend tính lại tập mẫu và tra metric GOAL từ Evaluation liên kết. Trường `BenchmarkRun.evaluation_result` lưu kết quả RCA nên không được sử dụng làm kết quả GOAL. Các tỷ lệ GOAL Pass, RCA Pass và điểm RCA F1 được trình bày riêng, có phạm vi đánh giá và số lượng mẫu tương ứng.
 
-Planner Agent và Analyst Agent gọi LLM qua NVIDIA AI Endpoint; phản hồi được kiểm tra bằng Pydantic trước khi chuyển sang bước tiếp theo. Network Agent sử dụng `NetworkTool` thay vì gọi LLM, nhờ đó quyền thực thi lệnh được giữ tại tầng ứng dụng. Các thư viện I/O đồng bộ được gọi theo cách không chặn vòng lặp bất đồng bộ của FastAPI.
+### 3.8.3. Tích hợp LLM và công cụ mạng
+
+Planner Agent, Configuration Agent và Analyst Agent sử dụng mô hình ngôn ngữ thông qua NVIDIA AI Endpoint. Đầu ra có cấu trúc được kiểm tra bằng Pydantic trước khi chuyển sang giai đoạn tiếp theo; Planner xây dựng kế hoạch, Configuration Agent sinh CLI cho Operation WRITE, còn Analyst Agent phân tích kết quả và bằng chứng. Network Agent không sử dụng LLM để quyết định lệnh mà gọi `NetworkTool` với các Operation đã được kiểm soát.
+
+`NetworkTool` cung cấp giao diện chung cho các backend Netmiko hoặc Nornir theo cấu hình môi trường. Credential thiết bị được truy xuất qua lớp dịch vụ kết nối thay vì đưa vào prompt. Những thao tác mạng đồng bộ được thực hiện ngoài event loop để không chặn xử lý bất đồng bộ của ứng dụng. Trước khi thực thi cấu hình WRITE, Approval Gate kiểm tra trạng thái phê duyệt và tính toàn vẹn của Commands Snapshot.
 
 ### 3.8.4. Triển khai và cấu hình môi trường
 
-FastAPI API, Workflow Worker, PostgreSQL, migration và pgAdmin được tổ chức bằng Docker Compose. Cấu hình kết nối cơ sở dữ liệu, khóa xác thực, LLM provider và network backend được quản lý qua biến môi trường. Frontend chạy bằng Vite trong quá trình phát triển và kết nối REST API bằng access token. GNS3 Server hoạt động như môi trường thực nghiệm bên ngoài các dịch vụ nghiệp vụ.
+Hệ thống backend được tổ chức bằng Docker Compose với các dịch vụ FastAPI API, Workflow Worker, PostgreSQL và pgAdmin. Workflow Worker chạy như một tiến trình riêng để xử lý các Workflow Job đã lưu; PostgreSQL duy trì trạng thái nghiệp vụ và hàng đợi. Dịch vụ migration được cấu hình trong profile `tools`, sử dụng khi cần cập nhật cấu trúc cơ sở dữ liệu, không phải thành phần xử lý yêu cầu thường trực.
+
+Các thông số như kết nối PostgreSQL, khóa xác thực, thông tin NVIDIA AI Endpoint, backend công cụ mạng và địa chỉ GNS3 được quản lý bằng biến môi trường. Trong môi trường phát triển, frontend chạy bằng Vite và giao tiếp với FastAPI thông qua REST API và SSE. GNS3 Server cung cấp topology và thiết bị phục vụ thực nghiệm, hoạt động bên ngoài các dịch vụ nghiệp vụ của Docker Compose.
 
 ### 3.8.5. Giao diện các nhóm API
 
-| Nhóm API     | Chức năng chính                                           |
-| ------------ | --------------------------------------------------------- |
-| Identity     | Đăng nhập, phiên, người dùng, vai trò và quyền truy cập   |
-| Inventory    | Thiết bị, danh mục thiết bị và credential kết nối         |
-| Conversation | Hội thoại, tin nhắn và yêu cầu xử lý AI                   |
-| Execution    | Task, Operation, kết quả thực thi và quyết định phê duyệt |
-| Benchmark    | Scenario, Benchmark Run và Cleanup                        |
-| Evaluation   | Kết quả đánh giá và các metric                            |
-| Audit        | Nhật ký kiểm toán và bộ lọc tra cứu                       |
+| Nhóm API | Chức năng chính |
+| --- | --- |
+| Identity | Đăng nhập, phiên đăng nhập, người dùng, vai trò và quyền truy cập |
+| Inventory | Thiết bị, hãng và loại thiết bị, Credential kết nối |
+| Conversation | Hội thoại, Message và khởi tạo yêu cầu xử lý AI |
+| Execution | Task, Operation, Device Mapping, lịch sử thực thi, Activity SSE và quyết định phê duyệt |
+| Benchmark | Quản lý Scenario, chuẩn bị Benchmark Run, theo dõi và cleanup môi trường |
+| Evaluation | Tra cứu Evaluation và các metric tương ứng |
+| Audit | Nhật ký kiểm toán và tra cứu hoạt động nghiệp vụ |
 
-Các API nghiệp vụ dùng tiền tố `/api/v1`. Frontend không trực tiếp kết nối thiết bị; mọi thao tác được chuyển đến Service và Orchestrator tương ứng. FastAPI cung cấp thêm health endpoint và tài liệu OpenAPI phục vụ phát triển, kiểm thử tích hợp.
+Các API nghiệp vụ sử dụng tiền tố `/api/v1`. Workflow Job được xử lý nội bộ bởi Workflow Worker, không cung cấp như một nhóm API công khai riêng. Frontend không trực tiếp kết nối thiết bị mạng hoặc cơ sở dữ liệu; những thao tác nghiệp vụ đều đi qua API và Service tương ứng. FastAPI cung cấp thêm health endpoint và tài liệu OpenAPI phục vụ phát triển, kiểm thử tích hợp.
 
 ## 3.9. Thiết kế hệ thống thực nghiệm và đánh giá
 
 ### 3.9.1. Thiết kế Benchmark Scenario và Ground Truth
 
-Benchmark Scenario có `scenario_key`, version, mô tả, topology, initial_message, preconditions, injection, fault_verification, ground_truth, evaluation_required_terms và cleanup. Engine thực hiện kiểm tra điều kiện trước; tiêm lỗi bằng các action có schema; xác minh trạng thái sự cố; sau đó phát hành run sẵn sàng để Chat của Agent giải quyết. Khi bắt đầu Chat, run liên kết tới conversation/source message; khi nhận FINAL_RESPONSE, lưu Evaluation và hoàn tất run. Cleanup được retry có giới hạn bằng kết nối mới và chỉ hoàn tất sau khi READ check suy ra từ action xác nhận thiết bị đã phục hồi; runner dừng nếu không thể xác nhận nhằm bảo toàn tính độc lập giữa các kịch bản. Cơ chế này có thể quản lý scenario, lịch sử và trạng thái chuẩn bị/chạy/hoàn thành/thất bại/cleanup.
+Hệ thống sử dụng Benchmark Scenario để mô tả điều kiện thử nghiệm, thao tác tiêm lỗi, tiêu chí xác minh và kết quả kỳ vọng. Mỗi Scenario gồm `scenario_key`, `version`, topology, `initial_message`, `preconditions`, `injection`, `fault_verification`, `ground_truth`, `evaluation_required_terms` và `cleanup`. Khi tạo Benchmark Run, hệ thống lưu `scenario_snapshot` để cố định phiên bản kịch bản và Ground Truth được dùng chấm điểm, tránh việc chỉnh sửa Scenario về sau làm thay đổi căn cứ đánh giá của Run đã có.
+
+Đối với nhóm kịch bản chẩn đoán hiện tại, Ground Truth là tập nguyên nhân sự cố gồm thiết bị, interface (nếu có) và loại lỗi. Benchmark được thiết kế với sự cố đã được tiêm, do đó Ground Truth chấm RCA không rỗng và trạng thái bất thường kỳ vọng là `is_anomaly = true`. Kết quả dự đoán của Agent được lấy từ structured diagnosis đã ghi trước khi Evaluator truy cập Ground Truth; không sử dụng từ khóa của phản hồi cuối hoặc đáp án kịch bản để dựng dự đoán. Cách tổ chức này tham khảo định hướng benchmark sự cố mạng của NIKA nhưng không đồng nhất bộ kịch bản hay quy tắc chấm điểm của hệ thống với NIKA.
 
 ### 3.9.2. Quy trình tiêm lỗi, kiểm thử và khôi phục môi trường
 
-Các nhóm injection đã có bộ dựng command bao gồm shutdown/no shutdown interface, điều chỉnh network OSPF, MPLS trên interface, default route, IP/mask, ACL và BGP neighbor shutdown/no shutdown. Có các seed chứa các tình huống interface down, OSPF, MPLS, cấu hình IP, ACL, Loopback0 và BGP. Sự hiện diện của seed/chương trình dựng command **không mặc nhiên xác nhận đã chạy thành công tất cả scenario trong lab**.
+Một lượt thực nghiệm bắt đầu bằng việc kiểm tra `preconditions` qua lệnh READ, thực hiện `injection` theo action có cấu trúc và kiểm tra `fault_verification` để xác nhận sự cố đã xuất hiện. Khi hoàn tất chuẩn bị, Benchmark Run chuyển sang `READY`; sau khi liên kết Message của người dùng, Run chuyển sang `RUNNING` để Workflow Worker xử lý. Chỉ khi có Message `FINAL_RESPONSE`, Benchmark Service mới tạo Evaluation và cập nhật Run thành `COMPLETED`. Trường hợp workflow chờ phê duyệt, Run vẫn ở trạng thái `RUNNING` cho đến khi tạo được phản hồi cuối.
 
-Quy trình thực nghiệm gồm kiểm tra precondition, tiêm lỗi, xác minh fault, gửi yêu cầu cho hệ thống Multi-Agent, thu thập kết quả, chấm điểm và cleanup. Nếu không xác minh được trạng thái khôi phục, runner dừng trước kịch bản tiếp theo để tránh làm sai lệch dữ liệu.
+Các action đã được hỗ trợ bao gồm thay đổi trạng thái interface, cấu hình OSPF/MPLS, địa chỉ IP, default route, ACL và trạng thái BGP neighbor. Các seed hiện có bao phủ nhiều nhóm sự cố, nhưng sự tồn tại của seed hoặc mã dựng command không đồng nghĩa tất cả Scenario đã được chạy thực nghiệm thành công. Khi chuẩn bị hoặc xác minh sự cố thất bại, Run được ghi nhận lỗi; nếu đã bắt đầu injection, hệ thống ưu tiên cleanup. Cleanup thực hiện các action khôi phục, thử lại có giới hạn và xác minh bằng lệnh READ. Nếu không xác nhận được trạng thái phục hồi, `cleanup_required` được giữ lại; lượt chạy đó không được mặc nhiên xem là một môi trường độc lập đã khôi phục.
 
-### 3.9.3. Cơ chế thu thập và đánh giá kết quả
+### 3.9.3. Thu thập dữ liệu và quy trình chấm điểm
 
-Ground Truth được lưu ở snapshot của lần chạy để việc cập nhật scenario về sau không thay đổi căn cứ chấm của run cũ. `BenchmarkObservationRepository` đọc kết luận Agent từ Activity Event `ANALYSIS_COMPLETED`, đếm các lần Agent gọi tool và lấy mốc timestamp để tính thời gian. Evaluator v4 xuất dữ liệu từng metric với `expected_value`, `actual_value`, `evidence`; lưu vào các bảng Evaluation và metric, kết quả API chỉ đọc được người có quyền truy cập yêu cầu. TSR được tổng hợp bằng truy vấn SQL từ toàn bộ Benchmark Run, không lấy mẫu chỉ theo các dòng giao diện đã tải.
+`BenchmarkObservationRepository` đọc kết luận có cấu trúc từ sự kiện `ANALYSIS_COMPLETED`, lấy dữ liệu Evidence Coverage, đếm các bản ghi thực thi công cụ và xác định khoảng chờ phê duyệt từ Task Activity. Kết quả phân tích dự phòng (`used_fallback`) không được sử dụng làm một structured RCA submission hợp lệ. Nếu submission thiếu hoặc không hợp lệ, Evaluator ghi nhận trạng thái tương ứng và chấm dự đoán RCA như tập rỗng; đối với các kịch bản có Ground Truth không rỗng, trường hợp này không đạt GOAL.
 
-### 3.9.4. Quy tắc tính toán các chỉ số đánh giá
+Bộ chấm điểm hiện hành là `db-benchmark-v5`, so sánh các tập cặp nguyên nhân đã chuẩn hóa và xuất các metric GOAL, RCA, REMEDIATION, SAFETY, LATENCY, INTERACTION_TURNS. Mỗi metric lưu kết quả cùng `expected_value`, `actual_value` và `evidence` trong PostgreSQL. Evaluation chỉ được tạo khi Run đang `RUNNING` và đã có `FINAL_RESPONSE`. Khi tổng hợp Task Success Rate, backend sử dụng truy vấn SQL trên toàn bộ lịch sử Benchmark Run, không suy ra tỷ lệ từ danh sách phân trang của giao diện.
 
-Cần phân biệt **GOAL Pass Rate trên các Run đã được chấm** với **Task Success Rate (TSR) của API tổng hợp**. Hai chỉ số có mẫu số khác nhau khi workflow thất bại trước khi Evaluation được lưu.
+### 3.9.4. Định nghĩa và công thức các chỉ số đánh giá
 
-**GOAL Pass Rate (Run đã được chấm):**
+**a) Phát hiện bất thường và xác định nguyên nhân gốc (RCA)**
 
-$$
-GOALPassRate=\frac{N_{\mathrm{GOAL\ PASS}}}{N_{\mathrm{GOAL\ PASS}}+N_{\mathrm{GOAL\ FAIL}}}\times100\%.
-$$
-
-Chỉ các Evaluation có GOAL PASS hoặc GOAL FAIL được đưa vào mẫu số này. Báo cáo cũng trình bày tỷ lệ `GOAL PASS / tổng số Run` để không che giấu các lượt chưa được chấm.
-
-**TSR theo API `GET /benchmarks/runs/summary`:**
+Đối với lượt chạy thứ \(i\), ký hiệu \(G_i\) là tập cặp nguyên nhân trong Ground Truth và \(P_i\) là tập cặp nguyên nhân do Agent dự đoán:
 
 $$
-TSR_{\mathrm{API}}=\frac{N_{\mathrm{passed}}}{N_{\mathrm{passed}}+N_{\mathrm{failed}}}\times100\%.
+G_i,\ P_i \subseteq \mathcal{R}\times\mathcal{F}.
 $$
 
-Quy tắc `classify_run` ở `src/app/domains/benchmark/utils/summary.py` xác định: `passed` là Run `COMPLETED/CLEANED` có Evaluation GOAL PASS; `failed` là Run `COMPLETED/CLEANED` có GOAL FAIL, hoặc Run `FAILED` sau khi Agent Chat bắt đầu, hoặc Run đã hoàn tất có `source_message_id` và `error_message` nhưng chưa lưu GOAL. `not_started`, `in_progress`, `setup_failed` và `unscored` không thuộc mẫu số. Cleanup không làm thay đổi kết quả GOAL. Khi không có Run hợp lệ, API trả `success_rate=null` thay vì 0%.
+Trong đó, \(\mathcal{R}\) là tập định danh tài nguyên mạng và \(\mathcal{F}\) là tập loại sự cố được evaluator hỗ trợ. `resource_id` được chuẩn hóa theo dạng `node/<device>` khi nguyên nhân ở mức thiết bị, hoặc `interface/<device>/<interface>` khi nguyên nhân gắn với interface. Tên thiết bị và interface được chuẩn hóa không phân biệt chữ hoa/thường; `fault_type` được chuẩn hóa theo taxonomy và alias của evaluator. Các cặp trùng nhau chỉ được tính một lần do sử dụng cấu trúc tập hợp.
 
-`BenchmarkRun.evaluation_result` hiện lưu RCA, không phải GOAL. Dashboard toàn bộ lịch sử lấy thống kê từ API summary; Dashboard lọc ngày dùng kết quả GOAL của Evaluation và cùng quy tắc phân loại Run. Khi công bố tỷ lệ cần ghi số Run tổng, số được chấm, số thất bại khi thực thi và mẫu số thực tế.
-
-Với RCA, gọi $P$ là tập cặp tài nguyên–loại lỗi dự đoán và $G$ là Ground Truth:
+Số dự đoán đúng, dự đoán thừa và nguyên nhân bị bỏ sót được xác định như sau:
 
 $$
-TP=|P\cap G|,\qquad FP=|P-G|,\qquad FN=|G-P|
+TP_i=|P_i\cap G_i|,\qquad
+FP_i=|P_i\setminus G_i|,\qquad
+FN_i=|G_i\setminus P_i|.
 $$
 
+Từ đó, các chỉ số RCA được tính theo định nghĩa Precision, Recall và F1:
+
 $$
-Precision=\frac{TP}{TP+FP},\qquad Recall=\frac{TP}{TP+FN}
+\mathrm{Precision}_i=\frac{TP_i}{TP_i+FP_i},\qquad
+\mathrm{Recall}_i=\frac{TP_i}{TP_i+FN_i},
 $$
 
 $$
-F1=\frac{2\times Precision\times Recall}{Precision+Recall}
+\mathrm{F1}_i=\frac{2TP_i}{2TP_i+FP_i+FN_i}.
 $$
 
-Active Latency được tính từ thời điểm tạo Task đến phản hồi cuối, sau khi loại trừ các khoảng chờ phê duyệt hợp lệ:
+Khi mẫu số bằng 0, evaluator quy ước chỉ số tương ứng bằng 0. Trường hợp cả tập dự đoán và Ground Truth đều rỗng được hàm tính điểm tổng quát xử lý riêng, nhưng không thuộc phạm vi các Benchmark Scenario chẩn đoán hiện tại vì Ground Truth bắt buộc không rỗng. Precision phản ánh tỷ lệ dự đoán đúng trong các cặp đã dự đoán, Recall phản ánh tỷ lệ nguyên nhân thực tế được tìm thấy, còn F1 cân bằng hai chỉ số. Đây là các công thức chuẩn; việc áp dụng lên cặp tài nguyên–loại lỗi là **quy ước biểu diễn đơn vị đánh giá của hệ thống**.
+
+Bên cạnh RCA theo cặp, evaluator tính riêng Localization Precision/Recall/F1 trên tập `resource_id` và Fault Type Precision/Recall/F1 trên tập `fault_type`, bằng cùng công thức nhưng thay đổi đối tượng tập hợp. Hai phép đánh giá thành phần không bảo đảm cặp RCA đúng: một dự đoán có thể xác định đúng thiết bị và đúng tập loại lỗi nhưng ghép sai loại lỗi với thiết bị. Trường `rca_accuracy` và `localization_accuracy` trong dữ liệu tương thích hiện được gán cùng giá trị với Recall, vì vậy báo cáo **không diễn giải chúng như Classification Accuracy**.
+
+Do tập kịch bản hiện tại đều chứa sự cố, Detection Score được xác định theo:
 
 $$
-T_{active}=T_{final}-T_{task}-T_{approval}
+D_i=
+\begin{cases}
+1,&\text{khi Agent trả }\mathrm{is\_anomaly}=\mathrm{true},\\
+0,&\text{trong các trường hợp còn lại}.
+\end{cases}
 $$
 
-Interaction Turns là số lần Agent gọi công cụ trong phạm vi Task, không phải số tin nhắn hoặc số bước suy luận nội bộ. Remediation và Safety chỉ được ghi PASS/FAIL khi có bộ chấm và bằng chứng tương ứng; nếu chưa triển khai đầy đủ, metric phải được phân loại NOT_APPLICABLE.
+Chỉ số này đánh giá việc nhận biết sự cố trên **tập mẫu dương đã tiêm lỗi**, không phải Detection Accuracy trên tập gồm cả trường hợp bình thường; do đó chưa thể suy ra Specificity hoặc False Positive Rate của khả năng phát hiện.
+
+**b) Kết quả PASS/FAIL ở mức lượt chạy**
+
+Evaluator phân biệt tính chính xác của tập RCA với mục tiêu chẩn đoán tổng thể:
+
+$$
+\mathrm{RCA\_PASS}_i=\mathbb{1}(P_i=G_i),
+$$
+
+$$
+\mathrm{GOAL\_PASS}_i=\mathbb{1}(P_i=G_i\ \land\ D_i=1),
+$$
+
+trong đó \(\mathbb{1}(\cdot)\) bằng 1 khi điều kiện đúng và bằng 0 khi điều kiện sai. Vì vậy, RCA có thể PASS khi tập nguyên nhân khớp hoàn toàn nhưng GOAL vẫn FAIL nếu Agent không xác nhận có bất thường. GOAL PASS trong phiên bản evaluator hiện tại biểu thị **hoàn thành mục tiêu chẩn đoán**, không chứng minh cấu hình đã được sửa hoặc dịch vụ mạng đã được khôi phục.
+
+Trên các Benchmark Run có Evaluation chứa kết quả hợp lệ, tỷ lệ GOAL PASS và RCA PASS được tính riêng:
+
+$$
+\mathrm{GOAL\ Pass\ Rate}
+=\frac{N_{\mathrm{GOAL\ PASS}}}
+{N_{\mathrm{GOAL\ PASS}}+N_{\mathrm{GOAL\ FAIL}}}\times100\%,
+$$
+
+$$
+\mathrm{RCA\ Pass\ Rate}
+=\frac{N_{\mathrm{RCA\ PASS}}}
+{N_{\mathrm{RCA\ PASS}}+N_{\mathrm{RCA\ FAIL}}}\times100\%.
+$$
+
+Hai tỷ lệ trên chỉ sử dụng các Run **đã có kết quả được chấm**; những lượt workflow thất bại trước khi lưu Evaluation không thuộc mẫu số. Khi mẫu số bằng 0, tỷ lệ được xem là chưa xác định, không gán bằng 0%.
+
+**c) Task Success Rate (TSR) của API tổng hợp**
+
+Để không loại bỏ mọi lượt thất bại trước khi Evaluation được tạo, API `GET /benchmarks/runs/summary` áp dụng quy tắc phân loại trên toàn bộ Benchmark Run:
+
+- `passed`: Run `COMPLETED` hoặc `CLEANED` có Evaluation GOAL PASS.
+- `failed`: Run `COMPLETED` hoặc `CLEANED` có GOAL FAIL; Run `FAILED` sau khi đã bắt đầu Agent Chat; hoặc Run đã hoàn tất, có `source_message_id` và `error_message` nhưng không có GOAL.
+- `not_started`, `in_progress`, `setup_failed`, `unscored`: các trường hợp chưa bắt đầu, đang chạy, lỗi chuẩn bị môi trường hoặc không đủ kết quả để chấm; được báo cáo riêng và không thuộc mẫu số TSR.
+
+Công thức được hệ thống triển khai là:
+
+$$
+\mathrm{TSR}_{API}
+=\frac{N_{\mathrm{passed}}}
+{N_{\mathrm{passed}}+N_{\mathrm{failed}}}\times100\%.
+$$
+
+Đặt \(N_{\mathrm{eligible}}=N_{\mathrm{passed}}+N_{\mathrm{failed}}\). Nếu \(N_{\mathrm{eligible}}=0\), API trả `null`, không trả 0%. Các Run còn `RUNNING` không được tính là thất bại; trạng thái `CLEANED` không làm thay đổi kết quả chẩn đoán đã chấm. `BenchmarkRun.evaluation_result` lưu kết quả RCA nên không được dùng làm GOAL khi tính TSR. Khi công bố TSR cần báo cáo đồng thời \(N_{\mathrm{eligible}}\), tổng số Run và số lượng từng nhóm bị loại khỏi mẫu số để tránh gây hiểu nhầm về tỷ lệ thành công.
+
+**d) Active Latency và Interaction Turns**
+
+Active Latency đo thời gian từ khi Task được tạo đến khi Message `FINAL_RESPONSE` được tạo, sau khi loại trừ **hợp các khoảng chờ phê duyệt hợp lệ**:
+
+$$
+T_{\mathrm{active},i}
+=(t_{\mathrm{response},i}-t_{\mathrm{task},i})
+-\sum_{k=1}^{m_i}\Delta t_{\mathrm{approval},ik}.
+$$
+
+Mỗi khoảng chờ bắt đầu tại sự kiện `APPROVAL_REQUESTED` và kết thúc tại sự kiện `EXECUTION_STARTED` tiếp theo khi workflow tiếp tục. Các khoảng trùng hoặc giao nhau được hợp nhất trước khi cộng, tránh trừ lặp thời gian. Khi thông tin chờ còn mở, sai thứ tự hoặc nằm ngoài khoảng đo, Latency được lưu là không xác định (`null`) thay vì suy đoán giá trị. Backend lưu `active_duration_ms`; khi trình bày bằng giây, chia giá trị này cho 1.000. Chỉ số bao gồm lập kế hoạch, thực thi công cụ mạng, phân tích và chi phí điều phối trong thời gian tồn tại của Task, **không phải thời gian suy luận riêng của LLM** và không bao gồm giai đoạn chuẩn bị tiêm lỗi GNS3 trước khi tạo Task.
+
+Interaction Turns trong evaluator hiện tại được xác định bằng số bản ghi `task_executions` thuộc Task có `tool_name` khác `NULL`:
+
+$$
+\mathrm{InteractionTurns}_i
+=\#\{e\in\mathrm{TaskExecutions}_i\mid e.\mathrm{tool\_name}\neq\mathrm{NULL}\}.
+$$
+
+Đây là số lượt gọi công cụ được ghi nhận cho Task, không phải số câu lệnh CLI, số tin nhắn hội thoại hay số vòng suy luận nội bộ của LLM. Chỉ số không bao gồm thao tác injection hoặc cleanup do Benchmark Engine thực hiện ngoài Task. LATENCY và INTERACTION_TURNS là các đại lượng đo lường, được lưu với trạng thái `UNKNOWN` thay vì áp đặt một ngưỡng PASS/FAIL chưa được xác định.
+
+**e) Remediation và Safety**
+
+Trong evaluator hiện hành, REMEDIATION và SAFETY đều được ghi `NOT_APPLICABLE` với `is_required = false`; chưa có cơ chế chấm PASS/FAIL tự động cho hai tiêu chí này. Vì vậy, báo cáo không tính Remediation Pass Rate hoặc Safety Pass Rate từ dữ liệu hiện có. Khả năng yêu cầu phê duyệt và khôi phục môi trường thử nghiệm được kiểm tra thông qua Approval, trạng thái Cleanup và các nhật ký tương ứng; không đồng nhất những kiểm tra đó với metric Safety đã được chấm.
+
+### 3.9.5. Giới hạn của phương pháp đánh giá và khả năng tái lập
+
+Các công thức Precision, Recall và F1 là những thước đo thông dụng trong đánh giá mô hình; tuy nhiên, **tính hợp lệ khoa học của kết quả** còn phụ thuộc vào đơn vị chấm, Ground Truth, mẫu số, tập kịch bản và cách thu thập bằng chứng. Vì evaluator sử dụng so khớp chính xác các cặp đã chuẩn hóa, sai khác về định danh tài nguyên hoặc taxonomy có thể làm giảm điểm dù kết luận ngôn ngữ tự nhiên gần đúng. Đồng thời, các Scenario hiện tại chỉ chứa sự cố đã tiêm nên Detection Score chưa phản ánh khả năng phân biệt mạng bình thường với mạng có lỗi.
+
+Các kết quả giữa nhiều lượt chạy cần được phân nhóm theo `evaluator_version`, mô hình LLM, topology, tập Scenario và phiên bản workflow; không nên coi các cohort thay đổi đồng thời nhiều thành phần là bằng chứng về quan hệ nhân quả. Khi trình bày kết quả, cần ghi số Run tổng, Run đủ điều kiện, Run được chấm, lỗi setup, Run chưa có kết quả, phân bố GOAL/RCA, thời gian đo được và số mẫu Latency/Interaction Turns. Nếu chỉ có một lượt thử cho mỗi Scenario, kết luận nên giới hạn ở thống kê mô tả; chưa đủ cơ sở khẳng định khác biệt có ý nghĩa thống kê hoặc khả năng tổng quát hóa. Các công thức nêu trên định nghĩa cách chấm điểm của hệ thống và có thể tái tính từ dữ liệu lưu trữ, nhưng không tự chứng minh hiệu quả thực nghiệm nếu chưa có dữ liệu quan sát tương ứng.
+
+Về cơ sở phương pháp, phép đo Precision/Recall/F1 tuân theo các định nghĩa chuẩn của [scikit-learn](https://scikit-learn.org/stable/modules/model_evaluation.html); việc đánh giá chẩn đoán dựa trên tài nguyên và loại lỗi được xây dựng theo hướng tham khảo [NIKA: A Network Arena for Benchmarking AI Agents on Network Troubleshooting](https://arxiv.org/abs/2512.16381). Phương pháp chấm cụ thể ở đây là triển khai `db-benchmark-v5` của hệ thống và không được xem là hoàn toàn tương đương với protocol đánh giá của NIKA.
 
 ---
 
