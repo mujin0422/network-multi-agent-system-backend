@@ -1417,10 +1417,10 @@ Bộ chấm điểm hiện hành là `db-benchmark-v5`, so sánh các tập cặ
 Đối với lượt chạy thứ \(i\), ký hiệu \(G_i\) là tập cặp nguyên nhân trong Ground Truth và \(P_i\) là tập cặp nguyên nhân do Agent dự đoán:
 
 $$
-G_i,\ P_i \subseteq \{(\mathrm{resource\_id},\mathrm{fault\_type})\}.
+G_i,\ P_i \subseteq \mathcal{R}\times\mathcal{F}.
 $$
 
-`resource_id` được chuẩn hóa theo dạng `node/<device>` khi nguyên nhân ở mức thiết bị, hoặc `interface/<device>/<interface>` khi nguyên nhân gắn với interface. Tên thiết bị và interface được chuẩn hóa không phân biệt chữ hoa/thường; `fault_type` được chuẩn hóa theo taxonomy và alias của evaluator. Các cặp trùng nhau chỉ được tính một lần do sử dụng cấu trúc tập hợp.
+Trong đó, \(\mathcal{R}\) là tập định danh tài nguyên mạng và \(\mathcal{F}\) là tập loại sự cố được evaluator hỗ trợ. `resource_id` được chuẩn hóa theo dạng `node/<device>` khi nguyên nhân ở mức thiết bị, hoặc `interface/<device>/<interface>` khi nguyên nhân gắn với interface. Tên thiết bị và interface được chuẩn hóa không phân biệt chữ hoa/thường; `fault_type` được chuẩn hóa theo taxonomy và alias của evaluator. Các cặp trùng nhau chỉ được tính một lần do sử dụng cấu trúc tập hợp.
 
 Số dự đoán đúng, dự đoán thừa và nguyên nhân bị bỏ sót được xác định như sau:
 
