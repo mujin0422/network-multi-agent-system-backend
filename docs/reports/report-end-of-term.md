@@ -1269,34 +1269,72 @@ _Hình 3.10. Vòng đời Benchmark Run và điều kiện khôi phục môi tr�
 
 ### 3.7.1. Mô hình dữ liệu và sơ đồ ERD
 
-PostgreSQL quản lý dữ liệu theo các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Các thực thể được liên kết bằng khóa ngoại để truy vết từ yêu cầu người dùng đến Task, kế hoạch, lần thực thi, hành động trên thiết bị và kết quả đánh giá.
+PostgreSQL tổ chức dữ liệu thành 27 bảng thuộc các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation, Audit và Workflow Job. Hình 3.11 trình bày tên các bảng và các quan hệ khóa ngoại chủ yếu, không đi sâu vào thuộc tính. Riêng bảng `workflow_jobs` lưu ID tham chiếu trong `payload` JSONB và không có khóa ngoại trực tiếp đến các bảng nghiệp vụ; vì vậy bảng này được biểu diễn độc lập trong sơ đồ.
 
 ```mermaid
 erDiagram
-    USERS ||--o{ CONVERSATIONS : owns
+    %% Identity and access control
+    ROLES ||--o{ USERS : assigns
+    USERS o|--o{ ROLES : created_by
     USERS ||--o{ USER_SESSIONS : has
-    USERS }o--o{ ROLES : assigned
-    ROLES }o--o{ PERMISSIONS : grants
-    CREDENTIALS ||--o{ DEVICES : authenticates
+    MANAGEMENT_FUNCTIONS ||--o{ PERMISSIONS : defines
+    ACTIONS ||--o{ PERMISSIONS : defines
+    ROLES ||--o{ ROLE_PERMISSIONS : has
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : assigned
+
+    %% Inventory and credentials
+    USERS ||--o{ CREDENTIALS : created_by
+    USERS ||--o{ DEVICES : created_by
+    CREDENTIALS o|--o{ DEVICES : authenticates
     BRANDS ||--o{ DEVICES : classifies
     CATEGORIES ||--o{ DEVICES : groups
+
+    %% Conversation and request tracking
+    USERS ||--o{ CONVERSATIONS : owns
     CONVERSATIONS ||--o{ MESSAGES : contains
-    CONVERSATIONS ||--o{ TASKS : creates
+    MESSAGES o|--o{ MESSAGES : replies_to
+    USERS ||--o{ TASKS : requests
+    CONVERSATIONS ||--o{ TASKS : groups
+    MESSAGES ||--o| TASKS : source_message
+
+    %% Execution DAG, approvals, and evidence logs
     TASKS ||--o{ TASK_OPERATIONS : contains
-    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : depends
+    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : operation
+    TASK_OPERATIONS ||--o{ OPERATION_DEPENDENCIES : depends_on
     TASK_OPERATIONS ||--o{ TASK_OPERATION_DEVICES : targets
     DEVICES ||--o{ TASK_OPERATION_DEVICES : assigned
+    TASK_OPERATION_DEVICES ||--o| OPERATION_DEVICE_APPROVALS : approval
+    USERS o|--o{ OPERATION_DEVICE_APPROVALS : decided_by
     TASKS ||--o{ TASK_EXECUTIONS : records
-    TASKS ||--o{ TASK_ACTIVITY_EVENTS : emits
-    TASKS ||--o{ DEVICE_ACTION_LOGS : logs
-    BENCHMARK_SCENARIOS ||--o{ BENCHMARK_RUNS : instantiates
-    BENCHMARK_RUNS }o--o| TASKS : evaluates
-    TASKS ||--o| TASK_EVALUATIONS : receives
-    TASK_EVALUATIONS ||--o{ TASK_EVALUATION_METRICS : contains
-    USERS ||--o{ AUDIT_LOGS : acts
+    TASK_OPERATIONS o|--o{ TASK_EXECUTIONS : operation
+    TASK_OPERATION_DEVICES o|--o{ TASK_EXECUTIONS : mapping
+    TASKS ||--o{ TASK_ACTIVITY_EVENTS : timeline
+    TASK_OPERATIONS o|--o{ TASK_ACTIVITY_EVENTS : operation
+    TASK_EXECUTIONS o|--o{ TASK_ACTIVITY_EVENTS : execution
+    TASKS ||--o{ DEVICE_ACTION_LOGS : records
+    TASK_OPERATIONS ||--o{ DEVICE_ACTION_LOGS : operation
+    TASK_OPERATION_DEVICES ||--o{ DEVICE_ACTION_LOGS : mapping
+    TASK_EXECUTIONS ||--o{ DEVICE_ACTION_LOGS : execution
+    DEVICES ||--o{ DEVICE_ACTION_LOGS : device
+    DEVICE_ACTION_LOGS o|--o{ DEVICE_ACTION_LOGS : rollback_of
+
+    %% Benchmark and evaluation
+    USERS o|--o{ BENCHMARK_SCENARIOS : created_by
+    BENCHMARK_SCENARIOS ||--o{ BENCHMARK_RUNS : instantiated
+    USERS ||--o{ BENCHMARK_RUNS : started_by
+    CONVERSATIONS o|--o{ BENCHMARK_RUNS : conversation
+    MESSAGES o|--o{ BENCHMARK_RUNS : source_message
+    TASKS o|--o{ BENCHMARK_RUNS : task
+    TASKS ||--o| TASK_EVALUATIONS : evaluated
+    TASK_EVALUATIONS ||--o{ TASK_EVALUATION_METRICS : metrics
+    TASK_EVALUATIONS o|--o{ BENCHMARK_RUNS : evaluation
+
+    %% Audit and asynchronous workflow queue
+    USERS o|--o{ AUDIT_LOGS : actor
+    WORKFLOW_JOBS
 ```
 
-_Hình 3.11. Sơ đồ quan hệ thực thể rút gọn của hệ thống._
+_Hình 3.11. Sơ đồ quan hệ giữa các bảng dữ liệu của hệ thống (chỉ thể hiện tên bảng)._
 
 ### 3.7.2. Quản lý thiết bị và thông tin kết nối
 
@@ -1304,45 +1342,53 @@ Inventory được chuẩn hóa thành Brand, Category, Credential và Device. T
 
 ### 3.7.3. Quản lý Task, Operation và Execution
 
-Task đại diện cho nhiệm vụ phát sinh từ yêu cầu người dùng. Mỗi Task chứa nhiều Operation; dependency biểu diễn điều kiện thực thi giữa các Operation; bảng ánh xạ Operation–Device quản lý vai trò, access mode và trạng thái trên từng thiết bị. Task Execution lưu từng lần thực thi, Device Action Log ghi lệnh và output, còn Task Activity Event ghi các sự kiện quan trọng trong vòng đời nhiệm vụ.
+Task đại diện cho yêu cầu xử lý của người dùng; mỗi Task chứa các Operation, dependency và ánh xạ Operation–Device theo quyền READ/WRITE. Bảng `operation_device_approvals` lưu yêu cầu và quyết định phê duyệt ở mức Device Mapping. `task_executions` lưu từng lần thực thi; `device_action_logs` ghi lệnh và kết quả theo thiết bị; `task_activity_events` ghi tiến trình xử lý. Bảng `workflow_jobs` quản lý hàng đợi MESSAGE/APPROVAL để Workflow Worker có thể xử lý hoặc tiếp tục Task mà không giữ yêu cầu HTTP.
 
 ### 3.7.4. Quản lý kết quả đánh giá và Audit Log
 
-Benchmark Scenario mô tả kịch bản, trạng thái ban đầu, injection, Ground Truth và cleanup; Benchmark Run đại diện cho một lần chạy độc lập. Task Evaluation và Evaluation Metric lưu điểm, giá trị mong đợi, giá trị thực tế và bằng chứng. Audit Log ghi các thao tác nghiệp vụ cần kiểm toán độc lập với phản hồi ngôn ngữ tự nhiên của Agent.
+Benchmark Scenario lưu định nghĩa kịch bản, trạng thái ban đầu, thao tác injection, Ground Truth và cleanup; Benchmark Run lưu thông tin từng lượt chạy và liên kết Task/Evaluation khi có kết quả. `task_evaluations` và `task_evaluation_metrics` lưu các tiêu chí đánh giá, giá trị kỳ vọng, giá trị thực tế và bằng chứng. `audit_logs` lưu dấu vết kiểm toán độc lập với phản hồi của Agent. Miền Identity dùng `users`, `roles`, `role_permissions`, `permissions`, `management_functions` và `actions` để quản lý phân quyền.
 
 ## 3.8. Xây dựng và triển khai hệ thống
 
 ### 3.8.1. Xây dựng Backend và API
 
-Backend được phát triển bằng FastAPI và tổ chức theo domain. Router tiếp nhận HTTP request và kiểm tra quyền; Service thực hiện logic nghiệp vụ; Repository truy xuất dữ liệu; Schema và Model định nghĩa hợp đồng dữ liệu. Các Agent không trực tiếp thao tác ORM hoặc cơ sở dữ liệu.
+Backend được phát triển bằng FastAPI và tổ chức theo các miền nghiệp vụ Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Router tiếp nhận yêu cầu HTTP, xác thực access token và kiểm tra permission; Domain Service thực hiện quy tắc nghiệp vụ, Repository thao tác với PostgreSQL, còn Schema và Model định nghĩa hợp đồng dữ liệu. Các Agent không trực tiếp truy cập Repository hoặc quản lý phiên kết nối cơ sở dữ liệu.
+
+Các yêu cầu xử lý AI được tiếp nhận qua Conversation API, lưu Message rồi tạo Workflow Job loại `MESSAGE`. Workflow Worker độc lập nhận job từ PostgreSQL và thực thi LangGraph, trong khi API cung cấp SSE để frontend theo dõi Task Activity. Đối với thao tác WRITE cần phê duyệt, API ghi quyết định và tạo job `APPROVAL` để Worker tiếp tục Task từ trạng thái đã lưu. Cơ chế này tách xử lý dài hạn khỏi vòng đời HTTP và hỗ trợ xử lý lại job khi có lỗi.
 
 ### 3.8.2. Xây dựng giao diện quản trị
 
-Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và hệ component shadcn; sử dụng các thư viện bảng, form, trạng thái và giao tiếp HTTP phù hợp. Các feature hiện có gồm Login/Profile, Dashboard, Chatbot/Conversation, Tasks, Devices, Credentials, Device Catalog, Users, Roles/Access Control, Audit Logs, Benchmark Scenarios, Benchmark Runs và Evaluations. Giao diện chat hỗ trợ danh sách hội thoại, activity timeline, hiển thị yêu cầu approval và mở chi tiết Task; trang Benchmark hỗ trợ nhập action/check/Ground Truth và xem kết quả chạy.
+Frontend được xây dựng bằng React 19, TypeScript, Vite, Tailwind CSS và bộ component shadcn. Giao diện gồm các nhóm chức năng đăng nhập và hồ sơ người dùng, Dashboard, Chatbot/Conversation, Task, quản lý thiết bị và Credential, danh mục thiết bị, người dùng và vai trò, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation. Những màn hình quản trị sử dụng bảng dữ liệu, bộ lọc, phân trang và giao diện xem chi tiết phù hợp với từng nhóm nghiệp vụ.
 
-Trang Evaluations hiển thị lịch sử đánh giá, GOAL/RCA, Remediation/Safety, Latency và Interaction Turns, cùng các kết quả có cấu trúc của v4 gồm RCA F1, Precision, Recall, Localization F1, Fault Type F1 và Detection. Dashboard dùng `GET /benchmarks/runs/summary` làm nguồn chuẩn cho TSR toàn bộ lịch sử. Khi lọc theo ngày bắt đầu Benchmark Run, frontend phân loại tập Run theo cùng quy tắc backend và tra kết quả `GOAL` từ Evaluation liên kết, không dùng `BenchmarkRun.evaluation_result` để tính TSR vì trường này hiện lưu kết quả **RCA**, không phải GOAL. GOAL Pass Rate, RCA Pass Rate và RCA F1 được hiển thị riêng với mẫu số tương ứng. Phiên bản evaluator giúp phân biệt chấm từ khóa lịch sử và chấm RCA có cấu trúc.
+Giao diện Chat hỗ trợ gửi yêu cầu, xem lịch sử hội thoại, theo dõi Task Activity bằng SSE, tải lại dữ liệu khi cần và hiển thị yêu cầu phê duyệt cấu hình. Màn hình Benchmark hỗ trợ quản lý Scenario, khai báo action, check và Ground Truth, theo dõi từng Benchmark Run và kết quả Evaluation. Trang Evaluation trình bày các metric GOAL, RCA, REMEDIATION, SAFETY, LATENCY và INTERACTION_TURNS; phần chi tiết RCA có thể hiển thị Precision, Recall, F1, Localization F1, Fault Type F1 và Detection Score theo dữ liệu evaluator.
 
-### 3.8.3. Tích hợp LLM và các công cụ mạng
+Dashboard hiển thị các chỉ số Task và biểu đồ thống kê, đồng thời sử dụng `GET /benchmarks/runs/summary` làm nguồn tổng hợp chuẩn cho TSR khi không áp dụng bộ lọc thời gian. Với khoảng ngày Benchmark Run do người dùng lựa chọn, frontend tính lại tập mẫu và tra metric GOAL từ Evaluation liên kết. Trường `BenchmarkRun.evaluation_result` lưu kết quả RCA nên không được sử dụng làm kết quả GOAL. Các tỷ lệ GOAL Pass, RCA Pass và điểm RCA F1 được trình bày riêng, có phạm vi đánh giá và số lượng mẫu tương ứng.
 
-Planner Agent và Analyst Agent gọi LLM qua NVIDIA AI Endpoint; phản hồi được kiểm tra bằng Pydantic trước khi chuyển sang bước tiếp theo. Network Agent sử dụng `NetworkTool` thay vì gọi LLM, nhờ đó quyền thực thi lệnh được giữ tại tầng ứng dụng. Các thư viện I/O đồng bộ được gọi theo cách không chặn vòng lặp bất đồng bộ của FastAPI.
+### 3.8.3. Tích hợp LLM và công cụ mạng
+
+Planner Agent, Configuration Agent và Analyst Agent sử dụng mô hình ngôn ngữ thông qua NVIDIA AI Endpoint. Đầu ra có cấu trúc được kiểm tra bằng Pydantic trước khi chuyển sang giai đoạn tiếp theo; Planner xây dựng kế hoạch, Configuration Agent sinh CLI cho Operation WRITE, còn Analyst Agent phân tích kết quả và bằng chứng. Network Agent không sử dụng LLM để quyết định lệnh mà gọi `NetworkTool` với các Operation đã được kiểm soát.
+
+`NetworkTool` cung cấp giao diện chung cho các backend Netmiko hoặc Nornir theo cấu hình môi trường. Credential thiết bị được truy xuất qua lớp dịch vụ kết nối thay vì đưa vào prompt. Những thao tác mạng đồng bộ được thực hiện ngoài event loop để không chặn xử lý bất đồng bộ của ứng dụng. Trước khi thực thi cấu hình WRITE, Approval Gate kiểm tra trạng thái phê duyệt và tính toàn vẹn của Commands Snapshot.
 
 ### 3.8.4. Triển khai và cấu hình môi trường
 
-FastAPI API, Workflow Worker, PostgreSQL, migration và pgAdmin được tổ chức bằng Docker Compose. Cấu hình kết nối cơ sở dữ liệu, khóa xác thực, LLM provider và network backend được quản lý qua biến môi trường. Frontend chạy bằng Vite trong quá trình phát triển và kết nối REST API bằng access token. GNS3 Server hoạt động như môi trường thực nghiệm bên ngoài các dịch vụ nghiệp vụ.
+Hệ thống backend được tổ chức bằng Docker Compose với các dịch vụ FastAPI API, Workflow Worker, PostgreSQL và pgAdmin. Workflow Worker chạy như một tiến trình riêng để xử lý các Workflow Job đã lưu; PostgreSQL duy trì trạng thái nghiệp vụ và hàng đợi. Dịch vụ migration được cấu hình trong profile `tools`, sử dụng khi cần cập nhật cấu trúc cơ sở dữ liệu, không phải thành phần xử lý yêu cầu thường trực.
+
+Các thông số như kết nối PostgreSQL, khóa xác thực, thông tin NVIDIA AI Endpoint, backend công cụ mạng và địa chỉ GNS3 được quản lý bằng biến môi trường. Trong môi trường phát triển, frontend chạy bằng Vite và giao tiếp với FastAPI thông qua REST API và SSE. GNS3 Server cung cấp topology và thiết bị phục vụ thực nghiệm, hoạt động bên ngoài các dịch vụ nghiệp vụ của Docker Compose.
 
 ### 3.8.5. Giao diện các nhóm API
 
-| Nhóm API     | Chức năng chính                                           |
-| ------------ | --------------------------------------------------------- |
-| Identity     | Đăng nhập, phiên, người dùng, vai trò và quyền truy cập   |
-| Inventory    | Thiết bị, danh mục thiết bị và credential kết nối         |
-| Conversation | Hội thoại, tin nhắn và yêu cầu xử lý AI                   |
-| Execution    | Task, Operation, kết quả thực thi và quyết định phê duyệt |
-| Benchmark    | Scenario, Benchmark Run và Cleanup                        |
-| Evaluation   | Kết quả đánh giá và các metric                            |
-| Audit        | Nhật ký kiểm toán và bộ lọc tra cứu                       |
+| Nhóm API | Chức năng chính |
+| --- | --- |
+| Identity | Đăng nhập, phiên đăng nhập, người dùng, vai trò và quyền truy cập |
+| Inventory | Thiết bị, hãng và loại thiết bị, Credential kết nối |
+| Conversation | Hội thoại, Message và khởi tạo yêu cầu xử lý AI |
+| Execution | Task, Operation, Device Mapping, lịch sử thực thi, Activity SSE và quyết định phê duyệt |
+| Benchmark | Quản lý Scenario, chuẩn bị Benchmark Run, theo dõi và cleanup môi trường |
+| Evaluation | Tra cứu Evaluation và các metric tương ứng |
+| Audit | Nhật ký kiểm toán và tra cứu hoạt động nghiệp vụ |
 
-Các API nghiệp vụ dùng tiền tố `/api/v1`. Frontend không trực tiếp kết nối thiết bị; mọi thao tác được chuyển đến Service và Orchestrator tương ứng. FastAPI cung cấp thêm health endpoint và tài liệu OpenAPI phục vụ phát triển, kiểm thử tích hợp.
+Các API nghiệp vụ sử dụng tiền tố `/api/v1`. Workflow Job được xử lý nội bộ bởi Workflow Worker, không cung cấp như một nhóm API công khai riêng. Frontend không trực tiếp kết nối thiết bị mạng hoặc cơ sở dữ liệu; những thao tác nghiệp vụ đều đi qua API và Service tương ứng. FastAPI cung cấp thêm health endpoint và tài liệu OpenAPI phục vụ phát triển, kiểm thử tích hợp.
 
 ## 3.9. Thiết kế hệ thống thực nghiệm và đánh giá
 
