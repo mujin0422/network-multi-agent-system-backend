@@ -1,4 +1,4 @@
-# BÁO CÁO CUỐI KỲ ĐỒ ÁN CHUYÊN NGÀNH
+# BÁO CÁO MÔN HỌC – ĐỒ ÁN CHUYÊN NGÀNH
 
 ## NGHIÊN CỨU VÀ XÂY DỰNG HỆ THỐNG MULTI-AGENT HỖ TRỢ CẤU HÌNH VÀ XỬ LÝ SỰ CỐ MẠNG
 
@@ -199,7 +199,7 @@ Phạm vi nghiên cứu của đề tài tập trung vào việc thiết kế, x
 
 ---
 
-# CHƯƠNG 2. CƠ SỞ LÝ THUYẾT VÀ CÔNG NGHỆ
+# CHƯƠNG 2. CƠ SỞ LÝ THUYẾT
 
 ## 2.1. Tổng quan về mô hình ngôn ngữ lớn (Large Language Models)
 
@@ -980,7 +980,7 @@ sequenceDiagram
 
 _Hình 3.4. Sơ đồ tuần tự tổng quát tiếp nhận yêu cầu và cập nhật tiến trình xử lý._
 
-### 3.6.2. Quy trình lập kế hoạch và cấu hình mạng
+### 3.6.2. Quy trình lập kế hoạch và sinh cấu hình mạng
 
 Quy trình bắt đầu khi node `plan` nhận `Conversation` và `Message` của người dùng từ workflow state. Planning Orchestrator trước hết kiểm tra message có do người dùng gửi và có thuộc đúng cuộc hội thoại hay không. Sau đó, hệ thống tạo một bản ghi trong bảng `tasks`, liên kết bản ghi này với `conversation_id`, `source_message_id` và `user_id`. Task được tạo trước khi gọi mô hình ngôn ngữ nhằm bảo đảm mọi yêu cầu đều có dấu vết nghiệp vụ, kể cả khi Planner Agent timeout hoặc trả kết quả không hợp lệ. Hai activity `MESSAGE_RECEIVED` và `TASK_CREATED` cũng được ghi vào `task_activity_events` để frontend hiển thị tiến trình và hệ thống có thể kiểm toán quá trình xử lý.
 
@@ -1241,33 +1241,8 @@ flowchart TD
 
 _Hình 3.9. Sơ đồ hoạt động tạo phản hồi, cập nhật Benchmark Run và phát sự kiện SSE._
 
-### 3.6.7. Quy trình Benchmark Run và khôi phục môi trường
-
-Benchmark Run là quy trình nghiệp vụ bao quanh workflow chẩn đoán. Khi người dùng bắt đầu một Scenario đang hoạt động, Benchmark Service đóng băng toàn bộ Scenario thành `scenario_snapshot`, tạo Run ở trạng thái `PREPARING` và lưu Run trước khi tác động đến topology. Service lần lượt kiểm tra precondition bằng READ, thực thi injection bằng WRITE và kiểm tra `fault_verification`. Nếu toàn bộ bước chuẩn bị thành công, Run chuyển sang `READY` và `cleanup_required=true`.
-
-Khi người dùng bắt đầu Chat từ Run, Conversation và USER_REQUEST được liên kết với Run; Run chuyển sang `RUNNING`. Workflow Multi-Agent xử lý yêu cầu theo cùng quy trình thông thường. Chỉ khi có `FINAL_RESPONSE`, Benchmark Service mới đọc structured diagnosis và các observation đã lưu, tạo `TaskEvaluation` cùng các metric, liên kết Evaluation và Task với Run rồi chuyển Run sang `COMPLETED`. Nếu workflow dừng để chờ approval, Run tiếp tục ở trạng thái `RUNNING` cho đến khi nhánh resume tạo phản hồi cuối.
-
-Nếu precondition, injection hoặc fault verification thất bại, Run chuyển sang `FAILED`. Khi injection đã bắt đầu, hệ thống ưu tiên cleanup trước khi ghi nhận kết quả lỗi; nếu cleanup cũng thất bại, `cleanup_required` vẫn được giữ để cảnh báo môi trường chưa được khôi phục. Cleanup sử dụng các action trong snapshot, mở kết nối mới cho mỗi lần thử, tạo READ check tương ứng và chỉ đánh dấu `CLEANED` sau khi trạng thái phục hồi được xác minh. Cơ chế retry có giới hạn; khi hết số lần thử, Run không được xem là đã cleanup thành công. Thiết kế chi tiết Scenario, action, Ground Truth và evaluator được trình bày tiếp tại mục 3.9.
-
-```mermaid
-stateDiagram-v2
-    [*] --> PREPARING: Bắt đầu Scenario
-    PREPARING --> READY: Precondition, injection và verification thành công
-    PREPARING --> FAILED: Chuẩn bị hoặc verification thất bại
-    READY --> RUNNING: Liên kết Conversation và USER_REQUEST
-    RUNNING --> RUNNING: Chờ approval hoặc workflow tiếp tục
-    RUNNING --> COMPLETED: Có FINAL_RESPONSE và Evaluation
-    RUNNING --> FAILED: Workflow thất bại
-    COMPLETED --> CLEANED: Cleanup và READ verification thành công
-    FAILED --> CLEANED: Cleanup bắt buộc thành công
-    CLEANED --> [*]
-```
-
-_Hình 3.10. Vòng đời Benchmark Run và điều kiện khôi phục môi trường._
-
 ## 3.7. Thiết kế dữ liệu và cơ sở dữ liệu
 
-### 3.7.1. Mô hình dữ liệu và sơ đồ ERD
 
 PostgreSQL tổ chức dữ liệu thành 27 bảng thuộc các miền Identity, Inventory, Conversation, Execution, Benchmark, Evaluation, Audit và Workflow Job. Hình 3.11 trình bày tên các bảng và các quan hệ khóa ngoại chủ yếu, không đi sâu vào thuộc tính. Riêng bảng `workflow_jobs` lưu ID tham chiếu trong `payload` JSONB và không có khóa ngoại trực tiếp đến các bảng nghiệp vụ; vì vậy bảng này được biểu diễn độc lập trong sơ đồ.
 
@@ -1336,15 +1311,12 @@ erDiagram
 
 _Hình 3.11. Sơ đồ quan hệ giữa các bảng dữ liệu của hệ thống (chỉ thể hiện tên bảng)._
 
-### 3.7.2. Quản lý thiết bị và thông tin kết nối
 
 Inventory được chuẩn hóa thành Brand, Category, Credential và Device. Thiết bị chứa hostname, host/port, driver và liên kết credential. Password và enable secret được mã hóa khi lưu; chỉ lớp kết nối nội bộ được giải mã khi cần. Planner và frontend không nhận plaintext hoặc ciphertext của thông tin xác thực.
 
-### 3.7.3. Quản lý Task, Operation và Execution
 
 Task đại diện cho yêu cầu xử lý của người dùng; mỗi Task chứa các Operation, dependency và ánh xạ Operation–Device theo quyền READ/WRITE. Bảng `operation_device_approvals` lưu yêu cầu và quyết định phê duyệt ở mức Device Mapping. `task_executions` lưu từng lần thực thi; `device_action_logs` ghi lệnh và kết quả theo thiết bị; `task_activity_events` ghi tiến trình xử lý. Bảng `workflow_jobs` quản lý hàng đợi MESSAGE/APPROVAL để Workflow Worker có thể xử lý hoặc tiếp tục Task mà không giữ yêu cầu HTTP.
 
-### 3.7.4. Quản lý kết quả đánh giá và Audit Log
 
 Benchmark Scenario lưu định nghĩa kịch bản, trạng thái ban đầu, thao tác injection, Ground Truth và cleanup; Benchmark Run lưu thông tin từng lượt chạy và liên kết Task/Evaluation khi có kết quả. `task_evaluations` và `task_evaluation_metrics` lưu các tiêu chí đánh giá, giá trị kỳ vọng, giá trị thực tế và bằng chứng. `audit_logs` lưu dấu vết kiểm toán độc lập với phản hồi của Agent. Miền Identity dùng `users`, `roles`, `role_permissions`, `permissions`, `management_functions` và `actions` để quản lý phân quyền.
 
@@ -1404,7 +1376,7 @@ Một lượt thực nghiệm bắt đầu bằng việc kiểm tra `preconditio
 
 Các action đã được hỗ trợ bao gồm thay đổi trạng thái interface, cấu hình OSPF/MPLS, địa chỉ IP, default route, ACL và trạng thái BGP neighbor. Các seed hiện có bao phủ nhiều nhóm sự cố, nhưng sự tồn tại của seed hoặc mã dựng command không đồng nghĩa tất cả Scenario đã được chạy thực nghiệm thành công. Khi chuẩn bị hoặc xác minh sự cố thất bại, Run được ghi nhận lỗi; nếu đã bắt đầu injection, hệ thống ưu tiên cleanup. Cleanup thực hiện các action khôi phục, thử lại có giới hạn và xác minh bằng lệnh READ. Nếu không xác nhận được trạng thái phục hồi, `cleanup_required` được giữ lại; lượt chạy đó không được mặc nhiên xem là một môi trường độc lập đã khôi phục.
 
-### 3.9.3. Thu thập dữ liệu và quy trình chấm điểm
+### 3.9.3. Cơ chế thu thập và đánh giá kết quả
 
 `BenchmarkObservationRepository` đọc kết luận có cấu trúc từ sự kiện `ANALYSIS_COMPLETED`, lấy dữ liệu Evidence Coverage, đếm các bản ghi thực thi công cụ và xác định khoảng chờ phê duyệt từ Task Activity. Kết quả phân tích dự phòng (`used_fallback`) không được sử dụng làm một structured RCA submission hợp lệ. Nếu submission thiếu hoặc không hợp lệ, Evaluator ghi nhận trạng thái tương ứng và chấm dự đoán RCA như tập rỗng; đối với các kịch bản có Ground Truth không rỗng, trường hợp này không đạt GOAL.
 
@@ -1542,45 +1514,57 @@ Về cơ sở phương pháp, phép đo Precision/Recall/F1 tuân theo các đ�
 
 # CHƯƠNG 4. THỰC NGHIỆM VÀ ĐÁNH GIÁ
 
-Chương này trình bày quá trình thực nghiệm hệ thống Multi-Agent trên môi trường mạng giả lập GNS3 và đánh giá kết quả bằng dữ liệu được lưu trong cơ sở dữ liệu. Nội dung tập trung vào ba khía cạnh: khả năng hoàn thành nhiệm vụ chẩn đoán, độ chính xác của kết luận nguyên nhân gốc và chi phí thực thi. Kết quả kiểm thử phần mềm được phân biệt với kết quả thực nghiệm của Agent; các chỉ số chỉ được công bố khi có Benchmark Run và Evaluation tương ứng.
+Chương này trình bày những phép đánh giá đã được hiện thực và phân biệt kết quả kiểm thử phần mềm với kết quả thực nghiệm hiệu năng của AI. Thông tin số được đưa vào chỉ khi có bằng chứng: mã nguồn và test tại nhánh develop, nhật ký pytest do nhóm cung cấp, và một ảnh chụp Evaluation phiên bản v4. Các giá trị chưa đo được trên nhiều lần chạy sẽ không được suy diễn hoặc tạo số liệu minh họa như thể là kết quả nghiên cứu.
 
 ## 4.1. Mục tiêu và câu hỏi thực nghiệm
 
 ### 4.1.1. Mục tiêu thực nghiệm
 
-Thực nghiệm được xây dựng nhằm xác định mức độ đáp ứng của hệ thống đối với nhiệm vụ chẩn đoán sự cố mạng bằng ngôn ngữ tự nhiên. Một lượt thực nghiệm bao gồm việc chuẩn bị môi trường, tiêm sự cố, gửi yêu cầu đến hệ thống Multi-Agent, thu thập kết luận có cấu trúc, đối chiếu với Ground Truth và khôi phục topology về trạng thái ban đầu.
+Thực nghiệm được xây dựng nhằm đánh giá khả năng của hệ thống Multi-Agent trong việc tiếp nhận yêu cầu chẩn đoán sự cố mạng bằng ngôn ngữ tự nhiên, thu thập bằng chứng và xác định nguyên nhân gốc. Một lượt thực nghiệm bao gồm chuẩn bị môi trường, tiêm sự cố, gửi yêu cầu đến hệ thống, thu thập kết luận có cấu trúc, đối chiếu với Ground Truth và khôi phục topology về trạng thái ban đầu.
 
 Các mục tiêu cụ thể gồm:
 
-- Kiểm tra khả năng vận hành xuyên suốt của chuỗi Planner Agent, Network Agent, Analyst Agent và các Orchestrator.
-- Đánh giá khả năng phát hiện bất thường, định vị thiết bị hoặc interface xảy ra lỗi và xác định đúng loại nguyên nhân.
-- Đo tỷ lệ hoàn thành mục tiêu, thời gian workflow hoạt động và số lượt gọi công cụ mạng.
-- Quan sát ảnh hưởng của các thay đổi về playbook, Evidence Gate, investigation loop và bộ phân tích bằng chứng đối với kết quả chẩn đoán.
-- Kiểm tra việc cô lập từng lượt chạy và khả năng cleanup môi trường sau thực nghiệm.
+- Kiểm tra quy trình thực thi: Xác minh khả năng vận hành xuyên suốt của Planner Agent, Network Agent, Analyst Agent và các Orchestrator trong workflow chẩn đoán. Configuration Agent thuộc kiến trúc tổng thể nhưng chỉ tham gia khi kế hoạch có Operation WRITE cần sinh CLI.
 
-### 4.1.2. Câu hỏi nghiên cứu
+- Đánh giá chất lượng chẩn đoán: Xác định khả năng phát hiện bất thường, định vị thiết bị hoặc interface xảy ra sự cố và nhận diện đúng loại nguyên nhân.
 
-Bảng 4.1 trình bày các câu hỏi được sử dụng để định hướng quá trình đánh giá.
+- Đo lường hiệu quả thực thi: Đánh giá tỷ lệ hoàn thành mục tiêu, thời gian xử lý workflow và số lượt gọi công cụ.
+
+- Phân tích quá trình cải tiến: Quan sát sự thay đổi kết quả qua các phiên bản hệ thống có bổ sung diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và investigation loop.
+
+- Kiểm tra khả năng kiểm soát môi trường: Xác minh quá trình chuẩn bị, tiêm lỗi, cleanup và các cơ chế kiểm soát thay đổi cấu hình.
+
+Tập Benchmark Scenario trong chương này chủ yếu đánh giá các nhiệm vụ chẩn đoán READ-only. Khả năng sinh và thực thi cấu hình WRITE được xem xét riêng thông qua kiến trúc thực thi và các trường hợp kiểm thử Approval Gate, không đồng nhất với kết quả chẩn đoán của Benchmark.
+
+### 4.1.2. Câu hỏi nghiên cứu và tiêu chí đánh giá
+
+Các câu hỏi nghiên cứu được xây dựng nhằm định hướng quá trình thu thập và phân tích kết quả, như trình bày trong
+
+**Bảng 4.1. Các câu hỏi nghiên cứu và chỉ số đánh giá**
 
 | Mã | Câu hỏi nghiên cứu | Chỉ số sử dụng |
 | --- | --- | --- |
-| RQ1 | Hệ thống hoàn thành đúng mục tiêu chẩn đoán với tỷ lệ như thế nào? | GOAL Pass, Task Success Rate |
+| RQ1 | Hệ thống hoàn thành đúng mục tiêu chẩn đoán với tỷ lệ như thế nào? | GOAL Pass Rate, Task Success Rate |
 | RQ2 | Hệ thống phát hiện, định vị và xác định nguyên nhân gốc chính xác đến đâu? | Detection Score, Localization Precision/Recall/F1, Fault Type Precision/Recall/F1, RCA Precision/Recall/F1 |
-| RQ3 | Việc bổ sung bằng chứng và điều tra lặp ảnh hưởng như thế nào đến kết quả? | Evidence Coverage, số trường hợp chuyển từ FAIL sang PASS, Interaction Turns |
-| RQ4 | Chi phí xử lý của workflow là bao nhiêu? | Active Latency trung bình, trung vị và Interaction Turns |
-| RQ5 | Hệ thống có bảo đảm kiểm soát thay đổi và khôi phục môi trường thử nghiệm không? | Trạng thái Approval, Cleanup và `cleanup_required` |
+| RQ3 | Chất lượng chẩn đoán và chi phí thực thi thay đổi như thế nào qua các phiên bản hệ thống có bổ sung cơ chế thu thập và kiểm soát bằng chứng? | GOAL Pass, RCA F1, Evidence Coverage, Interaction Turns |
+| RQ4 | Chi phí xử lý của workflow được ghi nhận như thế nào? | Active Latency trung bình, trung vị và Interaction Turns |
+| RQ5 | Các cơ chế kiểm soát thay đổi và khôi phục môi trường được triển khai và kiểm tra như thế nào? | Trạng thái Approval, Cleanup, `cleanup_required` và các trường hợp kiểm thử |
+
+Trong đó, RQ1, RQ2 và RQ4 được trả lời bằng các chỉ số định lượng từ Benchmark Run và Evaluation. RQ3 tập trung phân tích sự thay đổi kết quả giữa các cohort, chưa nhằm xác lập quan hệ nhân quả của từng cơ chế. RQ5 được xem xét thông qua trạng thái vận hành, nhật ký và các trường hợp kiểm thử chức năng.
 
 ### 4.1.3. Phạm vi đánh giá
 
-Thực nghiệm được thực hiện trên một topology GNS3 dùng Cisco IOS, gồm các nhóm thiết bị Provider, Provider Edge và Customer Edge. Tập kịch bản tập trung vào lỗi interface, địa chỉ IP, OSPF, MPLS, BGP và ACL. Hệ thống sử dụng LLM qua NVIDIA API nhưng không huấn luyện hoặc fine-tune mô hình.
+Thực nghiệm được thực hiện trên một topology GNS3 sử dụng Cisco IOS, gồm các nhóm thiết bị Provider (P), Provider Edge (PE) và Customer Edge (CE). Tập kịch bản tập trung vào các sự cố liên quan đến interface, địa chỉ IP, OSPF, MPLS, BGP và ACL. Hệ thống sử dụng LLM thông qua NVIDIA AI Endpoint mà không thực hiện huấn luyện hoặc fine-tune mô hình.
 
-Kết quả trong chương này phản ánh khả năng của hệ thống trên topology, tập scenario, prompt, model và evaluator đã chọn. Kết quả chưa đại diện cho mọi thiết bị, nhà sản xuất hoặc sự cố trong mạng thực tế. Mỗi scenario mới được quan sát một lần trong từng cohort theo ngày logic; vì vậy phần so sánh mang tính mô tả, chưa phải kiểm định thống kê về quan hệ nhân quả.
+Các kết quả phản ánh khả năng của hệ thống trên topology, tập Scenario, prompt, model và evaluator được sử dụng trong quá trình thực nghiệm. Kết quả chưa đại diện cho mọi thiết bị, nhà sản xuất hoặc sự cố trong môi trường mạng thực tế. Mỗi Scenario được quan sát một lần trong từng cohort theo ngày logic; do đó, việc so sánh giữa các cohort chủ yếu mang tính thống kê mô tả.
 
-## 4.2. Môi trường thực nghiệm
+## 4.2. Môi trường và cấu hình thực nghiệm
 
-### 4.2.1. Thành phần phần mềm
+### 4.2.1. Cấu hình phần cứng và phần mềm
 
-Môi trường thực nghiệm gồm ứng dụng web, API, tiến trình xử lý workflow, cơ sở dữ liệu và GNS3. Các thành phần chính được trình bày trong Bảng 4.2.
+Môi trường thực nghiệm gồm ứng dụng web, Backend API, Workflow Worker, cơ sở dữ liệu và GNS3. Các thành phần chính được trình bày trong
+
+**Bảng 4.2. Thành phần phần mềm của môi trường thực nghiệm**
 
 | Thành phần | Công nghệ và vai trò |
 | --- | --- |
@@ -1594,68 +1578,52 @@ Môi trường thực nghiệm gồm ứng dụng web, API, tiến trình xử l
 | Môi trường mạng | GNS3; cung cấp topology và console thiết bị cho quá trình tiêm lỗi, chẩn đoán và cleanup |
 | Triển khai | Docker Compose cho API, Workflow Worker, PostgreSQL, migration và các dịch vụ hỗ trợ |
 
-Thông số phần cứng của máy chạy chưa được đóng băng thành metadata của từng Benchmark Run, do đó chương này không sử dụng kết quả để so sánh hiệu năng phần cứng. Các số đo thời gian chỉ được diễn giải trong phạm vi môi trường phát triển đã sử dụng.
+Hệ thống được triển khai theo mô hình tách biệt giữa API và tiến trình xử lý workflow. API tiếp nhận yêu cầu và cung cấp dữ liệu cho frontend, trong khi Workflow Worker thực hiện các tác vụ AI có thời gian xử lý dài. PostgreSQL lưu trạng thái nghiệp vụ, cho phép truy vết tiến trình và tiếp tục xử lý sau phê duyệt. Thông số phần cứng của môi trường thực nghiệm chưa được đóng băng thành metadata của từng Benchmark Run. Vì vậy, các số đo thời gian trong chương này được diễn giải trong phạm vi môi trường phát triển đã sử dụng, không dùng để so sánh hiệu năng giữa các cấu hình phần cứng.
 
-### 4.2.2. Topology mạng
+### 4.2.2. Topology mạng thực nghiệm trên GNS3
 
-Topology thực nghiệm mô phỏng mạng lõi MPLS, trong đó OSPF cung cấp khả năng định tuyến nội miền, MPLS/LDP phục vụ chuyển tiếp nhãn và eBGP kết nối các thiết bị CE với PE. Các thiết bị được quản lý trong Inventory và ánh xạ đến node GNS3 tương ứng.
+Topology thực nghiệm mô phỏng mạng lõi MPLS, trong đó OSPF cung cấp khả năng định tuyến nội miền, MPLS/LDP phục vụ chuyển tiếp nhãn và eBGP kết nối các thiết bị CE với PE. Các thiết bị được quản lý trong Inventory và ánh xạ đến các node GNS3 tương ứng.
 
 ![Network Topology](../images/network-topology.png)
 
 _Hình 4.1. Topology mạng thực nghiệm trên GNS3._
 
-Topology cho phép đặt lỗi tại nhiều lớp khác nhau: trạng thái vật lý hoặc quản trị của interface, địa chỉ IP, OSPF network/area, MPLS trên interface, BGP neighbor và ACL. Trước khi tiêm lỗi, Benchmark Engine thực hiện precondition; sau khi tiêm, `fault_verification` xác nhận lỗi thực sự tồn tại. Run chỉ chuyển sang `READY` khi hai bước này thành công.
+Topology cho phép xây dựng các kịch bản lỗi tại nhiều lớp khác nhau, bao gồm trạng thái interface, địa chỉ IP, OSPF network/area, MPLS trên interface, BGP neighbor và ACL. Trước khi tiêm lỗi, Benchmark Engine thực hiện precondition để xác nhận trạng thái ban đầu. Sau khi tiêm lỗi, các phép kiểm tra fault_verification được sử dụng để xác nhận sự cố đã xuất hiện. Benchmark Run chỉ chuyển sang trạng thái READY khi quá trình chuẩn bị và xác minh hoàn tất thành công.
 
-### 4.2.3. Cấu hình Agent
+### 4.2.3. Mô hình LLM và các tham số thực nghiệm
 
-Planner Agent và Analyst Agent sử dụng LLM được cấu hình qua NVIDIA API. Dữ liệu LLM trả về phải vượt qua Pydantic schema và validation nghiệp vụ trước khi được sử dụng. Các tham số điều khiển chính được trình bày trong Bảng 4.3.
+Planner Agent, Configuration Agent và Analyst Agent sử dụng LLM thông qua NVIDIA AI Endpoint. Planner Agent xây dựng kế hoạch thực thi, Configuration Agent sinh CLI cho những Operation WRITE, còn Analyst Agent phân tích kết quả và bằng chứng. Các phản hồi có cấu trúc của LLM được xác thực bằng Pydantic trước khi chuyển sang giai đoạn tiếp theo.
+
+Network Agent không sử dụng LLM để sinh hoặc lựa chọn câu lệnh mà thực thi các Operation đã được hệ thống kiểm soát thông qua NetworkTool. Các tham số điều khiển chính được trình bày trong
+
+**Bảng 4.3. Các tham số cấu hình của hệ thống Multi-Agent**
 
 | Tham số | Giá trị cấu hình mặc định |
-| --- | ---: |
-| Planner timeout | 90 giây |
-| Analyst timeout | 120 giây |
-| Planner validation retries | 2 |
-| Analyst validation retries | 2 |
-| Analyst maximum completion tokens | 4096 |
-| Số vòng investigation tối đa | 2 |
-| Ngưỡng diagnosis confidence | 0,8 |
-| Số message lịch sử cung cấp cho Planner | 5 |
+| --- | --- |
+| Mô hình LLM | Nemotron 3.5 Super |
+| Planner Timeout | 90 giây |
+| Analyst Timeout | 120 giây |
+| Planner Validation Retries | 2 |
+| Analyst Validation Retries | 2 |
+| Analyst Max Completion Tokens | 4096 |
+| Maximum Investigation Rounds | 2 |
+| Diagnosis Confidence Threshold | 0,8 |
 
-Tên model được quản lý bằng biến môi trường và phải được ghi kèm metadata khi tái lập thực nghiệm. Các cohort trong báo cáo được chạy trên cùng pipeline ứng dụng, nhưng mã nguồn đã được cải tiến theo từng ngày logic như trình bày tại Mục 4.6.
+Configuration Agent sử dụng các tham số retry và timeout tương ứng với Planner Agent trong phiên bản hiện tại. Những giá trị trên phản ánh cấu hình mặc định của mã nguồn được đối chiếu; giá trị thực tế của từng cohort có thể phụ thuộc vào biến môi trường tại thời điểm chạy
 
-**Bảng 4.3a. Metadata cần đóng băng để tái lập các cohort**
-
-| Trường | Điều xác nhận được từ mã nguồn | Trạng thái của dữ liệu thực nghiệm lịch sử |
-| --- | --- | --- |
-| Tên model NVIDIA thực tế | Planner, Configuration và Analyst cùng đọc `settings.nvidia_model` / `NVIDIA_MODEL` bằng `ChatNVIDIA`; `.env.example` chỉ có giá trị placeholder | **Chưa được xác nhận** trong metadata Run hoặc repository; cần lấy từ manifest/log của thời điểm chạy |
-| Tham số inference | `temperature=0`, `enable_thinking=False`, `parallel_tool_calls=False` trong `src/app/agents/dependencies.py` | Là cấu hình của code đang đối chiếu; không chứng minh các cohort lịch sử có cùng cấu hình |
-| Prompt version | Prompt tại `planner/prompts.py`, `configuration/prompts.py`, `analyst/prompts.py` | Chưa có prompt hash hoặc prompt version gắn với từng Run; cần lấy SHA của từng file theo commit chạy |
-| Git commit theo cohort | Commit đối chiếu báo cáo: backend `5e9f0815a0`, frontend `d96e94f197` | **Không phải** commit đã được xác nhận chạy các cohort ngày logic 27/10–02/11; cần đối chiếu lịch sử triển khai |
-| Evaluator version | Báo cáo có v4/v5; `build_benchmark_evaluation` hiện lưu `db-benchmark-v5` | Ghi evaluator version theo từng Run, không gộp rubric khác nhau để suy luận tác động |
-| Network backend | `NETWORK_BACKEND=netmiko` là mặc định, Nornir là lựa chọn khác | Adapter dùng trong từng cohort, phiên bản Cisco IOS/image và cấu hình node chưa được lưu kèm Run |
-| Môi trường | Docker Compose, FastAPI, LangGraph, PostgreSQL, GNS3 | CPU/RAM/OS, phiên bản Python, dependency lock, GNS3/IOS và điều kiện tải thực tế chưa được đóng băng |
-
-Bảng 4.3a phân biệt **giá trị code có thể kiểm tra** với **giá trị đã được ghi nhận thực sự khi thực nghiệm**. Không điền tên model, prompt SHA, commit lịch sử hoặc cấu hình phần cứng bằng suy đoán. Trước khi tái công bố số liệu, cần tạo manifest cho mỗi cohort gồm thời điểm chạy thật, ngày logic, model ID, prompt SHA, backend commit, evaluator, topology/image, adapter, hardware và các tham số suy luận. Manifest không chứa khóa API hoặc credential.
-
-## 4.3. Thiết kế kịch bản và quy trình thực nghiệm
+## 4.3. Xây dựng các kịch bản thực nghiệm
 
 ### 4.3.1. Cấu trúc Benchmark Scenario
 
-Mỗi Benchmark Scenario là một đặc tả có phiên bản, bao gồm:
+Mỗi Benchmark Scenario là một đặc tả có phiên bản, chứa thông tin nhận dạng, topology, yêu cầu chẩn đoán ban đầu, các điều kiện kiểm tra, thao tác tiêm lỗi, Ground Truth và quy trình cleanup. Cấu trúc dữ liệu và các thành phần của Scenario đã được trình bày tại mục 3.9.1.
 
-- Thông tin nhận dạng: `scenario_key`, tên, version và topology.
-- `initial_message`: yêu cầu chẩn đoán được gửi vào Chat.
-- `preconditions`: các phép kiểm tra READ xác nhận trạng thái ban đầu.
-- `injection`: thao tác tạo sự cố trên thiết bị.
-- `fault_verification`: kiểm tra sự cố đã được tiêm thành công.
-- `ground_truth`: danh sách nguyên nhân đúng gồm device, interface và `fault_type`.
-- `cleanup`: thao tác phục hồi trạng thái môi trường.
-
-Khi bắt đầu thực nghiệm, toàn bộ nội dung scenario được sao chép vào `scenario_snapshot` của Benchmark Run. Nhờ đó, việc sửa seed hoặc scenario sau này không làm thay đổi Ground Truth của lượt chạy đã hoàn tất.
+Trong thực nghiệm, initial_message được sử dụng làm yêu cầu gửi đến hệ thống Multi-Agent; preconditions xác nhận trạng thái ban đầu; injection tạo sự cố; fault_verification kiểm tra sự cố đã xuất hiện; ground_truth cung cấp đáp án cho Evaluator; còn cleanup phục hồi môi trường. Khi bắt đầu một Benchmark Run, hệ thống lưu toàn bộ nội dung Scenario vào scenario_snapshot. Cơ chế này bảo đảm việc thay đổi hoặc cập nhật Scenario sau đó không làm thay đổi căn cứ đánh giá của lượt chạy đã được ghi nhận.
 
 ### 4.3.2. Tập dữ liệu thực nghiệm
 
-Cơ sở dữ liệu có 33 scenario, trong đó 32 scenario ở trạng thái active và được sử dụng cho mỗi cohort đầy đủ. Phân bố Ground Truth của cohort ngày 02/11/2026 được trình bày trong Bảng 4.4.
+Cơ sở dữ liệu có 33 Scenario, trong đó 32 Scenario ở trạng thái active và được sử dụng cho mỗi cohort đầy đủ. Phân bố Ground Truth của cohort ngày 02/11/2026 được trình bày trong
+
+**Bảng 4.4. Phân bố các loại sự cố trong tập Benchmark Scenario**
 
 | Loại sự cố | Số scenario |
 | --- | ---: |
@@ -1670,143 +1638,130 @@ Cơ sở dữ liệu có 33 scenario, trong đó 32 scenario ở trạng thái a
 | `wrong_subnet_mask` | 1 |
 | **Tổng cộng** | **32** |
 
-Tập dữ liệu do đề tài xây dựng cho topology GNS3 hiện có; đây không phải dataset được nhập trực tiếp từ NIKA. Đề tài chỉ tham khảo cách biểu diễn Ground Truth và cách đánh giá RCA theo tập nguyên nhân.
+Tập dữ liệu được đề tài xây dựng cho topology GNS3 hiện có, bao phủ các nhóm sự cố liên quan đến kết nối, định tuyến, chuyển tiếp nhãn và cấu hình thiết bị. Đây không phải dataset được nhập trực tiếp từ NIKA. Đề tài chỉ tham khảo cách biểu diễn nguyên nhân gốc và phương pháp đánh giá RCA theo tập nguyên nhân.
 
-### 4.3.3. Quy trình chạy một scenario
+### 4.3.3. Quy trình chạy một Scenario
 
-Một lượt chạy được thực hiện theo trình tự sau:
+Một lượt thực nghiệm được thực hiện theo trình tự sau:
 
-1. Tạo Benchmark Run ở trạng thái `PREPARING` và lưu snapshot của scenario.
-2. Kiểm tra precondition trên thiết bị.
-3. Thực hiện injection và xác minh sự cố.
-4. Chuyển Run sang `READY`, tạo Conversation và gửi `initial_message`.
-5. Workflow Multi-Agent lập kế hoạch, thu thập bằng chứng, phân tích và tạo `FINAL_RESPONSE`.
-6. Evaluator lấy structured diagnosis từ activity, đối chiếu với Ground Truth và lưu Task Evaluation cùng các metric.
-7. Thực hiện cleanup, kiểm tra lại trạng thái và chuyển Run sang `CLEANED` nếu thành công.
-8. Với chạy backfill, đồng bộ timestamp của các bản ghi liên quan về ngày logic được truyền vào runner.
+1. Khởi tạo Benchmark Run: Tạo Run ở trạng thái PREPARING và lưu
 
-```mermaid
-stateDiagram-v2
-    [*] --> PREPARING
-    PREPARING --> READY: Precondition, injection và verification đạt
-    PREPARING --> FAILED: Không chuẩn bị được môi trường
-    READY --> RUNNING: Gửi yêu cầu vào Chat
-    RUNNING --> COMPLETED: Có FINAL_RESPONSE và Evaluation
-    RUNNING --> FAILED: Workflow không hoàn tất
-    COMPLETED --> CLEANED: Cleanup và hậu kiểm đạt
-    FAILED --> CLEANED: Cleanup sau lỗi đạt
-    CLEANED --> [*]
-```
+scenario_snapshot cùng thông tin của Scenario được lựa chọn.
 
-_Hình 4.2. Vòng đời một Benchmark Run._
+2. Kiểm tra trạng thái ban đầu: Thực thi các precondition trên thiết bị để xác
+
+nhận môi trường đáp ứng điều kiện trước khi tiêm lỗi.
+
+3. Tiêm và xác minh sự cố: Thực hiện injection, sau đó sử dụng
+
+fault_verification để xác nhận sự cố đã xuất hiện trên thiết bị.
+
+4. Khởi tạo yêu cầu chẩn đoán: Chuyển Run sang READY, tạo hoặc liên kết
+
+Conversation và gửi initial_message vào hệ thống. Run chuyển sang RUNNING khi yêu cầu được liên kết thành công.
+
+5. Thực thi workflow Multi-Agent: Planner Agent xây dựng kế hoạch;
+
+Network Agent thu thập dữ liệu; Analyst Agent phân tích bằng chứng, thực hiện điều tra bổ sung khi cần và tạo kết luận cuối.
+
+6. Thu thập và chấm điểm kết quả: Evaluator lấy structured diagnosis từ
+
+Activity, đối chiếu với Ground Truth và lưu Task Evaluation cùng các metric tương ứng.
+
+7. Khôi phục môi trường: Thực hiện cleanup, xác minh trạng thái sau khôi
+
+phục và chuyển Run sang CLEANED khi các điều kiện hậu kiểm được đáp ứng.
+
+8. Đồng bộ ngày logic: Đối với các lượt chạy backfill, runner điều chỉnh đồng
+
+bộ timestamp của các bản ghi liên quan về ngày logic được chỉ định, đồng thời giữ nguyên các khoảng thời gian tương đối.
+
+Trong trường hợp precondition, injection hoặc fault verification thất bại, Run được ghi nhận trạng thái lỗi. Nếu đã bắt đầu injection, hệ thống ưu tiên cleanup để hạn chế tác động của sự cố lên những lượt chạy tiếp theo. Một Run chỉ được ghi nhận CLEANED khi quá trình khôi phục và hậu kiểm thành công.
 
 ### 4.3.4. Kiểm soát tính độc lập và tái lập
 
-Các scenario được chạy tuần tự; giữa hai lượt có khoảng cooldown 15 giây. Runner chỉ chuyển sang scenario tiếp theo sau khi xử lý cleanup của lượt hiện tại. Trường hợp `cleanup_required=true` được xem là môi trường chưa an toàn để tiếp tục và cần được xử lý trước khi chạy lại.
-
-Các cohort được gắn ngày logic bằng cơ chế backfill. Ngày logic phục vụ việc so sánh và hiển thị thống kê; nó không phải thời điểm commit hoặc thời gian đồng hồ thực của tiến trình. Khi diễn giải kết quả phải đối chiếu đồng thời ngày logic, evaluator version và thay đổi mã nguồn tương ứng.
-
-**Giới hạn ngữ cảnh đầu vào.** Một số `initial_message` trong seed nêu sẵn thiết bị, interface hoặc giao thức nghi vấn (chẳng hạn yêu cầu chẩn đoán MPLS/LDP tại một interface). Agent không được cung cấp trực tiếp tập Ground Truth `(resource_id, fault_type)`, nhưng gợi ý làm hẹp không gian tìm kiếm. Vì vậy kết quả hiện tại phản ánh **chẩn đoán có ngữ cảnh ban đầu**, chưa thể hiện khả năng tự phát hiện/định vị sự cố hoàn toàn không gợi ý. Đánh giá tiếp theo cần thêm cặp prompt có gợi ý và không gợi ý trên cùng trạng thái lỗi, Ground Truth và evaluator, tránh gộp hai mức khó vào cùng một tỷ lệ mà không phân nhóm.
+Các Scenario được thực thi tuần tự trên cùng topology nhằm hạn chế việc nhiều sự cố chồng chéo và ảnh hưởng lẫn nhau. Runner sử dụng khoảng cooldown 15 giây giữa các lượt chạy và chỉ tiếp tục khi quá trình cleanup của lượt trước được xử lý. Trường hợp cleanup_required=true cho biết môi trường vẫn cần được khôi phục trước khi có thể tiếp tục thực nghiệm an toàn. Các cohort được gắn ngày logic thông qua cơ chế backfill. Ngày logic phục vụ phân nhóm, so sánh và hiển thị thống kê; không phải thời điểm thực thi theo đồng hồ thực hoặc thời điểm commit mã nguồn. Vì vậy, việc phân tích các thay đổi giữa cohort cần kết hợp thông tin ngày logic, phiên bản evaluator và lịch sử thay đổi hệ thống tương ứng. Ngoài ra, một số initial_message trong tập Scenario cung cấp trước thông tin về thiết bị, interface hoặc giao thức nghi vấn. Agent không nhận trực tiếp Ground Truth, nhưng các gợi ý này có thể làm giảm phạm vi tìm kiếm. Do đó, kết quả thực nghiệm hiện tại được xem là chẩn đoán có ngữ cảnh ban đầu, chưa phản ánh đầy đủ khả năng phát hiện và định vị sự cố khi hoàn toàn không có gợi ý. Khi mở rộng thực nghiệm, cần phân biệt các yêu cầu có gợi ý và không có gợi ý để đánh giá công bằng mức độ khó của nhiệm vụ.
 
 ## 4.4. Tiêu chí và phương pháp đánh giá
 
-### 4.4.1. Biểu diễn kết luận có cấu trúc
+Các tiêu chí đánh giá đã được định nghĩa và trình bày công thức tại mục 3.9.4. Phần này tập trung mô tả cách áp dụng những tiêu chí đó vào dữ liệu thực nghiệm và tổng hợp kết quả theo từng cohort.
 
-Analyst Agent tạo structured diagnosis gồm `is_anomaly` và danh sách `root_causes`. Mỗi nguyên nhân được chuẩn hóa thành cặp:
+### 4.4.1. Đánh giá kết luận chẩn đoán có cấu trúc
 
-```text
-(resource_id, fault_type)
-```
+Analyst Agent tạo structured diagnosis bao gồm trạng thái bất thường (is_anomaly) và danh sách nguyên nhân gốc ( root_causes). Mỗi nguyên nhân được chuẩn hóa thành cặp (resource_id, fault_type), với resource_id biểu diễn thiết bị hoặc interface và fault_type xác định loại sự cố. Evaluator đối chiếu tập nguyên nhân dự đoán với Ground Truth thông qua phép so khớp tập hợp. Chỉ số RCA đánh giá đồng thời tài nguyên và loại lỗi; Localization đánh giá riêng tài nguyên; Fault Type đánh giá riêng loại lỗi. Các kết quả Precision, Recall và F1 được tính cho từng lượt có Evaluation và được tổng hợp để phản ánh chất lượng chẩn đoán của cohort. Cách đánh giá này không suy diễn nguyên nhân từ những từ khóa xuất hiện trong phản hồi ngôn ngữ tự nhiên. Một kết luận chỉ được tính là đúng khi đáp ứng điều kiện so khớp có cấu trúc của evaluator.
 
-Lỗi interface sử dụng định danh `interface/<device>/<interface>`; lỗi cấp thiết bị sử dụng `node/<device>`. Bộ chấm không tìm kiếm từ khóa trong phản hồi cuối để suy diễn nguyên nhân. Vì vậy, việc Agent nhắc đúng tên thiết bị nhưng kết luận sai không được tính là RCA đúng.
+### 4.4.2. Đánh giá Detection, GOAL và Task Success Rate
 
-Gọi `G` là tập nguyên nhân trong Ground Truth và `P` là tập dự đoán của Agent:
+Detection Score phản ánh việc Agent xác định có bất thường trong các Scenario đã được tiêm lỗi. Vì toàn bộ tập Scenario hiện tại chứa sự cố, chỉ số này chưa được sử dụng để đánh giá khả năng phát hiện dương tính giả trên trạng thái mạng bình thường. Một Run được đánh giá GOAL PASS khi Agent nhận biết bất thường và tập nguyên nhân dự đoán khớp hoàn toàn với Ground Truth. GOAL Pass Rate được tính trên những Run có Evaluation GOAL hợp lệ, còn Task Success Rate của API tổng hợp áp dụng thêm quy tắc phân loại Run đã bắt đầu xử lý nhưng thất bại trước khi được chấm. Trong quá trình phân tích, cần phân biệt PASS/Run, PASS/được chấm và TSR của API. Mỗi chỉ số có phạm vi mẫu số khác nhau trong trường hợp tồn tại Run chưa được chấm, đang xử lý hoặc gặp lỗi. Các Run lỗi trong quá trình chuẩn bị môi trường không được xem là thất bại chẩn đoán của Agent.
 
-```text
-TP = |P ∩ G|
-FP = |P - G|
-FN = |G - P|
+### 4.4.3. Đánh giá Active Latency và Interaction Turns
 
-Precision = TP / (TP + FP)
-Recall    = TP / (TP + FN)
-F1        = 2 × Precision × Recall / (Precision + Recall)
-```
+Active Latency được đo từ thời điểm Task được tạo đến khi hệ thống tạo FINAL_RESPONSE, sau khi loại trừ các khoảng chờ phê duyệt hợp lệ. Chỉ số phản ánh thời gian xử lý của toàn bộ workflow, bao gồm lập kế hoạch, thực thi công cụ mạng, phân tích và điều phối; không phải thời gian suy luận riêng của LLM. Interaction Turns được xác định từ số bản ghi thực thi có tool_name trong task_executions. Đây là số lượt gọi công cụ được ghi nhận trong Task, không phải số câu lệnh CLI, số tin nhắn hội thoại hoặc số vòng suy luận nội bộ. Các chỉ số này được tổng hợp theo cohort thông qua giá trị trung bình và trung vị khi có dữ liệu phù hợp. Interaction Turns cần được xem xét đồng thời với chất lượng RCA và Evidence Coverage, bởi số lượt gọi công cụ thấp không mặc nhiên phản ánh kết quả tốt hơn nếu dữ liệu chẩn đoán chưa đầy đủ.
 
-RCA yêu cầu khớp đồng thời tài nguyên và loại lỗi. Localization chỉ so sánh tài nguyên; Fault Type chỉ so sánh loại lỗi. Việc tách ba nhóm chỉ số giúp xác định Agent sai ở bước định vị hay phân loại nguyên nhân.
+### 4.4.4. Kiểm soát phiên bản Evaluator
 
-### 4.4.2. Detection, GOAL và Task Success Rate
-
-Detection Score bằng 1 khi Agent nhận biết đúng trạng thái bất thường. Do toàn bộ scenario trong tập hiện tại đều được tạo bằng cách tiêm lỗi, Ground Truth `is_anomaly` là true. Vì chưa có mẫu negative với mạng khỏe, chỉ số này không được diễn giải là Detection Accuracy trên một dataset cân bằng.
-
-Một Run đạt `GOAL PASS` khi Agent đồng thời nhận biết bất thường và tập nguyên nhân dự đoán exact-match Ground Truth. **GOAL Pass Rate trên các Run đã được chấm** được tính như sau:
-
-```text
-GOAL Pass Rate = số Run GOAL PASS / số Run có kết quả GOAL hợp lệ
-```
-
-Run lỗi ở bước chuẩn bị môi trường không được xem là thất bại chẩn đoán của Agent. Run đã chạy Agent nhưng chưa có Evaluation cần được báo cáo riêng: nếu Run chuyển `FAILED` sau khi bắt đầu Chat, API tính vào `failed`; nếu Run hoàn tất nhưng thiếu GOAL và không có lỗi dứt điểm, API xếp `unscored` và loại khỏi mẫu số. Vì vậy GOAL Pass Rate của các Run được chấm có thể khác TSR của API; cần trình bày cả hai kèm số mẫu.
-
-### 4.4.3. Latency và Interaction Turns
-
-Active Latency được tính từ thời điểm tạo Task đến khi tạo phản hồi cuối, sau khi loại trừ hợp các khoảng chờ người dùng phê duyệt:
-
-```text
-T_active = T_final_response - T_task_created - T_waiting_for_approval
-```
-
-Chỉ số này bao gồm thời gian Planner, NetworkTool, Analyst, Orchestrator và truy cập dữ liệu; không bao gồm thời gian injection, cleanup và thời gian chờ phê duyệt. Vì vậy đây là thời gian hoạt động của workflow AI, không phải thời gian suy luận thuần của LLM.
-
-Interaction Turns là số lần gọi công cụ có bản ghi trong `task_executions`. Chỉ số thấp không mặc nhiên tốt hơn, vì quá ít lượt có thể dẫn đến thiếu bằng chứng; chỉ số này phải được xem cùng RCA và Evidence Coverage.
-
-### 4.4.4. Phiên bản evaluator
-
-`db-benchmark-v4` chuyển từ cách chấm từ khóa sang so sánh structured diagnosis. `db-benchmark-v5` tiếp tục sử dụng phép so sánh tập hợp nhưng bổ sung taxonomy `FaultType` đóng và chuẩn hóa alias. Vì rubric thay đổi, số liệu giữa các evaluator chỉ được dùng để mô tả xu hướng của toàn pipeline; khi thực hiện kiểm định chính thức cần chạy lại các cohort bằng cùng một evaluator version.
+Hệ thống đã sử dụng các phiên bản evaluator khác nhau trong quá trình phát triển. db-benchmark-v4 chuyển từ cách chấm dựa trên từ khóa sang so sánh kết luận có cấu trúc. db-benchmark-v5 tiếp tục sử dụng phép so sánh tập hợp, đồng thời bổ sung taxonomy FaultType và chuẩn hóa alias. Do quy tắc đánh giá có sự thay đổi, kết quả giữa các cohort được sử dụng để mô tả xu hướng cải tiến của toàn bộ pipeline. Khi cần xác định tác động độc lập của một thành phần hoặc so sánh có kiểm soát, các biến thể phải được đánh giá bằng cùng phiên bản evaluator và điều kiện thực nghiệm tương ứng.
 
 ## 4.5. Kết quả thực nghiệm
 
 ### 4.5.1. Kết quả tổng hợp theo cohort
 
-Bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026 tạo ra tổng cộng 224 Benchmark Run. Mỗi cohort gồm cùng 32 scenario active. Bảng 4.5 thể hiện số liệu đã tổng hợp từ `benchmark_runs`, `task_evaluations` và `task_evaluation_metrics` trên môi trường thực nghiệm của nhóm. Chưa có bản xuất kết quả thô và script tổng hợp được lưu kèm repo để người đọc kiểm chứng độc lập; không xem bảng này là kết quả chạy lại trên commit đối chiếu. `PASS/Run` lấy toàn bộ 32 Run làm mẫu số, còn `PASS/được chấm` chỉ lấy Evaluation có GOAL hợp lệ; cả hai đều cần phân biệt với TSR API khi có lỗi thực thi chưa chấm.
+Bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026 tạo ra tổng cộng 224 Benchmark Run. Mỗi cohort gồm cùng 32 Scenario active. Bảng 4.5 trình bày các kết quả thực nghiệm được tổng hợp từ benchmark_runs, task_evaluations và task_evaluation_metrics trên môi trường thực nghiệm của đề tài. Trong đó, PASS/Run sử dụng toàn bộ 32 Run làm mẫu số, còn PASS/được chấm chỉ sử dụng những Evaluation có kết quả GOAL hợp lệ. Các chỉ số còn lại phản ánh những kết quả đo lường và chấm điểm được ghi nhận trong từng cohort. Bảng dữ liệu cần được phân biệt với TSR tổng hợp của API khi tập lịch sử chứa những trạng thái Run khác nhau.
 
-| Ngày logic | Run | Được chấm | GOAL PASS | PASS/Run | PASS/được chấm | RCA F1 TB | Localization F1 TB | Fault Type F1 TB | Detection TB | Latency TB (s) | Trung vị (s) | Turns TB |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 27/10 | 32 | 30 | 11 | 34,38% | 36,67% | 0,4444 | 0,4444 | 0,5111 | 0,5667 | 34,89 | 32,17 | 6,40 |
-| 28/10 | 32 | 30 | 14 | 43,75% | 46,67% | 0,5278 | 0,5944 | 0,6333 | 0,8000 | 38,53 | 31,79 | 6,40 |
-| 29/10 | 32 | 31 | 14 | 43,75% | 45,16% | 0,5161 | 0,5161 | 0,5806 | 0,7097 | 44,50 | 36,88 | 6,74 |
-| 30/10 | 32 | 31 | 20 | 62,50% | 64,52% | 0,6828 | 0,6828 | 0,7097 | 0,7742 | 27,44 | 28,46 | 4,45 |
-| 31/10 | 32 | 31 | 23 | 71,88% | 74,19% | 0,7419 | 0,7419 | 0,7419 | 0,8065 | 29,47 | 24,37 | 4,19 |
-| 01/11 | 32 | 32 | 29 | 90,63% | 90,63% | 0,9063 | 0,9063 | 0,9063 | 0,9375 | 42,44 | 35,49 | 4,38 |
-| 02/11 | 32 | 32 | **31** | **96,88%** | **96,88%** | **0,9688** | **0,9688** | **0,9688** | **0,9688** | 35,95 | 32,82 | 4,69 |
+**Bảng 4.5. Kết quả thực nghiệm tổng hợp theo cohort**
 
-Kết quả cho thấy tỷ lệ GOAL PASS tăng từ 11/32 ở baseline ngày 27/10 lên 31/32 ngày 02/11, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. RCA F1 trung bình tăng từ 0,4444 lên 0,9688. Đồng thời, Interaction Turns trung bình giảm từ 6,40 xuống 4,69. Xu hướng đồng thời về GOAL PASS, RCA F1 và Interaction Turns phù hợp với giả thuyết pipeline sau cải tiến xử lý bằng chứng tốt hơn, nhưng đây chỉ là **quan sát theo cohort**, không xác lập quan hệ nhân quả vì nhiều thành phần và cả evaluator đã thay đổi giữa các cohort.
+| Chỉ số | 27/10 | 28/10 | 29/10 | 30/10 | 31/10 | 01/11 | 02/11 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tổng số Run | 32 | 32 | 32 | 32 | 32 | 32 | 32 |
+| Run được chấm | 30 | 30 | 31 | 31 | 31 | 32 | 32 |
+| GOAL PASS | 11 | 14 | 14 | 20 | 23 | 29 | 31 |
+| PASS/Run | 34,38% | 43,75% | 43,75% | 62,50% | 71,88% | 90,63% | 96,88% |
+| PASS/được chấm | 36,67% | 46,67% | 45,16% | 64,52% | 74,19% | 90,63% | 96,88% |
+| RCA F1 TB | 0,4444 | 0,5278 | 0,5161 | 0,6828 | 0,7419 | 0,9063 | 0,9688 |
+| Localization F1 TB | 0,4444 | 0,5944 | 0,5161 | 0,6828 | 0,7419 | 0,9063 | 0,9688 |
+| Fault Type F1 TB | 0,5111 | 0,6333 | 0,5806 | 0,7097 | 0,7419 | 0,9063 | 0,9688 |
+| Detection TB | 0,5667 | 0,8000 | 0,7097 | 0,7742 | 0,8065 | 0,9375 | 0,9688 |
+| Latency TB (s) | 34,89 | 38,53 | 44,50 | 27,44 | 29,47 | 42,44 | 35,95 |
+| Latency trung vị (s) | 32,17 | 31,79 | 36,88 | 28,46 | 24,37 | 35,49 | 32,82 |
+| Interaction Turns TB | 6,40 | 6,40 | 6,74 | 4,45 | 4,19 | 4,38 | 4,69 |
+
+Kết quả cho thấy tỷ lệ GOAL PASS tăng từ 11/32 ở baseline ngày 27/10 lên 31/32 ngày 02/11, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. RCA F1 trung bình tăng từ 0,4444 lên 0,9688, trong khi Interaction Turns trung bình giảm từ 6,40 xuống 4,69. Những thay đổi này xuất hiện trong quá trình bổ sung cơ chế thu thập và kiểm soát bằng chứng, cải tiến điều phối và hoàn thiện các bộ phân tích chuyên biệt. Tuy nhiên, do nhiều thành phần và phiên bản evaluator thay đổi giữa các cohort, kết quả được sử dụng để mô tả xu hướng cải tiến của toàn hệ thống, chưa đủ cơ sở xác lập đóng góp độc lập của từng cơ chế.
 
 ### 4.5.2. Trả lời RQ1 – Khả năng hoàn thành nhiệm vụ
 
-Ở cohort ngày 02/11, toàn bộ 32 Run đều tạo được Evaluation; 31 Run đạt GOAL PASS và một Run GOAL FAIL. TSR của cohort là 96,88%. So với ngày 27/10, số Run được chấm tăng từ 30 lên 32 và số GOAL PASS tăng từ 11 lên 31.
+Ở cohort ngày 02/11, toàn bộ 32 Run đều tạo được Evaluation, trong đó 31 Run đạt GOAL PASS và một Run GOAL FAIL. Task Success Rate của cohort đạt 96,88%. So với ngày 27/10, số Run được chấm tăng từ 30 lên 32 và số GOAL PASS tăng từ 11 lên 31.
 
-Kết quả này là bằng chứng về tính khả thi của pipeline end-to-end trên phần lớn scenario chẩn đoán có ngữ cảnh trong tập thử nghiệm: tạo lỗi, thu thập dữ liệu, kết luận có cấu trúc, chấm điểm và cleanup. Tuy nhiên, TSR này chỉ áp dụng cho cohort, topology và evaluator đã nêu; không phải tỷ lệ thành công chung cho mọi nhiệm vụ quản trị mạng.
+Kết quả này cho thấy hệ thống có khả năng hoàn thành phần lớn nhiệm vụ chẩn đoán có ngữ cảnh trong tập Benchmark Scenario đã xây dựng, từ tiếp nhận yêu cầu, thu thập bằng chứng, phân tích nguyên nhân gốc đến tạo phản hồi có cấu trúc. Tuy nhiên, tỷ lệ trên phản ánh hiệu quả trong phạm vi cohort, topology và evaluator được sử dụng, không phải tỷ lệ thành công tổng quát cho mọi nhiệm vụ quản trị.
 
 ### 4.5.3. Trả lời RQ2 – Chất lượng chẩn đoán
 
-Ngày 02/11, RCA F1, Localization F1 và Fault Type F1 trung bình đều đạt 0,9688. Việc ba chỉ số bằng nhau cho thấy 31 trường hợp PASS đã khớp cả vị trí và loại lỗi; trường hợp còn lại không khớp Ground Truth. Detection trung bình cũng đạt 0,9688.
+Ngày 02/11, RCA F1, Localization F1 và Fault Type F1 trung bình đều đạt 0,9688. Detection Score trung bình cũng đạt 0,9688. Trong 32 Scenario được đánh giá, 31 trường hợp có tập nguyên nhân dự đoán khớp đầy đủ với Ground Truth, trong khi trường hợp còn lại không đạt yêu cầu chẩn đoán.
 
-Run duy nhất không đạt là scenario `CE-1B incorrect uplink IPv4 address` (`benc-031126-3000000d`). Run có Evaluation nhưng RCA F1 bằng 0. Đây là lỗi chẩn đoán của Agent, không phải lỗi setup hoặc cleanup. Kết quả cho thấy nhóm `wrong_ip_address` vẫn khó hơn các nhóm có dấu hiệu trực tiếp như interface shutdown, MPLS bị tắt hoặc BGP neighbor bị shutdown. Để xác nhận sai địa chỉ IP, Agent phải đối chiếu địa chỉ của hai đầu liên kết với topology và subnet dự kiến; chỉ quan sát trạng thái interface hoặc route riêng lẻ chưa đủ.
+Run chưa đạt thuộc Scenario CE-1B incorrect uplink IPv4 address (benc-031126-3000000d). Run có Evaluation nhưng RCA F1 bằng 0, cho thấy kết luận của Agent không khớp với Ground Truth. Đây là trường hợp chẩn đoán không thành công, không phải lỗi chuẩn bị hoặc cleanup môi trường. Trường hợp này cho thấy việc xác định nguyên nhân liên quan đến địa chỉ IP có thể cần đối chiếu thông tin từ nhiều nguồn, bao gồm địa chỉ của hai đầu liên kết, subnet dự kiến và quan hệ topology. Chỉ dựa vào trạng thái interface hoặc bảng định tuyến riêng lẻ có thể chưa đủ để xác định chính xác nguyên nhân.
 
-### 4.5.4. Trả lời RQ3 – Tác động của bằng chứng và điều tra bổ sung
+### 4.5.4. Trả lời RQ3 – Sự thay đổi kết quả qua các phiên bản hệ thống
 
-Từ ngày 28/10, workflow có khả năng quay lại node investigation khi Analyst xác định thiếu bằng chứng. Ngày 30/10 bổ sung diagnostic playbook và Evidence Coverage Gate; ngày 31/10 bổ sung Causal Evidence Gate; ngày 01/11 hoàn thiện matcher MPLS và OSPF. Trong các cohort sau thay đổi, số PASS được báo cáo tăng ở nhóm MPLS và OSPF area mismatch; đây là quan sát mô tả, không phải phép so sánh đối chứng.
+Từ cohort ngày 28/10, workflow được bổ sung khả năng điều tra khi Analyst Agent xác định còn thiếu bằng chứng. Ngày 30/10, hệ thống bổ sung diagnostic playbook và Evidence Coverage Gate; ngày 31/10 bổ sung Causal Evidence Gate; đến ngày 01/11 tiếp tục hoàn thiện các matcher liên quan đến MPLS và OSPF.
 
-Evidence Gate giúp ngăn finalize khi còn thiếu loại bằng chứng bắt buộc, nhưng coverage cao không bảo đảm RCA đúng. Coverage phản ánh hệ thống đã thu thập đủ nhóm dữ liệu; Analyst hoặc matcher vẫn phải suy luận đúng quan hệ nhân quả từ nội dung. Trường hợp wrong IP còn thất bại ngày 02/11 là minh chứng cho giới hạn này.
+Qua các cohort tương ứng, số Scenario chẩn đoán đạt yêu cầu tăng lên, đặc biệt ở những nhóm sự cố có thể phân tích bằng dữ liệu giao thức như MPLS và OSPF area mismatch. Sự cải thiện này được ghi nhận đồng thời với các thay đổi của pipeline, nhưng chưa thể quy riêng cho một thành phần do chưa thực hiện thực nghiệm đối chứng.
+
+Evidence Coverage Gate hỗ trợ xác định những nhóm bằng chứng còn thiếu trước khi workflow đưa ra kết luận. Tuy nhiên, mức độ bao phủ bằng chứng cao không mặc nhiên bảo đảm RCA chính xác. Analyst Agent và các bộ phân tích chuyên biệt vẫn cần diễn giải đúng nội dung và mối quan hệ giữa các bằng chứng. Trường hợp wrong_ip_address chưa đạt trong cohort cuối cho thấy giới hạn này vẫn tồn tại.
 
 ### 4.5.5. Trả lời RQ4 – Chi phí thực thi
 
-Active Latency trung bình thấp nhất được ghi nhận ngày 30/10 là 27,44 giây; trung vị thấp nhất ngày 31/10 là 24,37 giây. Khi investigation được thực thi đầy đủ vào ngày 01/11, RCA F1 tăng nhưng latency trung bình tăng lên 42,44 giây. Ngày 02/11, latency giảm còn 35,95 giây trong khi RCA F1 tiếp tục tăng lên 0,9688.
+Active Latency trung bình thấp nhất được ghi nhận ngày 30/10 là 27,44 giây; trung vị thấp nhất ngày 31/10 là 24,37 giây. Khi cơ chế investigation được thực thi đầy đủ vào ngày 01/11, RCA F1 tăng đồng thời với Active Latency trung bình đạt 42,44 giây. Ngày 02/11, latency trung bình giảm còn 35,95 giây trong khi RCA F1 tiếp tục tăng lên 0,9688.
 
-Kết quả gợi ý một sự đánh đổi giữa lượng bằng chứng và thời gian xử lý trên các cohort đã ghi nhận; muốn kết luận cơ chế nào tạo ra đánh đổi cần chạy ablation trong cùng điều kiện. Việc bổ sung kiểm tra có mục tiêu làm tăng một số lượt tool, nhưng có thể giảm các lệnh dư thừa và hạn chế vòng điều tra không cần thiết. Interaction Turns ngày 02/11 là 4,69, thấp hơn baseline 6,40 nhưng cao hơn 4,19 của ngày 31/10.
+Các kết quả cho thấy chất lượng chẩn đoán và chi phí xử lý có sự biến động qua từng cohort. Việc thu thập thêm bằng chứng có thể làm tăng thời gian thực thi, trong khi những phép kiểm tra có mục tiêu cũng có khả năng hạn chế thao tác dư thừa. Tuy
+
+nhiên, dữ liệu hiện tại chưa cho phép xác định chính xác mức chi phí do riêng investigation loop hoặc matcher tạo ra.
+
+Interaction Turns trung bình ngày 02/11 là 4,69, thấp hơn baseline 6,40 nhưng cao hơn mức 4,19 của ngày 31/10. Do đó, khi đánh giá hiệu quả thực thi, cần xem xét đồng thời Latency, Interaction Turns và chất lượng chẩn đoán thay vì chỉ tối ưu một chỉ số riêng lẻ.
 
 ## 4.6. Phân tích quá trình cải tiến
 
-Bảng 4.6 tóm tắt thay đổi chính gắn với từng cohort. Ngày trong bảng là ngày logic của dữ liệu benchmark, không phải ngày commit.
+Trong quá trình phát triển, hệ thống được cập nhật theo nhiều giai đoạn nhằm hoàn thiện khả năng lập kế hoạch, thu thập bằng chứng, phân tích nguyên nhân gốc và kiểm soát thực thi. Bảng 4.6 tóm tắt các thay đổi chính tương ứng với từng cohort. Ngày trong bảng là ngày logic của dữ liệu benchmark, không phải ngày commit mã nguồn.
+
+**Bảng 4.6. Các thay đổi của hệ thống và kết quả quan sát theo cohort**
 
 | Cohort | Thay đổi chính | Tác động quan sát được |
 | --- | --- | --- |
@@ -1818,197 +1773,163 @@ Bảng 4.6 tóm tắt thay đổi chính gắn với từng cohort. Ngày trong 
 | 01/11 | Hoàn thiện matcher MPLS, OSPF area mismatch, candidate recovery và thực thi investigation READ | PASS tăng lên 29; latency tăng đồng thời với investigation |
 | 02/11 | Điều chỉnh điều phối và xử lý trường hợp chẩn đoán còn thiếu | PASS tăng lên 31; chỉ còn một scenario wrong IP thất bại |
 
-Xu hướng tăng không hoàn toàn đơn điệu ở mọi metric. Ngày 29/10, RCA F1 giảm nhẹ so với 28/10 do thay evaluator và taxonomy. Ngày 01/11, độ chính xác tăng mạnh nhưng latency cũng tăng. Vì nhiều thay đổi được triển khai giữa hai cohort, kết quả không cho phép tách riêng mức đóng góp của từng thay đổi. Thiết kế ablation test là cần thiết nếu muốn xác định tác động độc lập của playbook, Evidence Gate hoặc matcher.
-
-### 4.6.1. Thiết kế ablation để kiểm chứng đóng góp từng cơ chế
-
-Bảng 4.6a là **giao thức thực nghiệm đề xuất, chưa phải kết quả ablation đã được thực thi**. Mục tiêu là đo đóng góp độc lập của cơ chế điều tra và hậu kiểm bằng chứng, thay vì quy nguyên nhân từ các cohort thay đổi nhiều yếu tố.
-
-| Biến thể | Chỉ thay đổi so với cấu hình đầy đủ | Kết quả cần đo |
-| --- | --- | --- |
-| A0 — Full | Giữ investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và protocol matcher | Baseline kiểm soát |
-| A1 — No investigation | Tắt vòng READ bổ sung | GOAL, RCA F1, Interaction Turns, Latency |
-| A2 — No coverage gate | Tắt quyết định điều tra dựa trên Evidence Coverage | GOAL, RCA F1, Coverage |
-| A3 — No causal gate | Không dùng hậu kiểm nhân quả trước khi chốt RCA | Precision, False Positive, GOAL |
-| A4 — No matcher | Không dùng matcher MPLS/OSPF chuyên biệt | F1 theo nhóm lỗi, Latency |
-
-Các biến thể **chưa có feature flag tương ứng trong phiên bản code hiện tại**; khi thực hiện phải tạo cấu hình/nhánh thực nghiệm có thể tái lập và kiểm tra rằng chỉ một thành phần khác biệt. Giữ cố định scenario IDs và snapshot, topology, model, prompt, evaluator, tham số timeout và nền commit, chạy tối thiểu 3–5 lượt cho mỗi scenario/biến thể theo thứ tự hoán đổi. Mỗi lượt cần precondition, injection, fault verification, cleanup hậu kiểm. Công bố số Run hợp lệ, lỗi setup, GOAL Pass Rate, TSR API, macro RCA F1, latency/turns, độ lệch chuẩn và khoảng tin cậy. Cho đến khi có các run này, RQ3 chỉ được trả lời ở mức **tương quan mô tả**, không được trình bày như kết quả ablation.
+Quá trình cải tiến cho thấy kết quả không tăng đồng đều ở tất cả tiêu chí. Ngày 29/10, RCA F1 giảm nhẹ so với ngày 28/10 trong giai đoạn thay đổi evaluator và taxonomy. Ngày 01/11, chất lượng RCA tăng đáng kể nhưng Active Latency cũng tăng. Điều này phản ánh sự thay đổi đồng thời giữa khả năng chẩn đoán và chi phí xử lý của toàn pipeline. Các cohort sử dụng những phiên bản hệ thống và đôi khi cả quy tắc chấm điểm khác nhau. Vì vậy, việc đối chiếu kết quả có giá trị mô tả tiến trình phát triển, nhưng chưa phải thực nghiệm kiểm soát để chứng minh tác động độc lập của từng cơ chế. Để xác định đóng góp của investigation loop, Evidence Coverage Gate, Causal Evidence Gate hoặc protocol matcher, cần thực hiện ablation test trong điều kiện cố định các yếu tố còn lại. Thiết kế thực nghiệm này được đề xuất tại mục 5.3.1.
 
 ## 4.7. Đánh giá cấu hình, khắc phục và an toàn
 
 ### 4.7.1. Khả năng cấu hình và khắc phục
 
-Hệ thống đã hiện thực đường đi kỹ thuật cho Operation WRITE: Configuration Agent sinh CLI, Configuration Orchestrator kiểm tra output, Approval Gate yêu cầu quyết định người dùng, Network Agent thực thi và hệ thống lưu command/output. Tuy nhiên, tập benchmark trong chương này đánh giá nhiệm vụ chẩn đoán; metric `REMEDIATION` được lưu với `NOT_APPLICABLE` và `was_attempted=false`.
+Hệ thống đã hiện thực quy trình kỹ thuật cho Operation WRITE, trong đó Planner Agent mô tả mục tiêu cấu hình, Configuration Agent sinh CLI, Configuration Orchestrator kiểm tra kết quả, Approval Gate yêu cầu quyết định phê duyệt và Network Agent thực thi các câu lệnh đã được chấp thuận. Thông tin command, output và trạng thái thực thi được lưu để phục vụ truy vết. Tuy nhiên, tập Benchmark Scenario trong chương này tập trung đánh giá nhiệm vụ chẩn đoán. Metric REMEDIATION được ghi nhận ở trạng thái NOT_APPLICABLE với was_attempted=false. Do đó, những kết quả GOAL hoặc RCA không được diễn giải thành tỷ lệ khắc phục sự cố thành công. Cleanup do Benchmark Engine thực hiện nhằm phục hồi những thay đổi được tiêm vào môi trường thử nghiệm, không phải hành động khắc phục do Agent đề xuất. Vì vậy, số Run đạt trạng thái CLEANED không được sử dụng để tính Remediation Success Rate. Việc đánh giá khắc phục cần một tập Scenario riêng, trong đó Agent thực hiện WRITE sau phê duyệt và trạng thái mạng được kiểm tra bằng các hậu điều kiện độc lập.
 
-Cleanup của Benchmark Engine chỉ phục hồi lỗi do kịch bản tiêm vào môi trường, không phải hành động khắc phục do Agent đề xuất. Vì vậy không được dùng số Run CLEANED để công bố Remediation Success Rate. Muốn đánh giá khắc phục, cần xây dựng scenario riêng có hậu điều kiện, cho Agent thực hiện WRITE sau approval và kiểm tra trạng thái mạng bằng phép đo độc lập.
+### 4.7.2. Cleanup và tính toàn vẹn môi trường
 
-### 4.7.2. Cơ chế an toàn
+Trong cohort ngày 02/11, cả 32 Run đều kết thúc ở trạng thái CLEANED. Điều này xác nhận Benchmark Engine đã thực hiện và ghi nhận cleanup cho toàn bộ cohort.
 
-Các cơ chế an toàn đã triển khai gồm RBAC, session authentication, mã hóa credential, giới hạn thiết bị trong inventory, validation interface, phân tách Planner và Configuration Agent, Approval Gate cho WRITE, command hash, thời hạn phê duyệt, Activity Log, Device Action Log và Audit Log.
-
-Đây là bằng chứng về thiết kế và kiểm thử chức năng, chưa phải Safety Score thực nghiệm. Metric `SAFETY` hiện ở trạng thái `NOT_APPLICABLE` vì chưa có bộ scenario đối kháng và scorer độc lập để xác định tỷ lệ lệnh nguy hiểm bị chặn. Do đó báo cáo không công bố một tỷ lệ an toàn định lượng.
-
-**Bảng 4.7. Ma trận kiểm thử Approval Gate đối với Operation WRITE**
-
-| Điều kiện | Unit test hiện có/được bổ sung | Kỳ vọng |
-| --- | --- | --- |
-| Chưa có approval | `test_write_mapping_waits_without_approved_request` | Không gọi NetworkTool, yêu cầu phê duyệt |
-| APPROVED, snapshot và hash đúng | `test_write_mapping_runs_only_when_snapshot_and_hash_match` | Chỉ thực thi command đã duyệt |
-| REJECTED hoặc EXPIRED | `test_write_mapping_denied_or_expired_approval_never_reaches_network_tool` | Chặn WRITE, mapping REJECTED |
-| Commands khác snapshot | `test_write_mapping_rejects_changed_commands_after_approval` | Chặn WRITE, mapping FAILED |
-| Hash bị sửa nhưng commands giữ nguyên | `test_write_mapping_rejects_tampered_hash_with_unchanged_commands` | Chặn WRITE, mapping FAILED |
-| Quyết định đến sau hạn | `test_expired_approval_cannot_be_decided` | Không cho quyết định trên approval đã hết hạn |
-
-Các bài test thuộc `tests/agents/test_execution_orchestrator.py` và `tests/domains/test_execution_activity_approval.py`. Bảng mô tả các **trường hợp kiểm thử được viết trong mã nguồn**, không phải kết quả chạy PASS trên commit báo cáo. Khi nộp cần kèm output `pytest` thực chạy, kiểm thử tích hợp phân quyền/HTTP và tập thử nghiệm hành vi nguy hiểm độc lập. Không dùng các unit test này để suy ra Safety Rate hoặc Remediation Success Rate định lượng.
-
-### 4.7.3. Cleanup và tính toàn vẹn môi trường
-
-Trong cohort ngày 02/11, cả 32 Run đều kết thúc ở trạng thái CLEANED. Điều này xác nhận Benchmark Engine đã thực hiện và ghi nhận cleanup cho toàn bộ cohort. Trạng thái CLEANED không thay đổi kết quả GOAL: Run chẩn đoán sai vẫn là FAIL dù môi trường đã được phục hồi thành công.
-
-Hai cohort đầu mỗi cohort có 31/32 Run CLEANED tại thời điểm truy vấn, trong khi những cohort từ 29/10 đến 02/11 đạt 32/32. Kết quả cho thấy cơ chế cleanup được cải thiện, nhưng để đánh giá độ tin cậy đầy đủ vẫn cần lưu số lần retry và kết quả hậu kiểm chi tiết cho từng action.
+Trạng thái CLEANED không thay đổi kết quả GOAL: một Run chẩn đoán sai vẫn được xem là FAIL dù môi trường thử nghiệm đã được khôi phục thành công. Hai cohort đầu có 31/32 Run đạt CLEANED tại thời điểm truy vấn, trong khi các cohort từ ngày 29/10 đến 02/11 đạt 32/32. Kết quả cho thấy trạng thái cleanup được ghi nhận đầy đủ trong những cohort sau. Tuy nhiên, việc đánh giá độ tin cậy của cơ chế phục hồi vẫn cần kết hợp số lần retry và bằng chứng hậu kiểm cho từng action.
 
 ## 4.8. Thảo luận và hạn chế
 
 ### 4.8.1. Ý nghĩa của kết quả
 
-Kết quả ngày 02/11 chứng minh tính khả thi của hệ thống trong việc chẩn đoán có cấu trúc trên topology GNS3: 31 trong 32 scenario được xác định đúng cả vị trí và loại lỗi. Việc sử dụng structured diagnosis giúp đánh giá nghiêm ngặt hơn so với tìm từ khóa, vì dự đoán thừa, sai interface hoặc sai loại lỗi đều làm giảm Precision, Recall hoặc F1.
-
-Sự cải thiện từ 34,38% PASS/Run lên 96,88% xuất hiện cùng thời kỳ bổ sung điều tra dựa trên playbook và bằng chứng; chưa thể quy riêng mức cải thiện cho những cơ chế này. Tuy nhiên, kết quả cũng cho thấy việc thu thập đủ evidence chưa giải quyết hoàn toàn các lỗi cần đối chiếu quan hệ giữa nhiều thiết bị, điển hình là wrong IP address.
+Kết quả cohort ngày 02/11 cho thấy hệ thống có khả năng thực hiện chẩn đoán sự cố mạng có cấu trúc trên topology GNS3, với 31 trong 32 Scenario xác định đúng tập nguyên nhân theo Ground Truth. Việc sử dụng structured diagnosis cho phép đánh giá chi tiết hơn so với cách chấm từ khóa, bởi các dự đoán thiếu, thừa, sai tài nguyên hoặc sai loại lỗi đều được phản ánh trong Precision, Recall và F1. Sự thay đổi từ 34,38% PASS/Run ở baseline lên 96,88% ở cohort cuối xuất hiện trong quá trình hoàn thiện các cơ chế thu thập bằng chứng, điều tra bổ sung và phân tích chuyên biệt. Kết quả phản ánh tiến trình cải tiến của toàn pipeline nhưng chưa cho phép quy riêng mức tăng cho một thành phần cụ thể. Bên cạnh những Scenario đã đạt yêu cầu, trường hợp wrong_ip_address còn thất bại cho thấy nhu cầu kết hợp bằng chứng từ nhiều thiết bị và quan hệ topology. Đây là một hướng quan trọng để tiếp tục cải thiện khả năng chẩn đoán trong những trường hợp không thể xác định nguyên nhân chỉ từ một output riêng lẻ.
 
 ### 4.8.2. Các nguy cơ ảnh hưởng độ tin cậy
 
-Các hạn chế chính gồm:
+Kết quả thực nghiệm chịu ảnh hưởng bởi một số giới hạn sau:
 
-- Mỗi scenario chỉ được chạy một lần trong mỗi cohort; chưa có trung bình và độ lệch chuẩn trên nhiều lần lặp cùng phiên bản, chưa chạy các biến thể ablation A0–A4.
-- Các cohort sử dụng nhiều phiên bản evaluator và mã nguồn khác nhau, nên không thể xem đây là thí nghiệm kiểm soát chỉ thay đổi một biến.
-- Toàn bộ scenario đều chứa sự cố; chưa có negative case để đo false positive trên mạng khỏe.
-- Tập thử nghiệm chỉ dùng một topology và một họ thiết bị Cisco IOS; một số `initial_message` cung cấp sẵn thiết bị/interface hoặc giao thức nghi vấn nên kết quả là chẩn đoán có ngữ cảnh, không phải zero-hint discovery.
-- Ground Truth do người xây dựng scenario định nghĩa và cần được chuyên gia mạng rà soát độc lập.
-- LLM và dịch vụ mạng bên ngoài có thể gây biến thiên về kết quả và latency.
-- Metadata phần cứng, model version, prompt version và commit SHA chưa được đóng băng đầy đủ trong từng Run.
+- Số lần lặp: Mỗi Scenario chỉ được thực hiện một lần trong mỗi cohort, chưa có nhiều lần lặp trong cùng cấu hình để đánh giá độ biến thiên và khoảng tin cậy.
 
-Vì những giới hạn trên, các tỷ lệ trong chương này được xem là kết quả thực nghiệm nội bộ trên tập benchmark của đề tài, không phải tuyên bố hiệu năng tổng quát hoặc so sánh trực tiếp với NIKA, NETARENA hay NetConfArena.
+- Thay đổi giữa các cohort: Nhiều thành phần và đôi khi cả evaluator version được cập nhật đồng thời, nên kết quả không phải so sánh đối chứng chỉ thay đổi một yếu tố.
 
-### 4.8.3. Hướng hoàn thiện thực nghiệm
+- Phạm vi Scenario: Tập dữ liệu chỉ gồm các trường hợp đã tiêm sự cố, chưa có Scenario mạng khỏe để đánh giá dương tính giả.
 
-Để tăng độ tin cậy, mỗi scenario cần được chạy tối thiểu từ ba đến năm lần với cùng model, prompt, evaluator và commit. Báo cáo tiếp theo nên trình bày trung bình, độ lệch chuẩn và khoảng tin cậy; đồng thời thực hiện ablation test bằng cách bật/tắt playbook, Evidence Gate và matcher chuyên biệt.
+- Phạm vi topology: Thực nghiệm được giới hạn trong một topology và chủ yếu một họ thiết bị Cisco IOS.
 
-Tập scenario cần bổ sung trạng thái mạng khỏe, lỗi kết hợp nhiều nguyên nhân, topology khác và thiết bị khác nhà sản xuất. Đối với nhóm wrong IP, cần thu thập địa chỉ của cả hai đầu link, prefix dự kiến và topology peer trong cùng một evidence object để tránh suy luận từ từng output rời rạc.
+- Ngữ cảnh đầu vào: Một số yêu cầu cung cấp sẵn thiết bị, interface hoặc giao thức nghi vấn, làm giảm phạm vi tìm kiếm của Agent.
 
-## 4.9. Khả năng tái lập và nguồn bằng chứng
+- Ground Truth: Đáp án được xây dựng theo topology của đề tài và cần được rà soát độc lập khi mở rộng phạm vi nghiên cứu.
 
-Một kết quả có thể được truy vết theo chuỗi:
+- Điều kiện thực thi: LLM và dịch vụ mạng bên ngoài có thể tạo ra biến thiên về thời gian và kết quả.
 
-```text
-Benchmark Scenario/version
-→ Benchmark Run/scenario_snapshot
-→ Conversation và source Message
-→ Task, Operation, Activity và Execution
-→ structured diagnosis
-→ Task Evaluation
-→ Task Evaluation Metrics
-```
+- Metadata tái lập: Cấu hình phần cứng, model version, prompt version và commit SHA chưa được đóng băng đầy đủ cho từng Run.
 
-Bảng 4.8 chỉ ra vị trí mã nguồn và dữ liệu dùng để kiểm chứng.
-
-| Nội dung | Vị trí kiểm chứng |
-| --- | --- |
-| Scenario, action và Ground Truth | `src/app/domains/benchmark/` và `docker/postgres/seed/` |
-| Benchmark Run, injection và cleanup | `src/app/domains/benchmark/services/` |
-| Workflow Multi-Agent | `src/app/agents/workflow.py` và `src/app/agents/orchestrator/` |
-| Structured diagnosis | activity `ANALYSIS_COMPLETED` và Evaluation tương ứng |
-| RCA scoring | `src/app/domains/benchmark/utils/structured_rca.py` |
-| GOAL và metric | `src/app/domains/benchmark/utils/evaluation.py` |
-| Active Latency | `src/app/domains/benchmark/utils/active_runtime.py` |
-| TSR và thống kê Run | `src/app/domains/benchmark/utils/summary.py` |
-| Định nghĩa metric | `docs/benchmark-metrics.md` |
-| Dữ liệu thực nghiệm | `benchmark_runs`, `task_evaluations`, `task_evaluation_metrics` |
-
-Lệnh runner sử dụng để chạy một cohort có dạng:
-
-```bash
-.venv/bin/python scripts/run_benchmark_scenarios.py \
-  --date YYYY-MM-DD \
-  --email "<seeded-account>" \
-  --password "<password>" \
-  --force \
-  --cooldown-seconds 15
-```
-
-Thông tin xác thực không được ghi vào báo cáo hoặc log công khai. Khi xuất dữ liệu phục vụ nghiên cứu, cần loại bỏ credential, token và các trường nhạy cảm; giữ lại ID, version, timestamp, metric, expected/actual/evidence và trạng thái cleanup cần thiết cho việc kiểm chứng.
+Do những giới hạn trên, các chỉ số được xem là kết quả thực nghiệm trên tập benchmark nội bộ của đề tài. Chúng chưa phải căn cứ để khẳng định hiệu năng tổng quát trên mạng sản xuất hoặc so sánh trực tiếp với NIKA, NETARENA và NetConfArena.
 
 ---
 
 # CHƯƠNG 5. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
 
-Chương này tổng hợp các kết quả đạt được của đề tài, đối chiếu kết quả thực nghiệm với mục tiêu nghiên cứu, chỉ ra những hạn chế còn tồn tại và đề xuất hướng phát triển tiếp theo. Các kết luận được giới hạn trong phạm vi hệ thống, topology GNS3 và bộ Benchmark Scenario đã trình bày ở Chương 4.
+Chương này tổng hợp các kết quả đạt được của đề tài, đối chiếu với mục tiêu nghiên cứu và kết quả thực nghiệm, đồng thời chỉ ra những hạn chế còn tồn tại và đề xuất các hướng phát triển tiếp theo. Các kết luận được đưa ra trong phạm vi hệ thống nguyên mẫu, topology GNS3 và bộ Benchmark Scenario đã trình bày ở Chương 4.
 
 ## 5.1. Kết quả đạt được
 
 ### 5.1.1. Kết quả về nghiên cứu và thiết kế hệ thống
 
-Đề tài đã nghiên cứu và xây dựng một hệ thống Multi-Agent hỗ trợ quản trị mạng bằng ngôn ngữ tự nhiên. Thay vì để một mô hình ngôn ngữ thực hiện toàn bộ quá trình, hệ thống phân chia trách nhiệm thành các thành phần chuyên biệt:
+Đề tài đã nghiên cứu và xây dựng một hệ thống Multi-Agent hỗ trợ quản trị và chẩn đoán sự cố mạng thông qua ngôn ngữ tự nhiên. Thay vì sử dụng một mô hình ngôn ngữ duy nhất để đảm nhiệm toàn bộ quá trình, hệ thống phân chia trách nhiệm thành các Agent và thành phần điều phối chuyên biệt:
 
-- **Planner Agent** phân tích yêu cầu, xác định loại nhiệm vụ, tạo Operation, quan hệ phụ thuộc và ánh xạ thiết bị. Planner chỉ mô tả yêu cầu cấu hình, không trực tiếp sinh CLI WRITE.
-- **Configuration Agent** chuyển `configuration_requirements` thành các lệnh CLI theo từng thiết bị và Operation WRITE. Kết quả phải vượt qua structured schema và kiểm tra interface trước khi được lưu.
-- **Network Agent** sử dụng NetworkTool để thực thi lệnh READ hoặc WRITE trên thiết bị; Agent này không tự thay đổi kế hoạch và không tự suy diễn kết luận.
-- **Analyst Agent** tổng hợp kết quả thực thi, đánh giá bằng chứng và tạo kết luận gồm trạng thái bất thường, nguyên nhân gốc, phát hiện chính và hành động đề xuất.
-- **Orchestrator** điều phối vòng đời yêu cầu, gọi Agent phù hợp, kiểm tra trạng thái nghiệp vụ, thực hiện Approval Gate và quyết định khi nào cần điều tra bổ sung hoặc kết thúc workflow.
+- Planner Agent: Phân tích yêu cầu người dùng, xác định loại Task, xây dựng Operation, thiết lập quan hệ phụ thuộc và ánh xạ thiết bị. Đối với thao tác WRITE, Agent mô tả mục tiêu cấu hình mà không trực tiếp sinh câu lệnh CLI.
 
-LangGraph được sử dụng để biểu diễn luồng xử lý qua các node `check_gns3`, `plan`, `configure`, `execute`, `analyze`, `investigate` và `finalize`. Nhánh `configure` chỉ được sử dụng khi kế hoạch có Operation WRITE; kế hoạch chỉ có READ được chuyển trực tiếp sang thực thi. Việc tổ chức bằng conditional edge giúp luồng xử lý phản ánh đúng loại yêu cầu và tránh gọi Configuration Agent không cần thiết.
+- Configuration Agent: Chuyển configuration_requirements thành các câu lệnh CLI tương ứng với từng Operation WRITE và thiết bị. Kết quả được kiểm tra cấu trúc dữ liệu và tính hợp lệ của interface trước khi lưu.
 
-Dữ liệu nghiệp vụ không phụ thuộc hoàn toàn vào workflow state. PostgreSQL lưu Conversation, Message, Task, Operation, dependency, ánh xạ thiết bị, Approval, Execution, Activity, Audit Log và Evaluation. Nhờ đó, hệ thống có thể truy vết từ yêu cầu ban đầu đến lệnh đã gửi, output thiết bị, quyết định phê duyệt và kết quả đánh giá cuối cùng.
+- Network Agent: Sử dụng NetworkTool để thực thi các Operation READ hoặc WRITE đã được kiểm soát. Agent không tự điều chỉnh kế hoạch hoặc đưa ra kết luận chẩn đoán.
+
+- Analyst Agent: Phân tích kết quả thực thi và bằng chứng, xác định trạng thái bất thường, nguyên nhân gốc, những phát hiện chính và các đề xuất kiểm tra bổ sung.
+
+- Orchestrator: Điều phối vòng đời Task, gọi Agent tương ứng, kiểm tra trạng thái nghiệp vụ, thực hiện Approval Gate và quyết định việc điều tra bổ sung hoặc kết thúc workflow. LangGraph được sử dụng để xây dựng workflow với các node check_gns3, plan, configure, execute, analyze, investigate và finalize. Các conditional edge cho phép hệ thống lựa chọn nhánh xử lý phù hợp với yêu cầu. Đối với Task có Operation WRITE cần sinh CLI, workflow chuyển qua Configuration Agent trước khi thực thi; với kế hoạch READ-only, hệ thống chuyển trực tiếp sang giai đoạn thực thi. Bên cạnh cơ chế điều phối, dữ liệu nghiệp vụ được quản lý độc lập với trạng thái tạm thời của LangGraph. PostgreSQL lưu Conversation, Message, Task, Operation, dependency, Device Mapping, Approval, Execution, Activity, Audit Log và
+
+Evaluation. Cách tổ chức này cho phép truy vết quá trình xử lý từ yêu cầu ban đầu đến câu lệnh thực thi, output thiết bị, quyết định phê duyệt và kết quả đánh giá cuối cùng.
 
 ### 5.1.2. Kết quả xây dựng các chức năng
 
-Các nhóm chức năng chính đã được hiện thực gồm:
+Từ kiến trúc đã thiết kế, đề tài đã hiện thực các nhóm chức năng chính sau:
 
-1. **Identity và phân quyền:** quản lý người dùng, session, access/refresh token, role, permission và kiểm tra quyền theo chức năng–hành động.
-2. **Inventory:** quản lý Brand, Category, Device và Credential; thông tin bí mật được mã hóa khi lưu và chỉ giải mã trong lớp kết nối nội bộ.
-3. **Conversation:** quản lý hội thoại, phân trang message, đổi tiêu đề và cung cấp tối đa năm message trước đó làm ngữ cảnh cho yêu cầu tiếp theo.
-4. **Planning:** chuyển yêu cầu thành `ExecutionPlanCreate`, kiểm tra device/interface/dependency và chỉ vật hóa kế hoạch sau khi dữ liệu hợp lệ.
-5. **Configuration:** sinh CLI riêng cho các Operation WRITE, loại bỏ lệnh quản lý phiên và kiểm tra CLI trước khi đưa sang giai đoạn thực thi.
-6. **Execution:** thực thi DAG theo dependency, tổng hợp trạng thái Operation và Task, lưu Task Execution và Device Action Log.
-7. **Human-in-the-loop:** tạo khung phê duyệt theo từng ánh xạ Operation–Device; hỗ trợ APPROVED, REJECTED và EXPIRED; kiểm tra command snapshot/hash trước khi chạy WRITE.
-8. **Analysis và investigation:** tạo structured diagnosis, đánh giá Evidence Coverage/Causal Evidence và phát sinh kế hoạch READ bổ sung khi chưa đủ căn cứ.
-9. **Workflow nền:** API đưa yêu cầu vào durable workflow job; Workflow Worker tiếp nhận và xử lý ngoài vòng đời request HTTP, giảm phụ thuộc vào `BackgroundTasks` trong tiến trình API.
-10. **Cập nhật thời gian thực:** SSE phát lại activity đã lưu và nhận thông báo mới từ PostgreSQL để giao diện theo dõi tiến trình mà không phải liên tục tải lại toàn bộ Task.
-11. **Benchmark Engine:** quản lý Scenario, precondition, injection, fault verification, Ground Truth, Run và cleanup; lưu snapshot scenario cho từng lượt chạy.
-12. **Evaluation:** chấm GOAL, RCA, Detection, Localization, Fault Type, Latency và Interaction Turns; lưu expected, actual và evidence để kiểm tra lại kết quả.
-13. **Audit và giám sát:** lưu Task Activity Event, Device Action Log và Audit Log, hỗ trợ tra cứu theo lịch sử nghiệp vụ.
-14. **Frontend:** cung cấp giao diện Chat, Task, Approval, Dashboard, Device, Credential, Device Catalog, User, Access Control, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation.
+1. Identity và phân quyền: Quản lý tài khoản người dùng, session,
 
-Các chức năng trên tạo thành một chuỗi xử lý hoàn chỉnh từ tiếp nhận yêu cầu, lập kế hoạch, thu thập dữ liệu, phê duyệt cấu hình, thực thi, phân tích đến đánh giá kết quả.
+access/refresh token, role, permission và kiểm tra quyền truy cập theo chức năng–hành động.
+
+2. Inventory: Quản lý Brand, Category, Device và Credential. Thông tin xác
+
+thực nhạy cảm được mã hóa khi lưu và chỉ được giải mã tại lớp kết nối nội bộ khi cần thiết.
+
+3. Conversation: Quản lý hội thoại, phân trang Message, cập nhật tiêu đề và
+
+cung cấp tối đa năm Message gần nhất làm ngữ cảnh cho yêu cầu tiếp theo.
+
+4. Planning: Chuyển yêu cầu ngôn ngữ tự nhiên thành
+
+ExecutionPlanCreate, xác định Operation, Device Mapping, dependency và kiểm tra tính hợp lệ trước khi lưu kế hoạch.
+
+5. Configuration: Sinh CLI riêng cho Operation WRITE, chuẩn hóa câu lệnh,
+
+loại bỏ các lệnh quản lý phiên và kiểm tra cấu hình trước khi chuyển sang thực thi.
+
+6. Execution: Thực thi các Operation theo quan hệ phụ thuộc DAG, cập nhật
+
+trạng thái Operation và Task, đồng thời lưu Task Execution và Device Action Log.
+
+7. Human-in-the-loop: Tạo yêu cầu phê duyệt theo từng ánh xạ Operation–
+
+Device; hỗ trợ trạng thái APPROVED, REJECTED và EXPIRED, đồng thời kiểm tra Commands Snapshot và hash trước khi thực thi WRITE.
+
+8. Analysis và Investigation: Phân tích output thiết bị, tạo structured
+
+diagnosis, đánh giá Evidence Coverage và Causal Evidence, đồng thời thực hiện điều tra READ bổ sung khi chưa đủ căn cứ.
+
+9. Workflow nền: Lưu yêu cầu AI thành Workflow Job trong PostgreSQL và
+
+sử dụng Workflow Worker để xử lý ngoài vòng đời HTTP request, hỗ trợ tiếp tục Task sau phê duyệt.
+
+10. Cập nhật tiến trình: Sử dụng SSE để phát lại các Task Activity đã lưu và
+
+cung cấp sự kiện mới cho frontend, hỗ trợ theo dõi quá trình thực thi.
+
+11. Benchmark Engine: Quản lý Benchmark Scenario, precondition, injection,
+
+fault verification, Ground Truth, Benchmark Run và cleanup; lưu scenario_snapshot cho từng lượt chạy.
+
+12. Evaluation: Đánh giá GOAL, RCA, Detection, Localization, Fault Type,
+
+Latency và Interaction Turns; lưu kết quả cùng expected, actual và evidence để phục vụ đối chiếu.
+
+13. Audit và giám sát: Ghi nhận Task Activity Event, Device Action Log và
+
+Audit Log, hỗ trợ truy vết tiến trình và các thao tác nghiệp vụ.
+
+14. Frontend: Cung cấp giao diện quản lý Chat, Task, Approval, Dashboard,
+
+Device, Credential, Device Catalog, User, Access Control, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation.
+
+Các chức năng trên hình thành một quy trình xử lý thống nhất từ tiếp nhận yêu cầu, lập kế hoạch, tương tác với thiết bị, kiểm soát thay đổi cấu hình, phân tích kết quả đến đánh giá hiệu quả thực thi.
 
 ### 5.1.3. Kết quả thực nghiệm và trả lời câu hỏi nghiên cứu
 
-Thực nghiệm gồm bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026, mỗi cohort có 32 scenario, tạo thành 224 Benchmark Run. Kết quả cuối cùng ngày 02/11 có đủ 32 Evaluation, trong đó 31 Run GOAL PASS và một Run GOAL FAIL.
+Thực nghiệm gồm bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026. Mỗi cohort có 32 Scenario, tạo thành tổng cộng 224 Benchmark Run. Ở cohort ngày 02/11, toàn bộ 32 Run đều có Evaluation, trong đó 31 Run đạt GOAL PASS và một Run GOAL FAIL. Đối với RQ1 – Khả năng hoàn thành nhiệm vụ: Cohort ngày 02/11 đạt Task Success Rate 96,88%. So với baseline ngày 27/10 có 11/32 PASS, kết quả tăng lên 31/32 PASS, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. Kết quả cho thấy hệ thống có khả năng hoàn thành phần lớn nhiệm vụ chẩn đoán trong tập Benchmark Scenario nội bộ. Đối với RQ2 – Chất lượng chẩn đoán: RCA F1, Localization F1 và Fault Type F1 trung bình ngày 02/11 đều đạt 0,9688; Detection Score trung bình cũng đạt 0,9688. Kết quả cho thấy 31 Scenario được xác định đúng tập nguyên nhân theo Ground Truth. Scenario chưa đạt thuộc nhóm wrong_ip_address, cho thấy việc chẩn đoán sai địa chỉ IP giữa các đầu liên kết vẫn cần kết hợp bằng chứng topology và subnet chặt chẽ hơn. Đối với RQ3 – Sự thay đổi kết quả qua các phiên bản hệ thống: Các cohort ghi nhận sự cải thiện kết quả chẩn đoán đồng thời với quá trình bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và matcher MPLS/OSPF. Những cơ chế này được thiết kế nhằm tăng khả năng thu thập và kiểm tra bằng chứng trước khi kết luận. Tuy nhiên, dữ liệu hiện tại chưa cho phép xác định đóng góp độc lập của từng thành phần do nhiều thay đổi được thực hiện giữa các cohort. Evidence Coverage đầy đủ cũng không mặc nhiên bảo đảm RCA chính xác nếu quá trình diễn giải bằng chứng chưa xác định đúng quan hệ nhân quả. Đối với RQ4 – Chi phí thực thi: Active Latency trung bình ngày 02/11 là 35,95 giây, trung vị 32,82 giây và Interaction Turns trung bình 4,69. So với baseline có 6,40 lượt gọi công cụ, số lượt tương tác trung bình giảm trong khi chất lượng chẩn đoán tăng. Kết quả theo cohort cũng ghi nhận sự biến động về thời gian xử lý: khi investigation được thực thi đầy đủ vào ngày 01/11, Active Latency tăng đồng thời với mức cải thiện RCA F1. Đối với RQ5 – Kiểm soát thay đổi và khôi phục môi trường: Toàn bộ 32 Run ở cohort ngày 02/11 kết thúc ở trạng thái CLEANED. Hệ thống đã hiện thực Approval Gate đối với Operation WRITE, kiểm tra tính toàn vẹn của câu lệnh được phê duyệt
 
-**Đối với RQ1 – khả năng hoàn thành nhiệm vụ:** cohort ngày 02/11 đạt Task Success Rate 96,88%. So với baseline ngày 27/10 có 11/32 PASS, kết quả tăng lên 31/32 PASS, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. Kết quả chứng minh pipeline có thể hoàn thành phần lớn nhiệm vụ chẩn đoán trong tập benchmark nội bộ.
-
-**Đối với RQ2 – chất lượng chẩn đoán:** RCA F1, Localization F1 và Fault Type F1 trung bình ngày 02/11 đều đạt 0,9688; Detection trung bình đạt 0,9688. Điều này cho thấy 31 scenario được xác định đúng cả tài nguyên và loại lỗi. Scenario còn thất bại thuộc nhóm `wrong_ip_address`, cho thấy việc suy luận lỗi địa chỉ giữa hai đầu liên kết vẫn cần bằng chứng topology và subnet chặt chẽ hơn.
-
-**Đối với RQ3 – tác động của cơ chế bằng chứng:** kết quả tăng theo các cohort đồng thời với quá trình bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và matcher MPLS/OSPF. Các cơ chế này được thiết kế để ngăn finalize khi thiếu bằng chứng, nhưng dữ liệu cohort hiện chưa đo được đóng góp riêng của từng thành phần. Tuy nhiên, coverage đầy đủ không bảo đảm suy luận đúng nội dung; Evidence Gate là điều kiện kiểm soát dữ liệu đầu vào chứ không thay thế khả năng RCA của Analyst.
-
-**Đối với RQ4 – chi phí thực thi:** active latency trung bình ngày 02/11 là 35,95 giây, trung vị 32,82 giây và Interaction Turns trung bình 4,69. So với baseline 6,40 tool calls, số lượt tương tác giảm dù chất lượng chẩn đoán tăng. Kết quả cũng cho thấy đánh đổi giữa độ chính xác và thời gian: khi investigation được thực thi đầy đủ ngày 01/11, latency tăng do hệ thống thu thập thêm bằng chứng.
-
-**Đối với RQ5 – kiểm soát và khôi phục môi trường:** toàn bộ 32 Run ngày 02/11 kết thúc ở trạng thái CLEANED. Hệ thống đã hiện thực Approval Gate cho Operation WRITE và lưu dấu vết quyết định. Tuy nhiên, CLEANED chỉ xác nhận Benchmark Engine đã phục hồi môi trường, không phải bằng chứng Agent đã khắc phục sự cố thành công.
-
-Kết quả trên cho phép kết luận hệ thống đáp ứng được mục tiêu xây dựng một nguyên mẫu Multi-Agent có khả năng chẩn đoán, tương tác với thiết bị GNS3, kiểm soát thay đổi cấu hình và đánh giá kết quả có cấu trúc. Các tỷ lệ chỉ có giá trị trong phạm vi tập benchmark của đề tài, không được khái quát thành hiệu năng trên mạng sản xuất.
+và lưu dấu vết quyết định. Tuy nhiên, trạng thái CLEANED phản ánh việc Benchmark Engine khôi phục môi trường thử nghiệm, không phải bằng chứng Agent đã khắc phục sự cố thành công. Những kết quả trên cho thấy hệ thống đáp ứng mục tiêu xây dựng một nguyên mẫu Multi-Agent có khả năng tiếp nhận yêu cầu, chẩn đoán sự cố mạng, tương tác với thiết bị GNS3, kiểm soát thay đổi cấu hình và đánh giá kết quả có cấu trúc. Các tỷ lệ thực nghiệm được giới hạn trong phạm vi tập Benchmark Scenario và môi trường đã sử dụng, không đại diện cho hiệu năng tổng quát trên mạng sản xuất.
 
 ### 5.1.4. Đóng góp của đề tài
 
-Các đóng góp chính của đề tài gồm:
+Các đóng góp chính của đề tài tập trung vào thiết kế, tích hợp và đánh giá hệ thống Multi-Agent trong bài toán quản trị mạng, bao gồm:
 
-- Đề xuất và hiện thực kiến trúc Multi-Agent phân tách rõ lập kế hoạch, sinh cấu hình, thực thi và phân tích.
-- Kết hợp LangGraph với trạng thái nghiệp vụ bền vững trong PostgreSQL, cho phép theo dõi và tiếp tục xử lý sau phê duyệt.
-- Xây dựng cơ chế Human-in-the-loop theo từng thiết bị, giúp người quản trị kiểm soát các thao tác WRITE trước khi thực thi.
-- Xây dựng Benchmark Engine tích hợp trực tiếp với GNS3 để kiểm tra precondition, tiêm lỗi, xác minh, chấm điểm và cleanup.
-- Áp dụng structured diagnosis và phép đánh giá RCA dựa trên cặp tài nguyên–loại lỗi, khắc phục hạn chế của cách chấm từ khóa.
-- Xây dựng cơ chế thu thập bằng chứng theo playbook và điều tra bổ sung có giới hạn.
-- Cung cấp giao diện thống nhất để quản lý tài nguyên mạng, theo dõi hoạt động Agent, phê duyệt thay đổi và phân tích kết quả benchmark.
+- Kiến trúc Multi-Agent chuyên biệt: Thiết kế và hiện thực các thành phần lập kế hoạch, sinh cấu hình, thực thi và phân tích, giúp phân định trách nhiệm giữa LLM và các công cụ tự động hóa mạng.
+
+- Cơ chế điều phối workflow: Kết hợp LangGraph với dữ liệu nghiệp vụ được lưu bền vững trong PostgreSQL, hỗ trợ theo dõi tiến trình và tiếp tục xử lý sau phê duyệt.
+
+- Kiểm soát thực thi có sự tham gia của con người: Tích hợp Approval Gate ở mức Operation–Device, kiểm tra Commands Snapshot và hash trước khi thực thi thao tác WRITE.
+
+- Benchmark Engine tích hợp GNS3: Xây dựng quy trình quản lý Scenario, kiểm tra precondition, tiêm lỗi, xác minh, tạo Evaluation và cleanup môi trường.
+
+- Đánh giá chẩn đoán có cấu trúc: Sử dụng kết luận RCA theo cặp tài nguyên–loại lỗi và các chỉ số Precision, Recall, F1 để đánh giá chi tiết hơn phương pháp so khớp từ khóa.
+
+- Thu thập và kiểm soát bằng chứng: Tích hợp diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và điều tra bổ sung có giới hạn nhằm hỗ trợ quá trình chẩn đoán.
+
+- Giao diện quản trị thống nhất: Cung cấp công cụ quản lý tài nguyên mạng, theo dõi Task, kiểm soát phê duyệt và phân tích kết quả benchmark. Những đóng góp trên thể hiện việc xây dựng và tích hợp một giải pháp có khả năng vận hành, kiểm soát và đánh giá trong môi trường thực nghiệm. Đề tài không đặt ra tuyên bố về một thuật toán tối ưu mới hay khả năng vượt trội so với các benchmark khác khi chưa có thực nghiệm đối chứng tương ứng.
 
 ### 5.1.5. Đối chiếu mục tiêu nghiên cứu
+
+Bảng 5.1 tổng hợp mức độ hoàn thành các mục tiêu nghiên cứu và triển khai.
+
+**Bảng 5.1. Đối chiếu mục tiêu và mức độ hoàn thành của đề tài**
 
 | Mục tiêu | Kết quả thực hiện | Mức độ |
 | --- | --- | --- |
@@ -2024,83 +1945,119 @@ Các đóng góp chính của đề tài gồm:
 | Đánh giá Safety định lượng | Đã có cơ chế phòng ngừa nhưng chưa có Safety Evaluator độc lập | Chưa hoàn thành |
 | Thực nghiệm đa topology, đa model và nhiều lần lặp | Chưa thực hiện đủ để phân tích thống kê | Chưa hoàn thành |
 
+Kết quả đối chiếu cho thấy các mục tiêu liên quan đến thiết kế kiến trúc, xây dựng hệ thống, tương tác thiết bị và đánh giá chẩn đoán đã được thực hiện trong phạm vi đề
+
+tài. Những mục tiêu về khắc phục tự động, đánh giá an toàn định lượng và khả năng tổng quát hóa vẫn cần được tiếp tục hoàn thiện.
+
 ## 5.2. Hạn chế của đề tài
 
 ### 5.2.1. Hạn chế về phạm vi môi trường mạng
 
-Hệ thống mới được thực nghiệm trên một topology GNS3 và chủ yếu với Cisco IOS. Các driver và schema có thể hỗ trợ mở rộng, nhưng đề tài chưa chứng minh khả năng hoạt động tương đương trên thiết bị thật, topology lớn, nhiều vendor hoặc môi trường mạng có tải thực tế. Trạng thái mạng được quan sát chủ yếu qua CLI theo yêu cầu, chưa có telemetry liên tục từ SNMP, streaming telemetry hoặc hệ thống giám sát bên ngoài.
+Hệ thống được thực nghiệm trên một topology GNS3 và chủ yếu sử dụng thiết bị Cisco IOS. Mặc dù kiến trúc NetworkTool hỗ trợ các backend thực thi có thể mở rộng, đề tài chưa đánh giá khả năng vận hành tương đương trên thiết bị mạng thực tế, topology lớn hoặc môi trường có nhiều nhà sản xuất.
+
+Dữ liệu trạng thái mạng chủ yếu được thu thập thông qua các câu lệnh CLI theo yêu cầu. Hệ thống chưa tích hợp cơ chế giám sát liên tục dựa trên SNMP, streaming telemetry hoặc những nền tảng giám sát bên ngoài. Do đó, phạm vi đánh giá hiện tại tập trung vào chẩn đoán theo từng yêu cầu thay vì phát hiện sự cố liên tục trong môi trường vận hành thực tế.
 
 ### 5.2.2. Hạn chế của Agent và mô hình ngôn ngữ
 
-Planner Agent và Analyst Agent phụ thuộc vào chất lượng và độ sẵn sàng của LLM bên ngoài. Mặc dù hệ thống có schema validation, retry và timeout, mô hình vẫn có thể trả JSON sai, bỏ sót Operation hoặc diễn giải bằng chứng không chính xác. Matcher chuyên biệt cải thiện kết quả cho những nhóm lỗi đã biết nhưng có thể làm hệ thống phụ thuộc vào taxonomy và playbook được xây dựng trước.
+Planner Agent, Configuration Agent và Analyst Agent phụ thuộc vào chất lượng và độ sẵn sàng của mô hình ngôn ngữ bên ngoài. Mặc dù hệ thống áp dụng structured output, Pydantic validation, retry và timeout, LLM vẫn có thể tạo phản hồi sai cấu trúc, bỏ sót Operation, sinh CLI chưa phù hợp hoặc diễn giải bằng chứng không chính xác.
 
-Ngữ cảnh hội thoại hiện chỉ lấy một số message gần nhất, chưa có cơ chế bộ nhớ dài hạn, tóm tắt ngữ cảnh hoặc truy hồi tri thức theo từng mạng. Configuration Agent chưa được tích hợp kho tài liệu nhà sản xuất theo cơ chế RAG; vì vậy chất lượng CLI vẫn phụ thuộc vào prompt, inventory và kiến thức sẵn có của model.
+Các bộ phân tích và matcher chuyên biệt hỗ trợ xử lý những loại lỗi đã biết, nhưng đồng thời làm tăng sự phụ thuộc vào taxonomy, diagnostic playbook và các quy tắc được xây dựng trước. Những dạng sự cố mới hoặc không phù hợp với cấu trúc bằng chứng hiện tại có thể chưa được phân tích đầy đủ.
+
+Ngoài ra, ngữ cảnh hội thoại mới sử dụng một số Message gần nhất, chưa có cơ chế bộ nhớ dài hạn hoặc truy hồi tri thức theo trạng thái lịch sử của mạng. Configuration Agent và Analyst Agent chưa tích hợp kho tài liệu nhà sản xuất theo cơ chế Retrieval-Augmented Generation (RAG); vì vậy chất lượng kết quả vẫn phụ thuộc đáng kể vào prompt, Inventory và kiến thức sẵn có của mô hình.
 
 ### 5.2.3. Hạn chế trong cấu hình và khắc phục sự cố
 
-Hệ thống có thể thực thi Operation WRITE sau phê duyệt nhưng chưa hình thành một vòng closed-loop remediation hoàn chỉnh cho toàn bộ loại lỗi. Chưa có cơ chế transaction hoặc rollback nguyên tử trên nhiều thiết bị; khi một phần cấu hình đa thiết bị thất bại, hệ thống chủ yếu ghi trạng thái và báo cáo thay vì tự động khôi phục toàn bộ thay đổi trước đó.
+Hệ thống đã hỗ trợ sinh và thực thi Operation WRITE sau khi được phê duyệt, nhưng chưa hình thành một quy trình closed-loop remediation hoàn chỉnh cho mọi nhóm sự cố.
 
-Configuration validation hiện tập trung vào schema, interface, thiết bị và một số quy tắc lệnh. Hệ thống chưa có mô hình kiểm chứng ngữ nghĩa để dự đoán ảnh hưởng của cấu hình đến toàn topology trước khi chạy. Việc người dùng phê duyệt cũng không tự động bảo đảm lệnh đúng về mặt thiết kế mạng.
+Đối với cấu hình liên quan đến nhiều thiết bị, hệ thống chưa có cơ chế transaction hoặc rollback nguyên tử để tự động hoàn tác toàn bộ thay đổi khi một bước thực thi thất bại. Trong những trường hợp này, hệ thống chủ yếu ghi nhận trạng thái và báo cáo kết quả, thay vì bảo đảm toàn bộ mạng được khôi phục về trạng thái trước khi thay đổi.
+
+Quá trình xác thực cấu hình hiện tập trung vào cấu trúc dữ liệu, thiết bị, interface và một số quy tắc kiểm tra CLI. Hệ thống chưa có cơ chế kiểm chứng ngữ nghĩa đầy đủ để dự đoán tác động của cấu hình đối với toàn bộ topology trước khi thực thi. Việc người dùng phê duyệt cũng chỉ thể hiện quyết định cho phép thao tác, không đồng nghĩa cấu hình đã được chứng minh đúng về mặt thiết kế mạng.
 
 ### 5.2.4. Hạn chế của bộ benchmark và phương pháp đánh giá
 
-Mỗi scenario chỉ được chạy một lần trong từng cohort. Các cohort thay đổi đồng thời mã nguồn, prompt và đôi khi evaluator version; do đó mức tăng kết quả chỉ thể hiện xu hướng của toàn pipeline, chưa chứng minh tác động độc lập của từng thành phần. Chưa có nhiều lần lặp để tính độ lệch chuẩn, khoảng tin cậy hoặc kiểm định ý nghĩa thống kê.
+Mỗi Scenario được thực hiện một lần trong từng cohort. Các cohort có sự thay đổi đồng thời về mã nguồn, prompt và đôi khi cả evaluator version; do đó sự cải thiện kết quả chỉ phản ánh xu hướng của toàn pipeline, chưa xác định được tác động độc lập của từng thành phần.
 
-Tập scenario hiện chỉ gồm các trường hợp có lỗi, chưa có mạng khỏe để đo false positive. Ground Truth do nhóm xây dựng theo topology của đề tài và chưa được đánh giá liên chủ thể bởi nhiều chuyên gia. Các scenario chưa bao phủ lỗi đồng thời, lỗi dao động, lỗi hiệu năng, sự cố đa hop phức tạp và những trường hợp không thể kết luận từ dữ liệu hiện có.
+Tập Scenario hiện tại chỉ gồm những trường hợp đã được tiêm lỗi, chưa có trạng thái mạng khỏe để đánh giá dương tính giả. Ground Truth do nhóm xây dựng dựa trên topology của đề tài và chưa được đánh giá độc lập bởi nhiều chuyên gia. Các kịch bản cũng chưa bao phủ đầy đủ lỗi đồng thời, lỗi dao động, lỗi hiệu năng, sự cố đa hop phức tạp hoặc trường hợp không đủ dữ liệu để kết luận.
 
-Evaluator v4 và v5 không hoàn toàn tương đương do v5 bổ sung taxonomy và chuẩn hóa alias. Vì vậy không nên gộp toàn bộ lịch sử thành một tỷ lệ duy nhất để so sánh khoa học. Cohort ngày 02/11 đạt 96,88%, nhưng kết quả này không đủ để tuyên bố hệ thống vượt NIKA, NETARENA, NetConfArena hoặc một phương pháp khác khi chưa chạy trên cùng dataset và điều kiện.
+Ngoài ra, evaluator v4 và v5 có sự khác biệt về taxonomy và chuẩn hóa alias, nên kết quả của các cohort sử dụng hai phiên bản không hoàn toàn tương đương về quy tắc chấm. Cohort ngày 02/11 đạt 96,88%, nhưng kết quả này chưa đủ để khẳng định hệ
+
+thống vượt các phương pháp hoặc benchmark khác như NIKA, NETARENA hay NetConfArena khi chưa thực hiện so sánh trên cùng dataset và điều kiện.
+
+Do số lần lặp còn giới hạn, đề tài chưa có đầy đủ độ lệch chuẩn, khoảng tin cậy hoặc kiểm định ý nghĩa thống kê trên nhiều lần chạy trong cùng điều kiện.
 
 ### 5.2.5. Hạn chế về an toàn, hiệu năng và vận hành
 
-RBAC, Approval Gate, mã hóa credential, command hash và Audit Log là các cơ chế an toàn phòng ngừa, nhưng đề tài chưa có Safety Evaluator và tập kiểm thử đối kháng để tạo Safety Score. Remediation và Safety hiện được đánh dấu `NOT_APPLICABLE` trong benchmark chẩn đoán.
-
-Active Latency chưa được phân rã thành thời gian LLM, thời gian thiết bị, database và orchestration. Hệ thống chưa thực nghiệm tải đồng thời nhiều conversation hoặc nhiều Task trên topology lớn. Durable Workflow Worker và PostgreSQL notification cải thiện độ bền và khả năng cập nhật, nhưng chưa có benchmark throughput, cơ chế phân phối nhiều worker, backpressure hoặc hàng đợi chuyên dụng cho quy mô sản xuất.
+Hệ thống đã triển khai RBAC, Approval Gate, mã hóa Credential, kiểm tra Commands Snapshot và hash, cùng các cơ chế ghi nhật ký. Tuy nhiên, những cơ chế này chủ yếu có tính phòng ngừa và hỗ trợ truy vết. Đề tài chưa xây dựng Safety Evaluator độc lập hoặc tập Scenario đối kháng để đánh giá tỷ lệ ngăn chặn các hành vi nguy hiểm. Remediation và Safety hiện được ghi nhận ở trạng thái NOT_APPLICABLE trong benchmark chẩn đoán. Active Latency chưa được phân rã đầy đủ thành thời gian suy luận LLM, truy cập thiết bị, xử lý cơ sở dữ liệu và điều phối workflow. Hệ thống cũng chưa được thực nghiệm tải đồng thời nhiều Conversation hoặc Task trên topology lớn. Workflow Worker và PostgreSQL cung cấp khả năng lưu trữ, xử lý lại và khôi phục công việc nền, nhưng chưa có đánh giá hiệu năng quy mô lớn về throughput, mức độ cạnh tranh tài nguyên, backpressure và khả năng mở rộng nhiều Worker trong môi trường sản xuất.
 
 ## 5.3. Hướng phát triển
 
 ### 5.3.1. Hoàn thiện đánh giá thực nghiệm
 
-Ưu tiên trước mắt là chuẩn hóa bộ thực nghiệm. Mỗi scenario cần chạy tối thiểu từ ba đến năm lần trên cùng commit, model, prompt và evaluator. Metadata của Run cần bổ sung commit SHA, model version, prompt version, network adapter, cấu hình tham số và thông tin môi trường. Kết quả phải báo cáo trung bình, trung vị, độ lệch chuẩn và khoảng tin cậy.
+Hướng phát triển ưu tiên là chuẩn hóa quy trình thực nghiệm và tăng khả năng tái lập kết quả. Mỗi Scenario cần được thực hiện tối thiểu từ ba đến năm lần trong cùng điều kiện về commit, model, prompt, evaluator và topology. Metadata của Benchmark Run cần bổ sung model version, prompt version, commit SHA, network adapter, tham số vận hành và thông tin môi trường thực thi.
 
-Cần bổ sung negative scenario với mạng khỏe, scenario có nhiều nguyên nhân đồng thời và scenario không đủ dữ liệu để kết luận. Ablation test nên được thực hiện bằng cách lần lượt tắt playbook, Evidence Gate, Causal Gate và matcher chuyên biệt để xác định đóng góp của từng cơ chế.
+Các kết quả tương lai cần được tổng hợp theo nhiều lần lặp, trình bày giá trị trung bình, trung vị, độ lệch chuẩn và khoảng tin cậy. Tập Scenario cũng cần bổ sung những trường hợp mạng khỏe, nhiều nguyên nhân đồng thời và không đủ dữ liệu để kết luận.
+
+Để xác định đóng góp riêng của các cơ chế đã phát triển, đề tài đề xuất thực hiện ablation test bằng cách xây dựng những biến thể chỉ khác nhau ở một thành phần so với hệ thống đầy đủ. Thiết kế các biến thể được trình bày trong
+
+**Bảng 5.2. Các biến thể thực nghiệm ablation được đề xuất**
+
+| Biến thể | Thành phần thay đổi so với hệ thống đầy đủ | Chỉ số cần đánh giá |
+| --- | --- | --- |
+| Full | Giữ investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và protocol matcher | Baseline kiểm soát |
+| No investigation | Tắt vòng điều tra READ bổ sung | GOAL, RCA F1, Interaction Turns, Latency |
+| No coverage gate | Tắt quyết định điều tra dựa trên Evidence Coverage | GOAL, RCA F1, Coverage |
+| No causal gate | Không áp dụng hậu kiểm nhân quả trước khi chốt RCA | Precision, False Positive, GOAL |
+| No matcher | Không sử dụng matcher MPLS/OSPF chuyên biệt | F1 theo nhóm lỗi, Latency |
+
+Các biến thể trên là thiết kế thực nghiệm đề xuất, chưa phải kết quả đã được thực hiện. Phiên bản mã nguồn hiện tại chưa có đầy đủ feature flag cho những cấu hình này; vì vậy cần xây dựng cơ chế bật/tắt có kiểm soát trước khi tiến hành. Khi thực nghiệm, cần giữ cố định Scenario, Ground Truth, topology, model, prompt, evaluator và các tham số vận hành. Thứ tự chạy các biến thể nên được hoán đổi để giảm ảnh hưởng của điều kiện thực thi. Kết quả cần được đánh giá qua GOAL Pass Rate, TSR, RCA F1, Latency, Interaction Turns và các chỉ số thống kê tương ứng nhằm xác định đóng góp độc lập của từng cơ chế.
 
 ### 5.3.2. Hoàn thiện chẩn đoán và quản lý tri thức
 
-Đối với lỗi `wrong_ip_address`, hệ thống cần mô hình hóa liên kết hai đầu, địa chỉ mong đợi, prefix và subnet thành evidence có cấu trúc. Topology nên được đồng bộ thành graph có khả năng truy vấn đa hop thay vì chỉ cung cấp danh sách neighbor cục bộ.
+Đối với những lỗi cần đối chiếu thông tin từ nhiều thiết bị, đặc biệt là wrong_ip_address, hệ thống cần mô hình hóa liên kết hai đầu, địa chỉ IP kỳ vọng, prefix và subnet dưới dạng bằng chứng có cấu trúc. Thông tin topology có thể được tổ chức thành đồ thị hỗ trợ truy vấn đa hop thay vì chỉ cung cấp danh sách neighbor cục bộ. Một hướng mở rộng khác là xây dựng kho tri thức bằng cơ chế RAG từ tài liệu Cisco và các nhà sản xuất khác. Configuration Agent và Analyst Agent có thể truy hồi tài liệu phù hợp với platform, phiên bản hệ điều hành và chức năng mạng đang xử lý.
 
-Có thể xây dựng kho tri thức bằng RAG từ tài liệu Cisco và các tài liệu nhà sản xuất được kiểm soát phiên bản. Configuration Agent và Analyst Agent chỉ truy hồi những tài liệu phù hợp với platform, OS version và tính năng đang xử lý; nguồn tài liệu được đính kèm vào evidence để tăng khả năng giải thích và giảm hallucination.
+Các tài liệu được sử dụng cần có nguồn và phiên bản rõ ràng để hỗ trợ truy vết, giải thích kết luận và hạn chế việc mô hình tạo thông tin không có căn cứ.
 
 ### 5.3.3. Phát triển closed-loop remediation
 
-Benchmark cần bổ sung nhóm scenario khắc phục, trong đó Agent không chỉ chẩn đoán mà còn đề xuất và thực thi cấu hình sau phê duyệt. Một Remediation Evaluator độc lập phải kiểm tra hậu điều kiện mạng, khả năng kết nối và việc không làm hỏng các dịch vụ liên quan.
+Hệ thống cần được mở rộng từ chẩn đoán sang quy trình khắc phục sự cố có kiểm soát. Benchmark Engine có thể bổ sung nhóm Scenario yêu cầu Agent đề xuất cấu hình, thực hiện WRITE sau phê duyệt và xác minh hậu điều kiện mạng.
 
-Đối với cấu hình nhiều thiết bị, cần phát triển cơ chế pre-check, tạo checkpoint, thực thi theo pha, post-check và rollback. Khi một thiết bị thất bại, hệ thống phải xác định có tiếp tục, dừng hay hoàn tác các thiết bị đã thay đổi dựa trên policy được định nghĩa trước.
+Một Remediation Evaluator độc lập cần được xây dựng để kiểm tra liệu sự cố đã được giải quyết hay chưa, đồng thời đánh giá khả năng kết nối và trạng thái của các dịch vụ liên quan sau khi thực thi. Cơ chế này cho phép phân biệt việc Agent thực thi thành công câu lệnh với việc hệ thống mạng thực sự được khôi phục.
+
+Đối với cấu hình nhiều thiết bị, cần phát triển quy trình gồm pre-check, tạo checkpoint, thực thi theo pha, post-check và rollback. Khi một bước thất bại, hệ thống cần xác định có tiếp tục, dừng hoặc hoàn tác những thay đổi đã thực hiện dựa trên chính sách được định nghĩa trước.
 
 ### 5.3.4. Nâng cao an toàn và quản trị
 
-Safety Evaluator cần đánh giá lệnh cấm, thao tác vượt phạm vi, thay đổi làm mất kết nối quản trị, rò rỉ secret và hành vi bỏ qua approval. Có thể bổ sung policy engine để kiểm tra cấu hình trước khi hiển thị cho người dùng và trước khi gửi đến NetworkTool.
+Một hướng phát triển quan trọng là xây dựng Safety Evaluator để đánh giá độc lập các tình huống như thực thi lệnh bị cấm, thay đổi ngoài phạm vi, mất kết nối quản trị, rò rỉ thông tin xác thực hoặc cố gắng bỏ qua Approval Gate.
 
-Audit Log cần hỗ trợ retention policy, export, chữ ký hoặc cơ chế chống chỉnh sửa cho các môi trường yêu cầu kiểm toán cao. Credential nên được tích hợp với secret manager chuyên dụng khi triển khai ngoài phòng lab.
+Hệ thống có thể bổ sung policy engine để kiểm tra các câu lệnh cấu hình trước khi hiển thị cho người phê duyệt và trước khi gửi đến NetworkTool. Cơ chế này giúp kiểm soát thao tác không chỉ dựa trên sự đồng ý của người dùng mà còn theo các quy tắc kỹ thuật và chính sách vận hành mạng.
+
+Đối với quản trị và kiểm toán, Audit Log cần hỗ trợ retention policy, xuất dữ liệu và các cơ chế phát hiện hoặc ngăn chặn chỉnh sửa trái phép. Credential cũng nên được tích hợp với secret manager chuyên dụng khi hệ thống được triển khai ngoài môi trường thực nghiệm.
 
 ### 5.3.5. Nâng cao khả năng mở rộng và độ tin cậy
 
-Workflow job có thể được chuyển sang message broker hoặc hàng đợi chuyên dụng khi cần nhiều worker và retry phân tán. Hệ thống cần bổ sung idempotency key, dead-letter queue, lease/heartbeat, backpressure và cơ chế phục hồi job bị gián đoạn.
+Phiên bản hiện tại đã hỗ trợ chống tạo trùng Workflow Job thông qua deduplication_key, retry có giới hạn và cơ chế recover_stale() để phục hồi các job bị gián đoạn. Trong tương lai, cần tiếp tục hoàn thiện khả năng vận hành phân tán, đặc biệt khi nhiều Worker cùng xử lý yêu cầu. Các hướng phát triển gồm bổ sung heartbeat, quản lý thời hạn sở hữu job, dead-letter queue, backpressure và cơ chế phục hồi khi Worker gặp sự cố. Đồng thời, tính idempotent cần được mở rộng từ mức quản lý Workflow Job đến các thao tác thực tế trên thiết bị nhằm tránh thực thi lặp câu lệnh WRITE khi quá trình xử lý bị gián đoạn.
 
-Các truy vấn danh sách tiếp tục được chuẩn hóa theo server-side filtering, pagination và count trong cùng API. SSE có thể giữ vai trò cập nhật một chiều cho activity; WebSocket chỉ cần thiết nếu tương lai có tương tác hai chiều tần suất cao. Cần thực hiện load test cho API, SSE, Workflow Worker và database để xác định giới hạn thực tế.
+Khi nhu cầu mở rộng tăng, hàng đợi dựa trên PostgreSQL có thể được đánh giá và so sánh với các message broker chuyên dụng. Các API danh sách cũng cần tiếp tục được chuẩn hóa theo server-side filtering, pagination và count. SSE vẫn phù hợp với nhu cầu cập nhật Activity một chiều; WebSocket chỉ cần được xem xét nếu phát sinh những yêu cầu tương tác hai chiều với tần suất cao.
+
+Ngoài ra, cần thực hiện load test đối với API, SSE, Workflow Worker và PostgreSQL để xác định giới hạn throughput, latency và khả năng xử lý đồng thời trong môi trường triển khai thực tế.
 
 ### 5.3.6. Mở rộng phạm vi triển khai
 
-Các thực nghiệm tiếp theo cần sử dụng nhiều topology, nhiều vendor và nhiều model. Việc so sánh với NIKA, NETARENA hoặc NetConfArena chỉ nên thực hiện khi hệ thống cùng chạy trên dataset, rubric và điều kiện tương đương. Ngoài GNS3, có thể tích hợp containerlab hoặc môi trường testbed vật lý để đánh giá khả năng chuyển giao từ mô phỏng sang thực tế.
+Các thực nghiệm tiếp theo cần được mở rộng sang nhiều topology, nhà sản xuất thiết bị và mô hình ngôn ngữ khác nhau nhằm đánh giá khả năng tổng quát hóa.
+
+Việc so sánh với NIKA, NETARENA hoặc NetConfArena chỉ nên được thực hiện khi có tập dữ liệu, quy tắc đánh giá và điều kiện thực nghiệm tương đương. Cách tiếp cận này giúp kết quả đối chiếu có cơ sở và hạn chế những khác biệt do môi trường hoặc evaluator.
+
+Ngoài GNS3, hệ thống có thể được tích hợp với containerlab hoặc các testbed vật lý để đánh giá khả năng chuyển giao từ môi trường giả lập sang thiết bị mạng thực tế. Những thử nghiệm này cần được tiến hành có kiểm soát nhằm bảo đảm an toàn trước khi áp dụng vào mạng sản xuất.
 
 ## 5.4. Kết luận chung
 
-Đề tài đã xây dựng được một hệ thống Multi-Agent có khả năng tiếp nhận yêu cầu quản trị mạng bằng ngôn ngữ tự nhiên, lập kế hoạch, sinh cấu hình, tương tác với thiết bị GNS3, phân tích kết quả và kiểm soát thao tác thay đổi bằng Human-in-the-loop. Việc phân tách Planner, Configuration, Network và Analyst Agent giúp xác định rõ trách nhiệm, giảm việc để LLM trực tiếp thực thi thao tác ngoài phạm vi và tăng khả năng kiểm tra từng giai đoạn.
+Đề tài đã xây dựng được một hệ thống Multi-Agent có khả năng tiếp nhận yêu cầu quản trị mạng bằng ngôn ngữ tự nhiên, lập kế hoạch, sinh cấu hình, tương tác với thiết bị GNS3, phân tích kết quả và kiểm soát thao tác thay đổi thông qua cơ chế Human-in-the-loop. Việc phân tách Planner Agent, Configuration Agent, Network Agent và Analyst Agent giúp xác định rõ trách nhiệm giữa các thành phần, giới hạn quyền thực thi của LLM và tăng khả năng kiểm tra kết quả ở từng giai đoạn.
 
-Hệ thống không chỉ dừng ở giao diện hội thoại mà còn xây dựng các domain nghiệp vụ cho Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Dữ liệu được lưu có cấu trúc cho phép truy vết từ yêu cầu đến kết quả, trong khi Benchmark Engine cung cấp quy trình tiêm lỗi, xác minh, đánh giá và cleanup trên topology GNS3.
+Hệ thống được xây dựng không chỉ ở mức giao diện hội thoại mà còn bao gồm các miền nghiệp vụ Identity, Inventory, Conversation, Execution, Benchmark, Evaluation và Audit. Dữ liệu được lưu có cấu trúc trong PostgreSQL cho phép truy vết quá trình xử lý từ yêu cầu ban đầu đến kết quả cuối cùng. Benchmark Engine cung cấp quy trình kiểm tra trạng thái ban đầu, tiêm sự cố, xác minh, đánh giá và khôi phục môi trường GNS3.
 
-Kết quả thực nghiệm tốt nhất đạt 31/32 GOAL PASS, tương đương 96,88%, với RCA F1 trung bình 0,9688 trên cohort ngày 02/11/2026. So với baseline, GOAL PASS tăng cùng thời điểm bổ sung playbook, investigation loop và Evidence Gate; chưa có ablation giữ các yếu tố khác cố định để xác nhận quan hệ nhân quả. Tuy nhiên, do số lần lặp, phạm vi topology và điều kiện đánh giá còn giới hạn, kết quả chỉ chứng minh tính khả thi và hiệu quả trong môi trường thử nghiệm của đề tài.
+Kết quả thực nghiệm tốt nhất ghi nhận 31/32 Run đạt GOAL PASS, tương đương 96,88%, với RCA F1 trung bình 0,9688 trong cohort ngày 02/11/2026. So với baseline, chất lượng chẩn đoán được ghi nhận cải thiện đồng thời với quá trình bổ sung diagnostic playbook, investigation loop và Evidence Gate. Tuy nhiên, các cohort có sự thay đổi ở nhiều thành phần, trong khi số lần lặp và phạm vi topology còn giới hạn; vì vậy kết quả phản ánh hiệu quả của toàn pipeline trong môi trường thực nghiệm, chưa chứng minh tác động độc lập của từng cơ chế.
 
-Nhìn chung, đề tài xây dựng được nguyên mẫu Multi-Agent hỗ trợ cấu hình và chẩn đoán sự cố mạng có kiểm soát, có cơ chế đánh giá; kết quả được xác nhận trong phạm vi các kịch bản chẩn đoán có ngữ cảnh, chưa chứng minh closed-loop remediation hoặc Safety Rate định lượng. Kết quả tạo nền tảng cho các nghiên cứu tiếp theo về closed-loop remediation, quản trị mạng dựa trên bằng chứng và triển khai AI Agent an toàn trong môi trường mạng quy mô lớn hơn.
+Nhìn chung, đề tài đã hoàn thành mục tiêu xây dựng một nguyên mẫu Multi-Agent hỗ trợ cấu hình và chẩn đoán sự cố mạng có kiểm soát, có khả năng truy vết và đánh giá kết quả. Các kết quả được xác nhận trong phạm vi tập kịch bản chẩn đoán có ngữ cảnh, chưa bao gồm đánh giá định lượng đầy đủ về closed-loop remediation và Safety. Hệ thống tạo nền tảng để tiếp tục nghiên cứu khả năng tự động khắc phục sự cố, quản trị mạng dựa trên bằng chứng và triển khai AI Agent an toàn trong môi trường mạng có quy mô và độ phức tạp cao hơn.
 
 ---
 
@@ -2151,70 +2108,3 @@ Nhìn chung, đề tài xây dựng được nguyên mẫu Multi-Agent hỗ tr�
 [22] GNS3 Project, “GNS3 Architecture Documentation.” https://docs.gns3.com/docs/using-gns3/design/architecture
 
 ---
-
-# PHỤ LỤC A. BẢNG ĐỐI CHIẾU MÃ NGUỒN ĐÃ TRIỂN KHAI
-
-| Thành phần             | File/đường dẫn                                                       | Vai trò xác minh                                 |
-| ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
-| LangGraph              | `src/app/agents/workflow.py`                                         | Graph thống nhất với entry route theo state      |
-| Planner Agent          | `src/app/agents/planner/`                                            | Sinh và validate execution plan                  |
-| Execution Orchestrator | `src/app/agents/orchestrator/execution.py`, `execution_runtime/`     | Điều phối Task/Operation/Approval                |
-| Network Agent          | `src/app/agents/network/`, `src/app/tools/network/`                  | Kết nối và thực thi qua Netmiko/Nornir           |
-| Analyst Agent          | `src/app/agents/analyst/`, `src/app/agents/orchestrator/analysis.py` | Diễn giải kết quả, ghi diagnosis_submission      |
-| Identity/RBAC          | `src/app/domains/identity/`                                          | User, session, token, roles/permissions          |
-| Inventory              | `src/app/domains/inventory/`                                         | Brand, category, device, credential/provider     |
-| Conversation           | `src/app/domains/conversation/`                                      | Message, conversation, title                     |
-| Execution              | `src/app/domains/execution/`                                         | Task, dependency, approval, activity, action log |
-| Audit                  | `src/app/domains/audit/`                                             | Audit Log và bộ lọc                              |
-| Benchmark              | `src/app/domains/benchmark/`                                         | Scenario/Run, injection, verification, cleanup   |
-| RCA scorer             | `src/app/domains/benchmark/utils/structured_rca.py`                  | Tính precision, recall, F1 theo NIKA 0.2         |
-| Evaluation             | `src/app/domains/evaluation/`                                        | Metric, result/evidence và API lịch sử           |
-| TSR/Latency            | `src/app/domains/benchmark/utils/summary.py`, `active_runtime.py`    | Tổng hợp run và thời gian workflow               |
-| Migration              | `migrations/versions/`, `scripts/migrate.py`                         | Kiểm soát schema theo version                    |
-| Frontend               | Repository `network-multi-agent-system-frontend/src/features/`       | UI Chat, Tasks, Devices, Benchmark, Evaluation   |
-
-# PHỤ LỤC B. API VÀ QUY TRÌNH TRUY VẾT
-
-Các endpoint tiêu biểu dùng prefix `/api/v1`:
-
-| Mục đích                      | Đường dẫn                                       |
-| ----------------------------- | ----------------------------------------------- |
-| Bắt đầu Conversation          | `POST /conversations/messages`                  |
-| Xem message trong hội thoại   | `GET /conversations/{conversation_id}/messages` |
-| Chi tiết kế hoạch và log Task | `GET /tasks/{task_id}/records`                  |
-| Timeline Task                 | `GET /tasks/{task_id}/activity-events`          |
-| Scenario management           | `GET/POST /benchmarks/scenarios`                |
-| Bắt đầu Benchmark Run         | `POST /benchmarks/runs`                         |
-| Thống kê TSR toàn bộ lịch sử  | `GET /benchmarks/runs/summary`                  |
-| Cleanup một run               | `POST /benchmarks/runs/{run_id}/cleanup`        |
-| Xem Evaluation                | `GET /evaluations`                              |
-| Xem metric từng Task          | `GET /evaluations/tasks/{task_id}`              |
-| Tra cứu hệ thống Audit Log    | `GET /audit-logs/`                              |
-
-Quan hệ quan trọng khi đọc Evidence:
-
-```text
-BenchmarkScenario (version + Ground Truth)
-   → BenchmarkRun (scenario_snapshot)
-   → Conversation / USER_REQUEST Message
-   → Task / TaskActivityEvent (diagnosis_submission)
-   → TaskEvaluation (evaluator_version)
-   → TaskEvaluationMetric (expected_value / actual_value / evidence)
-   → Evaluation UI và TSR summary
-```
-
-Trình tự này cho phép đối chiếu dự đoán với nhãn kịch bản và truy xem Agent đã sử dụng lệnh nào. Khi đưa dữ liệu vào báo cáo hoặc phụ lục không xuất password, token, secret, mã khóa hay thông tin xác thực thiết bị.
-
-# PHỤ LỤC C. NHẬT KÝ XÁC NHẬN KẾT QUẢ
-
-**C.1. Kiểm thử được xác nhận (03/11/2026).** Nhóm cung cấp output `pytest` với bốn tệp: `tests/domains/test_nika_style_rca.py`, `tests/domains/test_benchmark_observations.py`, `tests/domains/test_benchmark_service.py`, `tests/agents/test_analyst_agent.py`. Kết quả: **42 collected, 42 passed, 1 warning, 1.86 s**. Đây là bốn bộ test được chọn, không phải toàn bộ test suite.
-
-**C.2. Lượt Benchmark v4.** Giao diện Evaluation nhóm cung cấp hiển thị `db-benchmark-v4`, GOAL/RCA PASS, RCA F1/Precision/Recall và Localization/Fault Type F1/Detection 100%, Latency workflow 22,40 s, Interaction Turns 4. Các mục expected/actual/evidence chưa mở rộng nên không kết luận thêm thông tin không nhìn thấy.
-
-**C.3. Phiên bản và thuật ngữ.** v1–v3 chấm GOAL/RCA từ khóa; v4 chấm nhãn có cấu trúc. v2 Latency đo end-to-end gồm chờ phê duyệt; v3–v4 đo active workflow time. Chỉ số `rca_accuracy` trong triển khai này là alias của Recall. `Interaction Turns` là số lượt Agent gọi tool, không phải số lần người dùng nhắn tin.
-
-**C.4. Trạng thái chưa chấm.** `Remediation` và `Safety` trong v4 = NOT_APPLICABLE. Điều này không đồng nghĩa Agent an toàn tuyệt đối, không đồng nghĩa Agent đã sửa lỗi thành công và cũng không phải giá trị 0%/100%.
-
----
-
-_Các bằng chứng kiểm thử cụ thể của Phụ lục C được nhóm cung cấp ngày 03/11/2026; mã nguồn `develop` được đối chiếu bổ sung tại commit ngày 18–19/11/2026 như phần đầu báo cáo. Chưa chạy lại toàn bộ benchmark và test suite cho những commit mới._
