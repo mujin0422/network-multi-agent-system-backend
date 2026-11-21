@@ -1816,7 +1816,9 @@ Chương này tổng hợp các kết quả đạt được của đề tài, đ
 
 Evaluation. Cách tổ chức này cho phép truy vết quá trình xử lý từ yêu cầu ban đầu đến câu lệnh thực thi, output thiết bị, quyết định phê duyệt và kết quả đánh giá cuối cùng.
 
-### 5.1.2. Kết quả xây dựng các chức năng Từ kiến trúc đã thiết kế, đề tài đã hiện thực các nhóm chức năng chính sau:
+### 5.1.2. Kết quả xây dựng các chức năng
+
+Từ kiến trúc đã thiết kế, đề tài đã hiện thực các nhóm chức năng chính sau:
 
 1. Identity và phân quyền: Quản lý tài khoản người dùng, session, access/refresh token, role, permission và kiểm tra quyền truy cập theo chức năng–hành động.
 
