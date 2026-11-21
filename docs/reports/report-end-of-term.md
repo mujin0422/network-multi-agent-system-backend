@@ -1538,7 +1538,7 @@ Tập Benchmark Scenario trong chương này chủ yếu đánh giá các nhiệ
 
 ### 4.1.2. Câu hỏi nghiên cứu và tiêu chí đánh giá
 
-Các câu hỏi nghiên cứu được xây dựng nhằm định hướng quá trình thu thập và phân tích kết quả, như trình bày trong
+Các câu hỏi nghiên cứu được xây dựng nhằm định hướng quá trình thu thập và phân tích kết quả, như trình bày trong Bảng 4.1.
 
 **Bảng 4.1. Các câu hỏi nghiên cứu và chỉ số đánh giá**
 
@@ -1621,7 +1621,7 @@ Trong thực nghiệm, initial_message được sử dụng làm yêu cầu gử
 
 ### 4.3.2. Tập dữ liệu thực nghiệm
 
-Cơ sở dữ liệu có 33 Scenario, trong đó 32 Scenario ở trạng thái active và được sử dụng cho mỗi cohort đầy đủ. Phân bố Ground Truth của cohort ngày 02/11/2026 được trình bày trong
+Cơ sở dữ liệu có 33 Scenario, trong đó 32 Scenario ở trạng thái active và được sử dụng cho mỗi cohort đầy đủ. Phân bố Ground Truth của cohort ngày 02/11/2026 được trình bày trong Bảng 4.4.
 
 **Bảng 4.4. Phân bố các loại sự cố trong tập Benchmark Scenario**
 
@@ -1644,39 +1644,16 @@ Tập dữ liệu được đề tài xây dựng cho topology GNS3 hiện có, 
 
 Một lượt thực nghiệm được thực hiện theo trình tự sau:
 
-1. Khởi tạo Benchmark Run: Tạo Run ở trạng thái PREPARING và lưu
+1. **Khởi tạo Benchmark Run:** Tạo Run ở trạng thái `PREPARING` và lưu `scenario_snapshot` cùng thông tin của Scenario được lựa chọn.
+2. **Kiểm tra trạng thái ban đầu:** Thực thi các precondition trên thiết bị để xác nhận môi trường đáp ứng điều kiện trước khi tiêm lỗi.
+3. **Tiêm và xác minh sự cố:** Thực hiện injection, sau đó sử dụng `fault_verification` để xác nhận sự cố đã xuất hiện trên thiết bị.
+4. **Khởi tạo yêu cầu chẩn đoán:** Chuyển Run sang `READY`, tạo hoặc liên kết Conversation và gửi `initial_message` vào hệ thống. Run chuyển sang `RUNNING` khi yêu cầu được liên kết thành công.
+5. **Thực thi workflow Multi-Agent:** Planner Agent xây dựng kế hoạch; Network Agent thu thập dữ liệu; Analyst Agent phân tích bằng chứng, thực hiện điều tra bổ sung khi cần và tạo kết luận cuối.
+6. **Thu thập và chấm điểm kết quả:** Evaluator lấy structured diagnosis từ Activity, đối chiếu với Ground Truth và lưu Task Evaluation cùng các metric tương ứng.
+7. **Khôi phục môi trường:** Thực hiện cleanup, xác minh trạng thái sau khôi phục và chuyển Run sang `CLEANED` khi các điều kiện hậu kiểm được đáp ứng.
+8. **Đồng bộ ngày logic:** Đối với các lượt chạy backfill, runner điều chỉnh đồng bộ timestamp của các bản ghi liên quan về ngày logic được chỉ định, đồng thời giữ nguyên các khoảng thời gian tương đối.
 
-scenario_snapshot cùng thông tin của Scenario được lựa chọn.
-
-2. Kiểm tra trạng thái ban đầu: Thực thi các precondition trên thiết bị để xác
-
-nhận môi trường đáp ứng điều kiện trước khi tiêm lỗi.
-
-3. Tiêm và xác minh sự cố: Thực hiện injection, sau đó sử dụng
-
-fault_verification để xác nhận sự cố đã xuất hiện trên thiết bị.
-
-4. Khởi tạo yêu cầu chẩn đoán: Chuyển Run sang READY, tạo hoặc liên kết
-
-Conversation và gửi initial_message vào hệ thống. Run chuyển sang RUNNING khi yêu cầu được liên kết thành công.
-
-5. Thực thi workflow Multi-Agent: Planner Agent xây dựng kế hoạch;
-
-Network Agent thu thập dữ liệu; Analyst Agent phân tích bằng chứng, thực hiện điều tra bổ sung khi cần và tạo kết luận cuối.
-
-6. Thu thập và chấm điểm kết quả: Evaluator lấy structured diagnosis từ
-
-Activity, đối chiếu với Ground Truth và lưu Task Evaluation cùng các metric tương ứng.
-
-7. Khôi phục môi trường: Thực hiện cleanup, xác minh trạng thái sau khôi
-
-phục và chuyển Run sang CLEANED khi các điều kiện hậu kiểm được đáp ứng.
-
-8. Đồng bộ ngày logic: Đối với các lượt chạy backfill, runner điều chỉnh đồng
-
-bộ timestamp của các bản ghi liên quan về ngày logic được chỉ định, đồng thời giữ nguyên các khoảng thời gian tương đối.
-
-Trong trường hợp precondition, injection hoặc fault verification thất bại, Run được ghi nhận trạng thái lỗi. Nếu đã bắt đầu injection, hệ thống ưu tiên cleanup để hạn chế tác động của sự cố lên những lượt chạy tiếp theo. Một Run chỉ được ghi nhận CLEANED khi quá trình khôi phục và hậu kiểm thành công.
+Trong trường hợp precondition, injection hoặc fault verification thất bại, Run được ghi nhận trạng thái lỗi. Nếu đã bắt đầu injection, hệ thống ưu tiên cleanup để hạn chế tác động của sự cố lên những lượt chạy tiếp theo. Một Run chỉ được ghi nhận `CLEANED` khi quá trình khôi phục và hậu kiểm thành công.
 
 ### 4.3.4. Kiểm soát tính độc lập và tái lập
 
@@ -1839,73 +1816,55 @@ Chương này tổng hợp các kết quả đạt được của đề tài, đ
 
 Evaluation. Cách tổ chức này cho phép truy vết quá trình xử lý từ yêu cầu ban đầu đến câu lệnh thực thi, output thiết bị, quyết định phê duyệt và kết quả đánh giá cuối cùng.
 
-### 5.1.2. Kết quả xây dựng các chức năng
+### 5.1.2. Kết quả xây dựng các chức năng Từ kiến trúc đã thiết kế, đề tài đã hiện thực các nhóm chức năng chính sau:
 
-Từ kiến trúc đã thiết kế, đề tài đã hiện thực các nhóm chức năng chính sau:
+1. Identity và phân quyền: Quản lý tài khoản người dùng, session, access/refresh token, role, permission và kiểm tra quyền truy cập theo chức năng–hành động.
 
-1. Identity và phân quyền: Quản lý tài khoản người dùng, session,
+2. Inventory: Quản lý Brand, Category, Device và Credential. Thông tin xác thực nhạy cảm được mã hóa khi lưu và chỉ được giải mã tại lớp kết nối nội bộ khi cần thiết.
 
-access/refresh token, role, permission và kiểm tra quyền truy cập theo chức năng–hành động.
+3. Conversation: Quản lý hội thoại, phân trang Message, cập nhật tiêu đề và cung cấp tối đa năm Message gần nhất làm ngữ cảnh cho yêu cầu tiếp theo.
 
-2. Inventory: Quản lý Brand, Category, Device và Credential. Thông tin xác
+4. Planning: Chuyển yêu cầu ngôn ngữ tự nhiên thành ExecutionPlanCreate, xác định Operation, Device Mapping, dependency và kiểm tra tính hợp lệ trước khi lưu kế hoạch.
 
-thực nhạy cảm được mã hóa khi lưu và chỉ được giải mã tại lớp kết nối nội bộ khi cần thiết.
+5. Configuration: Sinh CLI riêng cho Operation WRITE, chuẩn hóa câu lệnh, loại bỏ các lệnh quản lý phiên và kiểm tra cấu hình trước khi chuyển sang thực thi.
 
-3. Conversation: Quản lý hội thoại, phân trang Message, cập nhật tiêu đề và
+6. Execution: Thực thi các Operation theo quan hệ phụ thuộc DAG, cập nhật trạng thái Operation và Task, đồng thời lưu Task Execution và Device Action Log.
 
-cung cấp tối đa năm Message gần nhất làm ngữ cảnh cho yêu cầu tiếp theo.
+7. Human-in-the-loop: Tạo yêu cầu phê duyệt theo từng ánh xạ Operation–Device; hỗ trợ trạng thái APPROVED, REJECTED và EXPIRED, đồng thời kiểm tra Commands Snapshot và hash trước khi thực thi WRITE.
 
-4. Planning: Chuyển yêu cầu ngôn ngữ tự nhiên thành
+8. Analysis và Investigation: Phân tích output thiết bị, tạo structured diagnosis, đánh giá Evidence Coverage và Causal Evidence, đồng thời thực hiện điều tra READ bổ sung khi chưa đủ căn cứ.
 
-ExecutionPlanCreate, xác định Operation, Device Mapping, dependency và kiểm tra tính hợp lệ trước khi lưu kế hoạch.
+9. Workflow nền: Lưu yêu cầu AI thành Workflow Job trong PostgreSQL và sử dụng Workflow Worker để xử lý ngoài vòng đời HTTP request, hỗ trợ tiếp tục Task sau phê duyệt.
 
-5. Configuration: Sinh CLI riêng cho Operation WRITE, chuẩn hóa câu lệnh,
+10. Cập nhật tiến trình: Sử dụng SSE để phát lại các Task Activity đã lưu và cung cấp sự kiện mới cho frontend, hỗ trợ theo dõi quá trình thực thi.
 
-loại bỏ các lệnh quản lý phiên và kiểm tra cấu hình trước khi chuyển sang thực thi.
+11. Benchmark Engine: Quản lý Benchmark Scenario, precondition, injection, fault verification, Ground Truth, Benchmark Run và cleanup; lưu scenario_snapshot cho từng lượt chạy.
 
-6. Execution: Thực thi các Operation theo quan hệ phụ thuộc DAG, cập nhật
+12. Evaluation: Đánh giá GOAL, RCA, Detection, Localization, Fault Type, Latency và Interaction Turns; lưu kết quả cùng expected, actual và evidence để phục vụ đối chiếu.
 
-trạng thái Operation và Task, đồng thời lưu Task Execution và Device Action Log.
+13. Audit và giám sát: Ghi nhận Task Activity Event, Device Action Log và Audit Log, hỗ trợ truy vết tiến trình và các thao tác nghiệp vụ.
 
-7. Human-in-the-loop: Tạo yêu cầu phê duyệt theo từng ánh xạ Operation–
-
-Device; hỗ trợ trạng thái APPROVED, REJECTED và EXPIRED, đồng thời kiểm tra Commands Snapshot và hash trước khi thực thi WRITE.
-
-8. Analysis và Investigation: Phân tích output thiết bị, tạo structured
-
-diagnosis, đánh giá Evidence Coverage và Causal Evidence, đồng thời thực hiện điều tra READ bổ sung khi chưa đủ căn cứ.
-
-9. Workflow nền: Lưu yêu cầu AI thành Workflow Job trong PostgreSQL và
-
-sử dụng Workflow Worker để xử lý ngoài vòng đời HTTP request, hỗ trợ tiếp tục Task sau phê duyệt.
-
-10. Cập nhật tiến trình: Sử dụng SSE để phát lại các Task Activity đã lưu và
-
-cung cấp sự kiện mới cho frontend, hỗ trợ theo dõi quá trình thực thi.
-
-11. Benchmark Engine: Quản lý Benchmark Scenario, precondition, injection,
-
-fault verification, Ground Truth, Benchmark Run và cleanup; lưu scenario_snapshot cho từng lượt chạy.
-
-12. Evaluation: Đánh giá GOAL, RCA, Detection, Localization, Fault Type,
-
-Latency và Interaction Turns; lưu kết quả cùng expected, actual và evidence để phục vụ đối chiếu.
-
-13. Audit và giám sát: Ghi nhận Task Activity Event, Device Action Log và
-
-Audit Log, hỗ trợ truy vết tiến trình và các thao tác nghiệp vụ.
-
-14. Frontend: Cung cấp giao diện quản lý Chat, Task, Approval, Dashboard,
-
-Device, Credential, Device Catalog, User, Access Control, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation.
+14. Frontend: Cung cấp giao diện quản lý Chat, Task, Approval, Dashboard, Device, Credential, Device Catalog, User, Access Control, Audit Log, Benchmark Scenario, Benchmark Run và Evaluation.
 
 Các chức năng trên hình thành một quy trình xử lý thống nhất từ tiếp nhận yêu cầu, lập kế hoạch, tương tác với thiết bị, kiểm soát thay đổi cấu hình, phân tích kết quả đến đánh giá hiệu quả thực thi.
 
 ### 5.1.3. Kết quả thực nghiệm và trả lời câu hỏi nghiên cứu
 
-Thực nghiệm gồm bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026. Mỗi cohort có 32 Scenario, tạo thành tổng cộng 224 Benchmark Run. Ở cohort ngày 02/11, toàn bộ 32 Run đều có Evaluation, trong đó 31 Run đạt GOAL PASS và một Run GOAL FAIL. Đối với RQ1 – Khả năng hoàn thành nhiệm vụ: Cohort ngày 02/11 đạt Task Success Rate 96,88%. So với baseline ngày 27/10 có 11/32 PASS, kết quả tăng lên 31/32 PASS, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. Kết quả cho thấy hệ thống có khả năng hoàn thành phần lớn nhiệm vụ chẩn đoán trong tập Benchmark Scenario nội bộ. Đối với RQ2 – Chất lượng chẩn đoán: RCA F1, Localization F1 và Fault Type F1 trung bình ngày 02/11 đều đạt 0,9688; Detection Score trung bình cũng đạt 0,9688. Kết quả cho thấy 31 Scenario được xác định đúng tập nguyên nhân theo Ground Truth. Scenario chưa đạt thuộc nhóm wrong_ip_address, cho thấy việc chẩn đoán sai địa chỉ IP giữa các đầu liên kết vẫn cần kết hợp bằng chứng topology và subnet chặt chẽ hơn. Đối với RQ3 – Sự thay đổi kết quả qua các phiên bản hệ thống: Các cohort ghi nhận sự cải thiện kết quả chẩn đoán đồng thời với quá trình bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và matcher MPLS/OSPF. Những cơ chế này được thiết kế nhằm tăng khả năng thu thập và kiểm tra bằng chứng trước khi kết luận. Tuy nhiên, dữ liệu hiện tại chưa cho phép xác định đóng góp độc lập của từng thành phần do nhiều thay đổi được thực hiện giữa các cohort. Evidence Coverage đầy đủ cũng không mặc nhiên bảo đảm RCA chính xác nếu quá trình diễn giải bằng chứng chưa xác định đúng quan hệ nhân quả. Đối với RQ4 – Chi phí thực thi: Active Latency trung bình ngày 02/11 là 35,95 giây, trung vị 32,82 giây và Interaction Turns trung bình 4,69. So với baseline có 6,40 lượt gọi công cụ, số lượt tương tác trung bình giảm trong khi chất lượng chẩn đoán tăng. Kết quả theo cohort cũng ghi nhận sự biến động về thời gian xử lý: khi investigation được thực thi đầy đủ vào ngày 01/11, Active Latency tăng đồng thời với mức cải thiện RCA F1. Đối với RQ5 – Kiểm soát thay đổi và khôi phục môi trường: Toàn bộ 32 Run ở cohort ngày 02/11 kết thúc ở trạng thái CLEANED. Hệ thống đã hiện thực Approval Gate đối với Operation WRITE, kiểm tra tính toàn vẹn của câu lệnh được phê duyệt
+Thực nghiệm gồm bảy cohort đầy đủ từ ngày logic 27/10 đến 02/11/2026. Mỗi cohort có 32 Scenario, tạo thành tổng cộng 224 Benchmark Run. Ở cohort ngày 02/11, toàn bộ 32 Run đều có Evaluation, trong đó 31 Run đạt GOAL PASS và một Run GOAL FAIL.
 
-và lưu dấu vết quyết định. Tuy nhiên, trạng thái CLEANED phản ánh việc Benchmark Engine khôi phục môi trường thử nghiệm, không phải bằng chứng Agent đã khắc phục sự cố thành công. Những kết quả trên cho thấy hệ thống đáp ứng mục tiêu xây dựng một nguyên mẫu Multi-Agent có khả năng tiếp nhận yêu cầu, chẩn đoán sự cố mạng, tương tác với thiết bị GNS3, kiểm soát thay đổi cấu hình và đánh giá kết quả có cấu trúc. Các tỷ lệ thực nghiệm được giới hạn trong phạm vi tập Benchmark Scenario và môi trường đã sử dụng, không đại diện cho hiệu năng tổng quát trên mạng sản xuất.
+**Đối với RQ1 – Khả năng hoàn thành nhiệm vụ:** Cohort ngày 02/11 đạt Task Success Rate 96,88%. So với baseline ngày 27/10 có 11/32 PASS, kết quả tăng lên 31/32 PASS, tương ứng tăng 62,50 điểm phần trăm trên toàn cohort. Kết quả cho thấy hệ thống có khả năng hoàn thành phần lớn nhiệm vụ chẩn đoán trong tập Benchmark Scenario nội bộ.
+
+**Đối với RQ2 – Chất lượng chẩn đoán:** RCA F1, Localization F1 và Fault Type F1 trung bình ngày 02/11 đều đạt 0,9688; Detection Score trung bình cũng đạt 0,9688. Kết quả cho thấy 31 Scenario được xác định đúng tập nguyên nhân theo Ground Truth. Scenario chưa đạt thuộc nhóm wrong_ip_address, cho thấy việc chẩn đoán sai địa chỉ IP giữa các đầu liên kết vẫn cần kết hợp bằng chứng topology và subnet chặt chẽ hơn.
+
+**Đối với RQ3 – Sự thay đổi kết quả qua các phiên bản hệ thống:** Các cohort ghi nhận sự cải thiện kết quả chẩn đoán đồng thời với quá trình bổ sung investigation loop, diagnostic playbook, Evidence Coverage Gate, Causal Evidence Gate và matcher MPLS/OSPF. Những cơ chế này được thiết kế nhằm tăng khả năng thu thập và kiểm tra bằng chứng trước khi kết luận. Tuy nhiên, dữ liệu hiện tại chưa cho phép xác định đóng góp độc lập của từng thành phần do nhiều thay đổi được thực hiện giữa các cohort. Evidence Coverage đầy đủ cũng không mặc nhiên bảo đảm RCA chính xác nếu quá trình diễn giải bằng chứng chưa xác định đúng quan hệ nhân quả.
+
+**Đối với RQ4 – Chi phí thực thi:** Active Latency trung bình ngày 02/11 là 35,95 giây, trung vị 32,82 giây và Interaction Turns trung bình 4,69. So với baseline có 6,40 lượt gọi công cụ, số lượt tương tác trung bình giảm trong khi chất lượng chẩn đoán tăng. Kết quả theo cohort cũng ghi nhận sự biến động về thời gian xử lý: khi investigation được thực thi đầy đủ vào ngày 01/11, Active Latency tăng đồng thời với mức cải thiện RCA F1.
+
+**Đối với RQ5 – Kiểm soát thay đổi và khôi phục môi trường:** Toàn bộ 32 Run ở cohort ngày 02/11 kết thúc ở trạng thái CLEANED. Hệ thống đã hiện thực Approval Gate đối với Operation WRITE, kiểm tra tính toàn vẹn của câu lệnh được phê duyệt
+
+và lưu dấu vết quyết định. Tuy nhiên, trạng thái CLEANED phản ánh việc Benchmark Engine khôi phục môi trường thử nghiệm, không phải bằng chứng Agent đã khắc phục sự cố thành công.
+
+Những kết quả trên cho thấy hệ thống đáp ứng mục tiêu xây dựng một nguyên mẫu Multi-Agent có khả năng tiếp nhận yêu cầu, chẩn đoán sự cố mạng, tương tác với thiết bị GNS3, kiểm soát thay đổi cấu hình và đánh giá kết quả có cấu trúc. Các tỷ lệ thực nghiệm được giới hạn trong phạm vi tập Benchmark Scenario và môi trường đã sử dụng, không đại diện cho hiệu năng tổng quát trên mạng sản xuất.
 
 ### 5.1.4. Đóng góp của đề tài
 
@@ -1997,7 +1956,7 @@ Hướng phát triển ưu tiên là chuẩn hóa quy trình thực nghiệm và
 
 Các kết quả tương lai cần được tổng hợp theo nhiều lần lặp, trình bày giá trị trung bình, trung vị, độ lệch chuẩn và khoảng tin cậy. Tập Scenario cũng cần bổ sung những trường hợp mạng khỏe, nhiều nguyên nhân đồng thời và không đủ dữ liệu để kết luận.
 
-Để xác định đóng góp riêng của các cơ chế đã phát triển, đề tài đề xuất thực hiện ablation test bằng cách xây dựng những biến thể chỉ khác nhau ở một thành phần so với hệ thống đầy đủ. Thiết kế các biến thể được trình bày trong
+Để xác định đóng góp riêng của các cơ chế đã phát triển, đề tài đề xuất thực hiện ablation test bằng cách xây dựng những biến thể chỉ khác nhau ở một thành phần so với hệ thống đầy đủ. Thiết kế các biến thể được trình bày trong Bảng 5.2.
 
 **Bảng 5.2. Các biến thể thực nghiệm ablation được đề xuất**
 
